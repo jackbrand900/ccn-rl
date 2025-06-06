@@ -1,5 +1,6 @@
 import optuna
 import numpy as np
+import yaml
 from src.train import create_environment, run_training
 from src.agents.dqn_agent import DQNAgent
 
@@ -30,10 +31,11 @@ def objective(trial):
     return avg_reward
 
 if __name__ == "__main__":
+    agent_type = "dqn" # TODO: make this configurable
     storage = "sqlite:///optuna_study.db"
     study = optuna.create_study(
         direction="maximize",
-        study_name="dqn_tuning",
+        study_name=f"{agent_type}_tuning",
         storage=storage,
         load_if_exists=True
     )
@@ -43,3 +45,10 @@ if __name__ == "__main__":
     trial = study.best_trial
     print(f"  Value: {trial.value}")
     print(f"  Params: {trial.params}")
+
+    # Save the best hyperparameters to a YAML file for later use or analysis
+    best_params = study.best_trial.params
+    with open(f"../config/{agent_type}_hyperparameters.yaml", "w") as file:
+        yaml.dump(best_params, file)
+
+    print(f"Hyperparameters saved to config/{agent_type}_hyperparameters.yaml")

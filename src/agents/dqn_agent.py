@@ -15,7 +15,8 @@ class DQNAgent:
                  gamma=0.99,
                  epsilon=1.0,
                  epsilon_decay=0.995,
-                 epsilon_min=0.01):
+                 epsilon_min=0.01,
+                 target_update_freq=1000):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.gamma = gamma
@@ -24,11 +25,18 @@ class DQNAgent:
         self.epsilon_min = epsilon_min
 
         self.q_network = QNetwork(state_dim, action_dim, hidden_dim)
+        self.target_network = QNetwork(state_dim, action_dim, hidden_dim)
+        self.target_network.load_state_dict(self.q_network.state_dict())
+        self.target_network.eval()  # Target network is not trained directly
+
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=lr)
         self.loss_fn = nn.MSELoss()
 
         self.replay_buffer = deque(maxlen=10000)
         self.batch_size = 64
+
+        self.learn_step_counter = 0
+        self.target_update_freq = target_update_freq
 
     def select_action(self, state):
         if np.random.rand() < self.epsilon:
@@ -55,8 +63,9 @@ class DQNAgent:
         dones = torch.FloatTensor(dones).unsqueeze(1)
 
         q_values = self.q_network(states).gather(1, actions)
+
         with torch.no_grad():
-            next_q_values = self.q_network(next_states).max(1, keepdim=True)[0]
+            next_q_values = self.target_network(next_states).max(1, keepdim=True)[0]
             target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
 
         loss = self.loss_fn(q_values, target_q_values)
@@ -65,4 +74,10 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
+        # Update target network periodically
+        self.learn_step_counter += 1
+        if self.learn_step_counter % self.target_update_freq == 0:
+            self.target_network.load_state_dict(self.q_network.state_dict())
+
+        # Epsilon decay
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)

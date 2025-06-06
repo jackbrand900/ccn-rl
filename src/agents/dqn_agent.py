@@ -4,10 +4,18 @@ import torch.optim as optim
 import numpy as np
 import random
 from collections import deque
-from ..models.network import QNetwork
+from src.models.network import QNetwork
 
 class DQNAgent:
-    def __init__(self, state_dim, action_dim, hidden_dim=64, lr=1e-3, gamma=0.99, epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01):
+    def __init__(self,
+                 state_dim,
+                 action_dim,
+                 hidden_dim=64,
+                 lr=1e-3,
+                 gamma=0.99,
+                 epsilon=1.0,
+                 epsilon_decay=0.995,
+                 epsilon_min=0.01):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.gamma = gamma
@@ -40,10 +48,10 @@ class DQNAgent:
         batch = random.sample(self.replay_buffer, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
 
-        states = torch.FloatTensor(states)
+        states = torch.FloatTensor(np.array(states))
+        next_states = torch.FloatTensor(np.array(next_states))
         actions = torch.LongTensor(actions).unsqueeze(1)
         rewards = torch.FloatTensor(rewards).unsqueeze(1)
-        next_states = torch.FloatTensor(next_states)
         dones = torch.FloatTensor(dones).unsqueeze(1)
 
         q_values = self.q_network(states).gather(1, actions)

@@ -5,3 +5,4 @@ gym-minigrid
 optuna
 optuna-dashboard
 pyaml
+pishield

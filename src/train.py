@@ -4,6 +4,7 @@ import numpy as np
 from src.agents.dqn_agent import DQNAgent
 from minigrid.envs import EmptyEnv
 from minigrid.wrappers import FullyObsWrapper, FlatObsWrapper
+from src.utils.graphing import plot_rewards
 
 # Register the environment with Gymnasium
 if 'MiniGrid-Empty-5x5-v0' not in gym.envs.registry.keys():
@@ -43,6 +44,13 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             print(f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}, Epsilon: {agent.epsilon:.3f}")
 
     env.close()
+    plot_rewards(
+        rewards=episode_rewards,
+        title="Training Performance",
+        rolling_window=20,
+        save_path="plots/training_rewards.png",
+        show=True
+    )
     if log_rewards:
         return episode_rewards
     else:

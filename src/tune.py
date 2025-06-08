@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     # Save the best hyperparameters to a YAML file for later use or analysis
     best_params = study.best_trial.params
-    with open(f"../config/{agent_type}_hyperparameters.yaml", "w") as file:
-        yaml.dump(best_params, file)
+    # with open(f"../config/{agent_type}_hyperparameters.yaml", "w") as file:
+    #     yaml.dump(best_params, file)
 
     print(f"Hyperparameters saved to config/{agent_type}_hyperparameters.yaml")

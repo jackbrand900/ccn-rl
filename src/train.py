@@ -1,10 +1,11 @@
 import gymnasium as gym
-from gymnasium.envs.registration import register
 import numpy as np
+import argparse
+from gymnasium.envs.registration import register
 from src.agents.dqn_agent import DQNAgent
-from minigrid.envs import EmptyEnv
 from minigrid.wrappers import FullyObsWrapper, FlatObsWrapper
 from src.utils.graphing import plot_rewards, plot_action_frequencies
+from src.utils.visualize_env import visualize_env
 
 # Register the environment with Gymnasium
 if 'MiniGrid-Empty-5x5-v0' not in gym.envs.registry.keys():
@@ -20,7 +21,7 @@ def create_environment():
     env = FlatObsWrapper(env)
     return env
 
-def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False):
+def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, visualize=False):
     episode_rewards = []
     actions_taken = []
     for episode in range(1, num_episodes + 1):
@@ -37,6 +38,9 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             agent.update()
             state = next_state
             total_reward += reward
+
+            if visualize:
+                visualize_env(env)  # visualize current env state
 
         episode_rewards.append(total_reward)
 
@@ -60,14 +64,19 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
     else:
         return None
 
-def train():
+def train(use_shield=False, verbose=False):
     env = create_environment()
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
 
-    agent = DQNAgent(state_dim, action_dim)
-
+    agent = DQNAgent(state_dim, action_dim, use_shield=use_shield, verbose=verbose)
     run_training(agent, env)
 
 if __name__ == "__main__":
-    train()
+    parser = argparse.ArgumentParser(description="Train DQN agent with optional shield and verbose.")
+    parser.add_argument('--use_shield', action='store_true', help='Enable PiShield constraints during training')
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
+
+    args = parser.parse_args()
+
+    train(use_shield=args.use_shield, verbose=args.verbose)

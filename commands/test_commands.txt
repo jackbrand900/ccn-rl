@@ -1,0 +1,11 @@
+Run normally (no shield, no verbose):
+python -m src.train
+
+Run with shield enabled:
+python -m src.train --use_shield
+
+Run with verbose enabled:
+python -m src.train --verbose
+
+Run with both shield and verbose:
+python -m src.train --use_shield --verbose

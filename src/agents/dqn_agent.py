@@ -18,6 +18,7 @@ class DQNAgent:
                  epsilon_decay=0.995,
                  epsilon_min=0.01,
                  target_update_freq=1000,
+                 use_shield=True,
                  verbose=False):
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -25,7 +26,8 @@ class DQNAgent:
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
-        self.verbose = verbose  # Store verbose flag
+        self.use_shield = use_shield
+        self.verbose = verbose
 
         self.q_network = QNetwork(state_dim, action_dim, hidden_dim)
         self.target_network = QNetwork(state_dim, action_dim, hidden_dim)
@@ -40,13 +42,17 @@ class DQNAgent:
 
         self.learn_step_counter = 0
         self.target_update_freq = target_update_freq
-        self.shield_layer = build_shield_layer(
-            action_dim,  # output size (number of actions)
-            "src/requirements/constraints.linear",
-            ordering_choice='given'
-        )
 
-    def select_action(self, state):
+        if self.use_shield:
+            self.shield_layer = build_shield_layer(
+                action_dim,
+                "src/requirements/constraints.linear",
+                ordering_choice='given'
+            )
+        else:
+            self.shield_layer = None
+
+    def select_action(self, state, env=None):
         if np.random.rand() < self.epsilon:
             action = np.random.choice(self.action_dim)
             if self.verbose:
@@ -57,14 +63,19 @@ class DQNAgent:
         with torch.no_grad():
             q_values = self.q_network(state)  # (1, action_dim)
             action_probs = torch.softmax(q_values, dim=1)  # softmax for PiShield
-            corrected_probs = self.shield_layer(action_probs)
+
+            if self.use_shield and self.shield_layer is not None:
+                corrected_probs = self.shield_layer(action_probs)
+            else:
+                corrected_probs = action_probs
 
             action = corrected_probs.argmax(dim=1).item()
 
             if self.verbose:
                 print(f"[Policy] Q-values: {q_values.numpy().flatten()}")
                 print(f"[Policy] Softmax probs: {action_probs.numpy().flatten()}")
-                print(f"[Policy] Shielded probs: {corrected_probs.numpy().flatten()}")
+                if self.use_shield:
+                    print(f"[Policy] Shielded probs: {corrected_probs.numpy().flatten()}")
                 print(f"[Policy] Action selected: {action}")
 
         return action
@@ -104,3 +115,6 @@ class DQNAgent:
 
         # Epsilon decay
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
+
+    def enable_shield(self, enable: bool):
+        self.use_shield = enable

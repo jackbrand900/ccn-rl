@@ -1,5 +1,5 @@
 # check_constraints.py
-path = "src/requirements/constraints.linear"
+path = "src/requirements/left_only.linear"
 
 with open(path, "r", encoding="utf-8") as f:
     for i, line in enumerate(f, 1):

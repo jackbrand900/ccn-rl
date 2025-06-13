@@ -46,7 +46,7 @@ class DQNAgent:
         if self.use_shield:
             self.shield_layer = build_shield_layer(
                 action_dim,
-                "src/requirements/constraints.linear",
+                "src/requirements/left_only.linear",
                 ordering_choice='given'
             )
         else:

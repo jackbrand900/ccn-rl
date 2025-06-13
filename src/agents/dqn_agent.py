@@ -17,13 +17,15 @@ class DQNAgent:
                  epsilon=1.0,
                  epsilon_decay=0.995,
                  epsilon_min=0.01,
-                 target_update_freq=1000):
+                 target_update_freq=1000,
+                 verbose=False):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
+        self.verbose = verbose  # Store verbose flag
 
         self.q_network = QNetwork(state_dim, action_dim, hidden_dim)
         self.target_network = QNetwork(state_dim, action_dim, hidden_dim)
@@ -47,7 +49,8 @@ class DQNAgent:
     def select_action(self, state):
         if np.random.rand() < self.epsilon:
             action = np.random.choice(self.action_dim)
-            print(f"[Random] Action selected: {action}")
+            if self.verbose:
+                print(f"[Random] Action selected: {action}")
             return action
 
         state = torch.FloatTensor(state).unsqueeze(0)
@@ -58,10 +61,11 @@ class DQNAgent:
 
             action = corrected_probs.argmax(dim=1).item()
 
-            print(f"[Policy] Q-values: {q_values.numpy().flatten()}")
-            print(f"[Policy] Softmax probs: {action_probs.numpy().flatten()}")
-            print(f"[Policy] Shielded probs: {corrected_probs.numpy().flatten()}")
-            print(f"[Policy] Action selected: {action}")
+            if self.verbose:
+                print(f"[Policy] Q-values: {q_values.numpy().flatten()}")
+                print(f"[Policy] Softmax probs: {action_probs.numpy().flatten()}")
+                print(f"[Policy] Shielded probs: {corrected_probs.numpy().flatten()}")
+                print(f"[Policy] Action selected: {action}")
 
         return action
 

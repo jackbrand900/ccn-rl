@@ -5,6 +5,7 @@ import numpy as np
 import random
 from collections import deque
 from src.models.network import QNetwork
+from pishield.shield_layer import build_shield_layer
 
 class DQNAgent:
     def __init__(self,
@@ -37,14 +38,32 @@ class DQNAgent:
 
         self.learn_step_counter = 0
         self.target_update_freq = target_update_freq
+        self.shield_layer = build_shield_layer(
+            action_dim,  # output size (number of actions)
+            "src/requirements/constraints.linear",
+            ordering_choice='given'
+        )
 
     def select_action(self, state):
         if np.random.rand() < self.epsilon:
-            return np.random.choice(self.action_dim)
+            action = np.random.choice(self.action_dim)
+            print(f"[Random] Action selected: {action}")
+            return action
+
         state = torch.FloatTensor(state).unsqueeze(0)
         with torch.no_grad():
-            q_values = self.q_network(state)
-        return q_values.argmax().item()
+            q_values = self.q_network(state)  # (1, action_dim)
+            action_probs = torch.softmax(q_values, dim=1)  # softmax for PiShield
+            corrected_probs = self.shield_layer(action_probs)
+
+            action = corrected_probs.argmax(dim=1).item()
+
+            print(f"[Policy] Q-values: {q_values.numpy().flatten()}")
+            print(f"[Policy] Softmax probs: {action_probs.numpy().flatten()}")
+            print(f"[Policy] Shielded probs: {corrected_probs.numpy().flatten()}")
+            print(f"[Policy] Action selected: {action}")
+
+        return action
 
     def store_transition(self, state, action, reward, next_state, done):
         self.replay_buffer.append((state, action, reward, next_state, done))

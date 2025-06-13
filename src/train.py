@@ -4,7 +4,7 @@ import numpy as np
 from src.agents.dqn_agent import DQNAgent
 from minigrid.envs import EmptyEnv
 from minigrid.wrappers import FullyObsWrapper, FlatObsWrapper
-from src.utils.graphing import plot_rewards
+from src.utils.graphing import plot_rewards, plot_action_frequencies
 
 # Register the environment with Gymnasium
 if 'MiniGrid-Empty-5x5-v0' not in gym.envs.registry.keys():
@@ -22,7 +22,7 @@ def create_environment():
 
 def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False):
     episode_rewards = []
-
+    actions_taken = []
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
         done = False
@@ -30,6 +30,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
 
         while not done:
             action = agent.select_action(state)
+            actions_taken.append(action)
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
             agent.store_transition(state, action, reward, next_state, done)
@@ -51,6 +52,9 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
         save_path="plots/training_rewards.png",
         show=True
     )
+    plot_action_frequencies(actions_taken,
+                            action_labels=['Left', 'Right', 'Forward', 'Pickup', 'Drop', 'Toggle', 'Done'])
+
     if log_rewards:
         return episode_rewards
     else:

@@ -30,7 +30,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
         total_reward = 0
 
         while not done:
-            action = agent.select_action(state)
+            action = agent.select_action(state, env)
             actions_taken.append(action)
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
@@ -69,7 +69,11 @@ def train(use_shield=False, verbose=False):
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
 
-    agent = DQNAgent(state_dim, action_dim, use_shield=use_shield, verbose=verbose)
+    agent = DQNAgent(state_dim,
+                     action_dim,
+                     use_shield=use_shield,
+                     verbose=verbose,
+                     requirements_path = 'src/requirements/left_only.linear',)
     run_training(agent, env)
 
 if __name__ == "__main__":

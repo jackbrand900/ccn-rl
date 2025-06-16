@@ -6,6 +6,7 @@ import random
 from collections import deque
 from src.models.network import QNetwork
 from pishield.shield_layer import build_shield_layer
+from src.utils.shield_controller import ShieldController
 
 class DQNAgent:
     def __init__(self,
@@ -19,7 +20,8 @@ class DQNAgent:
                  epsilon_min=0.01,
                  target_update_freq=1000,
                  use_shield=True,
-                 verbose=False):
+                 verbose=False,
+                 requirements_path=None):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.gamma = gamma
@@ -44,11 +46,8 @@ class DQNAgent:
         self.target_update_freq = target_update_freq
 
         if self.use_shield:
-            self.shield_layer = build_shield_layer(
-                action_dim,
-                "src/requirements/left_only.linear",
-                ordering_choice='given'
-            )
+            shield_controller = ShieldController(requirements_path, action_dim)
+            self.shield_layer = shield_controller.build_shield_layer()
         else:
             self.shield_layer = None
 

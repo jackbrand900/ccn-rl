@@ -73,7 +73,7 @@ def train(use_shield=False, verbose=False):
                      action_dim,
                      use_shield=use_shield,
                      verbose=verbose,
-                     requirements_path = 'src/requirements/left_only.linear',)
+                     requirements_path = 'src/requirements/left_on_flag.cnf',)
     run_training(agent, env)
 
 if __name__ == "__main__":

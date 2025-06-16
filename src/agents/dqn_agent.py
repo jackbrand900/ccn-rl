@@ -46,8 +46,8 @@ class DQNAgent:
         self.target_update_freq = target_update_freq
 
         if self.use_shield:
-            shield_controller = ShieldController(requirements_path, action_dim)
-            self.shield_layer = shield_controller.build_shield_layer()
+            self.shield_controller = ShieldController(requirements_path, action_dim, None)
+            self.shield_layer = self.shield_controller.build_shield_layer()
         else:
             self.shield_layer = None
 
@@ -64,7 +64,13 @@ class DQNAgent:
             action_probs = torch.softmax(q_values, dim=1)  # softmax for PiShield
 
             if self.use_shield and self.shield_layer is not None:
-                corrected_probs = self.shield_layer(action_probs)
+                print(f"Learn step counter: {self.learn_step_counter}")
+                context = {
+                    "state": state,
+                    "step": self.learn_step_counter,
+                    "env_info": getattr(env, "metadata", {})  # optional
+                }
+                corrected_probs = self.shield_controller.apply(action_probs, context)
             else:
                 corrected_probs = action_probs
 

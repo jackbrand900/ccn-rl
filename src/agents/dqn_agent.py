@@ -67,7 +67,7 @@ class DQNAgent:
             if self.use_shield and self.shield_layer is not None:
                 # print(f"Learn step counter: {self.learn_step_counter}")
                 position = extract_agent_pos(env)
-                # print(f"Agent pos: {position}")
+                print(f"Agent pos: {position}")
                 context = {
                     "state": state,
                     "position": position,

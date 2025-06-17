@@ -6,7 +6,7 @@ class ShieldController:
     def __init__(self, requirements_path, num_actions, flag_logic_fn):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
-        self.var_names = ["y_{}".format(i) for i in range(8)] # TODO: hardcoded for now
+        self.var_names = ["y_{}".format(i) for i in range(9)] # TODO: hardcoded for now
         self.num_vars = len(self.var_names)
         self.num_flags = self._count_flags()
         self.flag_logic_fn = flag_logic_fn
@@ -18,10 +18,10 @@ class ShieldController:
         return len([v for v in self.var_names if int(v[2:]) >= self.num_actions])
 
     def build_shield_layer(self):
-        shield = ShieldLayer(num_classes=8,
+        shield = ShieldLayer(num_classes=9,
                              requirements=self.requirements_path,
                              ordering_choice="custom",
-                             custom_ordering="7,6,5,4,3,2,1,0")
+                             custom_ordering="8,7,6,5,4,3,2,1,0")
         return shield
 
     def step_count_flag_logic(self, context):
@@ -31,7 +31,8 @@ class ShieldController:
 
     def position_flag_logic(self, context):
         position = context["position"]
-        flags = {"y_7": int(position == (1, 1))}
+        flags = {"y_7": int(position == (1, 1)),
+                 "y_8": int(position == (2, 1))}
         return flags
 
     def apply(self, action_probs, context):

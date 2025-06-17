@@ -24,13 +24,18 @@ class ShieldController:
                              custom_ordering="7,6,5,4,3,2,1,0")
         return shield
 
-    def flag_logic(self, context):
+    def step_count_flag_logic(self, context):
         step = context["step"]
         flags = {"y_7": int(step % 10 == 0)}
         return flags
 
+    def position_flag_logic(self, context):
+        position = context["position"]
+        flags = {"y_7": int(position == (1, 1))}
+        return flags
+
     def apply(self, action_probs, context):
-        flags = self.flag_logic(context)
+        flags = self.position_flag_logic(context)
         flag_values = [flags.get(name, 0) for name in self.flag_names]
         flag_tensor = torch.tensor(flag_values, device=action_probs.device, dtype=action_probs.dtype).unsqueeze(0)
 

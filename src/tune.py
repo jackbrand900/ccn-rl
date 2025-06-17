@@ -23,8 +23,11 @@ def objective(trial):
         gamma=gamma,
         epsilon_decay=epsilon_decay,
         target_update_freq=target_update_freq,
-        requirements_path = '../requirements/left_only.linear',
+        use_shield=True,
+        verbose=False,
+        requirements_path = 'src/requirements/forward_on_flag.cnf',
     )
+
 
     rewards = run_training(agent, env, num_episodes=200, print_interval=None, log_rewards=True)
     avg_reward = np.mean(rewards[-20:])

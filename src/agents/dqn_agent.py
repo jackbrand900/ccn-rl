@@ -7,6 +7,7 @@ from collections import deque
 from src.models.network import QNetwork
 from pishield.shield_layer import build_shield_layer
 from src.utils.shield_controller import ShieldController
+from src.utils.env_helpers import extract_agent_pos, convert_action_to_string
 
 class DQNAgent:
     def __init__(self,
@@ -64,9 +65,12 @@ class DQNAgent:
             action_probs = torch.softmax(q_values, dim=1)  # softmax for PiShield
 
             if self.use_shield and self.shield_layer is not None:
-                print(f"Learn step counter: {self.learn_step_counter}")
+                # print(f"Learn step counter: {self.learn_step_counter}")
+                position = extract_agent_pos(env)
+                # print(f"Agent pos: {position}")
                 context = {
                     "state": state,
+                    "position": position,
                     "step": self.learn_step_counter,
                     "env_info": getattr(env, "metadata", {})  # optional
                 }
@@ -75,7 +79,8 @@ class DQNAgent:
                 corrected_probs = action_probs
 
             action = corrected_probs.argmax(dim=1).item()
-
+            # print(state.numpy().tolist())
+            # print(action)
             if self.verbose:
                 print(f"[Policy] Q-values: {q_values.numpy().flatten()}")
                 print(f"[Policy] Softmax probs: {action_probs.numpy().flatten()}")

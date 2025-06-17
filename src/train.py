@@ -17,7 +17,6 @@ if 'MiniGrid-Empty-5x5-v0' not in gym.envs.registry.keys():
 
 def create_environment():
     env = gym.make("MiniGrid-Empty-5x5-v0")
-    env = FullyObsWrapper(env)
     env = FlatObsWrapper(env)
     return env
 
@@ -73,7 +72,7 @@ def train(use_shield=False, verbose=False):
                      action_dim,
                      use_shield=use_shield,
                      verbose=verbose,
-                     requirements_path = 'src/requirements/left_on_flag.cnf',)
+                     requirements_path = 'src/requirements/forward_on_flag.cnf',)
     run_training(agent, env)
 
 if __name__ == "__main__":

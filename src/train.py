@@ -73,6 +73,8 @@ def train(use_shield=False, verbose=False):
                      action_dim,
                      use_shield=use_shield,
                      verbose=verbose,
+                     # epsilon=0,
+                     # epsilon_min=0,
                      requirements_path = 'src/requirements/forward_on_flag.cnf',
                      env=env)
     run_training(agent, env)

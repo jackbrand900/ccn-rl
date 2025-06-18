@@ -38,6 +38,8 @@ class DQNAgent:
         self.target_network = QNetwork(state_dim, action_dim, hidden_dim)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()  # Target network is not trained directly
+        self.last_raw_probs = None
+        self.last_corrected_probs = None
 
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=lr)
         self.loss_fn = nn.MSELoss()
@@ -55,48 +57,51 @@ class DQNAgent:
             self.shield_layer = None
 
     def select_action(self, state, env=None):
+        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+
         if np.random.rand() < self.epsilon:
             action = np.random.choice(self.action_dim)
             if self.verbose:
                 print(f"[Random] Action selected: {action}")
+            # Fallback: use uniform probs as dummy values
+            uniform_probs = np.ones(self.action_dim, dtype=np.float32) / self.action_dim
+            self.last_raw_probs = uniform_probs
+            self.last_corrected_probs = uniform_probs
             return action
 
-        state = torch.FloatTensor(state).unsqueeze(0)
         with torch.no_grad():
-            q_values = self.q_network(state)  # (1, action_dim)
-            action_probs = torch.softmax(q_values, dim=1)  # softmax for PiShield
+            q_values = self.q_network(state_tensor)
+            action_probs = torch.softmax(q_values, dim=1)
 
             if self.use_shield and self.shield_layer is not None:
                 position = extract_agent_pos(env)
                 context = {
-                    "state": state,
+                    "state": state_tensor,
                     "position": position,
                     "step": self.learn_step_counter,
-                    "env_info": getattr(env, "metadata", {})  # optional
+                    "env_info": getattr(env, "metadata", {})
                 }
                 corrected_probs = self.shield_controller.apply(action_probs, context, self.verbose)
             else:
                 corrected_probs = action_probs
 
             action = corrected_probs.argmax(dim=1).item()
-            if self.verbose:
-                print(f"[Policy] Q-values: {q_values.numpy().flatten()}")
-                print(f"[Policy] Softmax probs: {action_probs.numpy().flatten()}")
-                if self.use_shield:
-                    print(f"[Policy] Shielded probs: {corrected_probs.numpy().flatten()}")
-                print(f"[Policy] Action selected: {action}")
 
+        self.last_raw_probs = action_probs.squeeze().cpu().numpy().astype(np.float32)
+        self.last_corrected_probs = corrected_probs.squeeze().cpu().numpy().astype(np.float32)
         return action
 
     def store_transition(self, state, action, reward, next_state, done):
-        self.replay_buffer.append((state, action, reward, next_state, done))
+        raw = self.last_raw_probs.astype(np.float32)
+        corrected = self.last_corrected_probs.astype(np.float32)
+        self.replay_buffer.append((state, action, reward, next_state, done, raw, corrected))
 
     def update(self):
         if len(self.replay_buffer) < self.batch_size:
             return
 
         batch = random.sample(self.replay_buffer, self.batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
+        states, actions, rewards, next_states, dones, raw_probs, corrected_probs = zip(*batch)
 
         states = torch.FloatTensor(np.array(states))
         next_states = torch.FloatTensor(np.array(next_states))
@@ -104,17 +109,42 @@ class DQNAgent:
         rewards = torch.FloatTensor(rewards).unsqueeze(1)
         dones = torch.FloatTensor(dones).unsqueeze(1)
 
-        q_values = self.q_network(states).gather(1, actions)
+        # --- Standard TD loss ---
+        q_values_raw = self.q_network(states)
+        q_values = q_values_raw.gather(1, actions)
 
         with torch.no_grad():
             next_q_values = self.target_network(next_states).max(1, keepdim=True)[0]
             target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
 
-        loss = self.loss_fn(q_values, target_q_values)
+        td_loss = self.loss_fn(q_values, target_q_values)
+
+        # --- Requirements loss ---
+        raw_probs = np.array(raw_probs, dtype=np.float32)
+        corrected_probs = np.array(corrected_probs, dtype=np.float32)
+
+        raw_probs = torch.FloatTensor(raw_probs)
+        corrected_probs = torch.FloatTensor(corrected_probs)
+
+        action_mask = torch.zeros_like(corrected_probs).scatter_(1, actions, 1.0)
+        log_probs = torch.log(raw_probs + 1e-8)
+        selected_log_probs = (action_mask * log_probs).sum(dim=1, keepdim=True)
+        with torch.no_grad():
+            td_weights = target_q_values / (target_q_values.max() + 1e-8)
+
+        req_loss = -selected_log_probs * td_weights
+        req_loss = req_loss.mean()
+
+        lambda_td = 1.0
+        lambda_req = 0.05
+        total_loss = lambda_td * td_loss + lambda_req * req_loss
 
         self.optimizer.zero_grad()
-        loss.backward()
+        total_loss.backward()
         self.optimizer.step()
+
+        if self.verbose:
+            print(f"[Update] TD Loss: {td_loss.item():.4f}, Req Loss: {req_loss.item():.4f}, Total Loss: {total_loss.item():.4f}")
 
         # Update target network periodically
         self.learn_step_counter += 1

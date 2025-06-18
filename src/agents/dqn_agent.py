@@ -22,7 +22,8 @@ class DQNAgent:
                  target_update_freq=1000,
                  use_shield=True,
                  verbose=False,
-                 requirements_path=None):
+                 requirements_path=None,
+                 env=None):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.gamma = gamma
@@ -31,6 +32,7 @@ class DQNAgent:
         self.epsilon_min = epsilon_min
         self.use_shield = use_shield
         self.verbose = verbose
+        self.env = env
 
         self.q_network = QNetwork(state_dim, action_dim, hidden_dim)
         self.target_network = QNetwork(state_dim, action_dim, hidden_dim)
@@ -65,22 +67,18 @@ class DQNAgent:
             action_probs = torch.softmax(q_values, dim=1)  # softmax for PiShield
 
             if self.use_shield and self.shield_layer is not None:
-                # print(f"Learn step counter: {self.learn_step_counter}")
                 position = extract_agent_pos(env)
-                print(f"Agent pos: {position}")
                 context = {
                     "state": state,
                     "position": position,
                     "step": self.learn_step_counter,
                     "env_info": getattr(env, "metadata", {})  # optional
                 }
-                corrected_probs = self.shield_controller.apply(action_probs, context)
+                corrected_probs = self.shield_controller.apply(action_probs, context, self.verbose)
             else:
                 corrected_probs = action_probs
 
             action = corrected_probs.argmax(dim=1).item()
-            # print(state.numpy().tolist())
-            # print(action)
             if self.verbose:
                 print(f"[Policy] Q-values: {q_values.numpy().flatten()}")
                 print(f"[Policy] Softmax probs: {action_probs.numpy().flatten()}")
@@ -128,3 +126,6 @@ class DQNAgent:
 
     def enable_shield(self, enable: bool):
         self.use_shield = enable
+
+    def get_agent_pos(self):
+        return extract_agent_pos(self.env)

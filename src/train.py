@@ -5,7 +5,8 @@ from gymnasium.envs.registration import register
 from src.agents.dqn_agent import DQNAgent
 from minigrid.wrappers import FullyObsWrapper, FlatObsWrapper
 from src.utils.graphing import plot_rewards, plot_action_frequencies
-from src.utils.visualize_env import visualize_env
+from src.utils.visualize_env import plot_action_histograms, get_action_counts_per_state
+from collections import defaultdict
 
 # Register the environment with Gymnasium
 if 'MiniGrid-Empty-5x5-v0' not in gym.envs.registry.keys():
@@ -20,7 +21,7 @@ def create_environment():
     env = FlatObsWrapper(env)
     return env
 
-def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, visualize=False):
+def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False):
     episode_rewards = []
     actions_taken = []
     for episode in range(1, num_episodes + 1):
@@ -30,16 +31,14 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
 
         while not done:
             action = agent.select_action(state, env)
-            actions_taken.append(action)
+            x, y = agent.get_agent_pos()
+            actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
             agent.store_transition(state, action, reward, next_state, done)
             agent.update()
             state = next_state
             total_reward += reward
-
-            if visualize:
-                visualize_env(env)  # visualize current env state
 
         episode_rewards.append(total_reward)
 
@@ -48,6 +47,8 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             print(f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}, Epsilon: {agent.epsilon:.3f}")
 
     env.close()
+    action_counts = get_action_counts_per_state(actions_taken)
+    plot_action_histograms(action_counts)
     plot_rewards(
         rewards=episode_rewards,
         title="Training Performance",
@@ -55,9 +56,9 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
         save_path="plots/training_rewards.png",
         show=True
     )
-    plot_action_frequencies(actions_taken,
+    actions = [action for _, _, action in actions_taken]
+    plot_action_frequencies(actions,
                             action_labels=['Left', 'Right', 'Forward', 'Pickup', 'Drop', 'Toggle', 'Done'])
-
     if log_rewards:
         return episode_rewards
     else:
@@ -72,7 +73,8 @@ def train(use_shield=False, verbose=False):
                      action_dim,
                      use_shield=use_shield,
                      verbose=verbose,
-                     requirements_path = 'src/requirements/double_forward_flag.cnf',)
+                     requirements_path = 'src/requirements/forward_on_flag.cnf',
+                     env=env)
     run_training(agent, env)
 
 if __name__ == "__main__":

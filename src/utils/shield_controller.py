@@ -15,7 +15,6 @@ class ShieldController:
         self.num_vars = len(self.var_names)
         self.action_names = self.var_names[:num_actions]
         self.flag_names = self.var_names[num_actions:]
-
         self.shield_layer = self.build_shield_layer()
 
     def _batchify(self, single_fn):

@@ -1,12 +1,10 @@
 import gymnasium as gym
 import numpy as np
+import src.utils.graphing as graphing
 import argparse
 from gymnasium.envs.registration import register
 from src.agents.dqn_agent import DQNAgent
 from minigrid.wrappers import FullyObsWrapper, FlatObsWrapper
-from src.utils.graphing import plot_rewards, plot_action_frequencies
-from src.utils.visualize_env import plot_action_histograms, get_action_counts_per_state
-from collections import defaultdict
 
 # Register the environment with Gymnasium
 if 'MiniGrid-Empty-5x5-v0' not in gym.envs.registry.keys():
@@ -52,9 +50,9 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
             print(f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}, Epsilon: {agent.epsilon:.3f}")
 
     env.close()
-    action_counts = get_action_counts_per_state(actions_taken)
-    plot_action_histograms(action_counts)
-    plot_rewards(
+    action_counts = graphing.get_action_counts_per_state(actions_taken)
+    graphing.plot_action_histograms(action_counts)
+    graphing.plot_rewards(
         rewards=episode_rewards,
         title="Training Performance",
         rolling_window=20,
@@ -62,7 +60,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
         show=True
     )
     actions = [action for _, _, action in actions_taken]
-    plot_action_frequencies(actions,
+    graphing.plot_action_frequencies(actions,
                             action_labels=['Left', 'Right', 'Forward', 'Pickup', 'Drop', 'Toggle', 'Done'])
     if log_rewards:
         return episode_rewards

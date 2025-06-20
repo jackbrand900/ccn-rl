@@ -1,8 +1,9 @@
 import torch
-from pishield.propositional_requirements.shield_layer import ShieldLayer
+from pishield.propositional_requirements.shield_layer import ShieldLayer as PropositionalShieldLayer
+from pishield.linear_requirements.shield_layer import ShieldLayer as LinearShieldLayer
 
 class ShieldController:
-    def __init__(self, requirements_path, num_actions, num_flags=1, flag_logic_fn=None):
+    def __init__(self, requirements_path, num_actions, num_flags=1, flag_logic_fn=None, threshold=0.5):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
         self.num_flags = num_flags
@@ -24,12 +25,18 @@ class ShieldController:
 
     def build_shield_layer(self):
         ordering = ",".join(reversed(self.ordering_names))  # e.g. 3,2,1,0
-        return ShieldLayer(
+        # TODO: make this dynamic based on the type of shield layer (propositional or linear)
+        return PropositionalShieldLayer(
             num_classes=self.num_vars,
             requirements=self.requirements_path,
             ordering_choice="custom",
-            custom_ordering=ordering
+            custom_ordering=ordering,
         )
+        # return LinearShieldLayer(
+        #     num_variables=self.num_vars,
+        #     requirements_filepath=self.requirements_path,
+        #     ordering_choice="given"
+        # )
 
     def default_flag_logic(self, context):
         """Fallback flag logic — always 0 for all flags"""

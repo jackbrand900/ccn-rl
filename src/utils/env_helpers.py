@@ -1,5 +1,3 @@
-import numpy as np
-
 def extract_agent_pos(flat_obs):
     pos = flat_obs.unwrapped.agent_pos
     return pos

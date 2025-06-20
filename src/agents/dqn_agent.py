@@ -49,8 +49,8 @@ class DQNAgent:
             self.shield_controller = ShieldController(
                 requirements_path=requirements_path,
                 num_actions=action_dim,
-                num_flags=1,
-                flag_logic_fn=context_provider.position_flag_logic
+                num_flags=1, # TODO: make this dynamic based on the number of flags in the requirements file
+                flag_logic_fn=None,
             )
         else:
             self.shield_controller = None
@@ -136,6 +136,8 @@ class DQNAgent:
 
         if self.verbose:
             print(f"[Update] TD Loss: {td_loss.item():.4f}, Req Loss: {req_loss.item():.4f}, Total Loss: {total_loss.item():.4f}")
+
+        # print(f"TD Loss: {td_loss.item()}, Q-values: {q_values.mean().item()}")
 
         # Target network update
         self.learn_step_counter += 1

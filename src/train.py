@@ -21,7 +21,7 @@ def create_environment():
     env = FlatObsWrapper(env)
     return env
 
-def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False):
+def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False, verbose=False):
     episode_rewards = []
     actions_taken = []
     for episode in range(1, num_episodes + 1):
@@ -30,12 +30,17 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
         total_reward = 0
 
         while not done:
-            action = agent.select_action(state, env)
-            x, y = agent.get_agent_pos()
+            action, context = agent.select_action(state, env)
+            x, y = context.get("position", None)
+            timestep = context.get("timestep", None)
             actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
-            agent.store_transition(state, action, reward, next_state, done)
+
+            if verbose:
+                print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
+
+            agent.store_transition(state, action, reward, next_state, context, done)
             agent.update()
             state = next_state
             total_reward += reward
@@ -75,7 +80,7 @@ def train(use_shield=False, verbose=False):
                      verbose=verbose,
                      requirements_path = 'src/requirements/forward_on_flag.cnf',
                      env=env)
-    run_training(agent, env)
+    run_training(agent, env, verbose=verbose)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train DQN agent with optional shield and verbose.")

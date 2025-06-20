@@ -71,7 +71,6 @@ def train(use_shield=False, verbose=False, visualize=False):
     env = create_environment()
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
-
     agent = DQNAgent(state_dim,
                      action_dim,
                      use_shield=use_shield,

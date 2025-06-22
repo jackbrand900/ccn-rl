@@ -50,6 +50,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
 
     env.close()
     if visualize:
+        graphing.plot_losses(agent.training_logs)
+        graphing.plot_prob_shift(agent.training_logs)
         action_counts = graphing.get_action_counts_per_state(actions_taken)
         graphing.plot_action_histograms(action_counts)
         graphing.plot_rewards(
@@ -59,9 +61,9 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
             save_path="plots/training_rewards.png",
             show=True
         )
-        actions = [action for _, _, action in actions_taken]
-        graphing.plot_action_frequencies(actions,
-                                action_labels=['Left', 'Right', 'Forward', 'Pickup', 'Drop', 'Toggle', 'Done'])
+        # actions = [action for _, _, action in actions_taken]
+        # graphing.plot_action_frequencies(actions,
+        #                         action_labels=['Left', 'Right', 'Forward', 'Pickup', 'Drop', 'Toggle', 'Done'])
     if log_rewards:
         return episode_rewards
     else:

@@ -44,6 +44,12 @@ class DQNAgent:
         self.batch_size = 64
         self.learn_step_counter = 0
         self.target_update_freq = target_update_freq
+        self.training_logs = {
+            "td_loss": [],
+            "req_loss": [],
+            "consistency_loss": [],
+            "prob_shift": []
+        }
 
         if self.use_shield:
             self.shield_controller = ShieldController(
@@ -124,19 +130,35 @@ class DQNAgent:
 
         req_loss = nn.BCELoss()(shielded_probs, goal)
 
+        # --- Consistency Loss (encourage raw probs ≈ shielded probs) ---
+        consistency_loss = torch.nn.MSELoss()(raw_probs[:, :self.action_dim], shielded_probs)
+
         # --- Total Loss ---
         lambda_td = 1.0
         lambda_req = 0.05
-        total_loss = lambda_td * td_loss + lambda_req * req_loss
+        lambda_consistency = 0.05
+        total_loss = (
+                lambda_td * td_loss +
+                lambda_req * req_loss +
+                lambda_consistency * consistency_loss
+        )
 
         self.optimizer.zero_grad()
         total_loss.backward()
         self.optimizer.step()
 
         if self.verbose:
-            print(f"[Update] TD Loss: {td_loss.item():.4f}, Req Loss: {req_loss.item():.4f}, Total Loss: {total_loss.item():.4f}")
+            print(f"[Update] TD Loss: {td_loss.item():.4f}, Req Loss: {req_loss.item():.4f}, Consistency: {consistency_loss.item():.4f}, Total: {total_loss.item():.4f}")
 
-        # print(f"TD Loss: {td_loss.item()}, Q-values: {q_values.mean().item()}")
+
+        # Log metrics
+        self.training_logs["td_loss"].append(td_loss.item())
+        self.training_logs["req_loss"].append(req_loss.item())
+        self.training_logs["consistency_loss"].append(consistency_loss.item())
+
+        # Compute average per-batch L1 shift in probability due to the shield
+        prob_shift = torch.abs(shielded_probs - raw_probs[:, :self.action_dim]).mean().item()
+        self.training_logs["prob_shift"].append(prob_shift)
 
         # Target network update
         self.learn_step_counter += 1

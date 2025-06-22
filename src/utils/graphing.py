@@ -182,3 +182,58 @@ def plot_action_histograms(action_counts, action_names=None, max_cols=10):
 
     plt.tight_layout()
     plt.show()
+
+def moving_average(values, window=10):
+    if len(values) < window:
+        return values
+    return np.convolve(values, np.ones(window) / window, mode='valid')
+
+def plot_losses(logs, window=10, save_path=None):
+    # Smooth each loss
+    td_loss = moving_average(logs["td_loss"], window)
+    req_loss = moving_average(logs["req_loss"], window)
+    consistency_loss = moving_average(logs["consistency_loss"], window)
+    smoothed_steps = range(len(td_loss))  # all logs are same length after smoothing
+
+    # Create subplots
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharex=True)
+
+    # TD Loss
+    axes[0].plot(smoothed_steps, td_loss, color="blue")
+    axes[0].set_title("TD Loss")
+    axes[0].set_xlabel("Training Steps")
+    axes[0].set_ylabel("Loss")
+    axes[0].grid(True)
+
+    # Requirements Loss
+    axes[1].plot(smoothed_steps, req_loss, color="orange")
+    axes[1].set_title("Requirements Loss")
+    axes[1].set_xlabel("Training Steps")
+    axes[1].grid(True)
+
+    # Consistency Loss
+    axes[2].plot(smoothed_steps, consistency_loss, color="green")
+    axes[2].set_title("Consistency Loss")
+    axes[2].set_xlabel("Training Steps")
+    axes[2].grid(True)
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+    plt.show()
+
+def plot_prob_shift(logs, window=10, save_path=None):
+    prob_shift = moving_average(logs["prob_shift"], window)
+    smoothed_steps = range(len(prob_shift))
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(smoothed_steps, prob_shift, label="Shield Probability Shift", color="orange")
+    plt.title("Shield-Induced Probability Shift (Smoothed)")
+    plt.xlabel("Training Steps")
+    plt.ylabel("Avg L1 Shift in Action Probabilities")
+    plt.legend()
+    plt.grid(True)
+
+    if save_path:
+        plt.savefig(save_path)
+    plt.show()

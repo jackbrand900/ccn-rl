@@ -1,11 +1,10 @@
 import gymnasium as gym
 import numpy as np
+import src.utils.graphing as graphing
 import argparse
 from gymnasium.envs.registration import register
 from src.agents.dqn_agent import DQNAgent
 from minigrid.wrappers import FullyObsWrapper, FlatObsWrapper
-from src.utils.graphing import plot_rewards, plot_action_frequencies
-from src.utils.visualize_env import visualize_env
 
 # Register the environment with Gymnasium
 if 'MiniGrid-Empty-5x5-v0' not in gym.envs.registry.keys():
@@ -17,11 +16,10 @@ if 'MiniGrid-Empty-5x5-v0' not in gym.envs.registry.keys():
 
 def create_environment():
     env = gym.make("MiniGrid-Empty-5x5-v0")
-    env = FullyObsWrapper(env)
     env = FlatObsWrapper(env)
     return env
 
-def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, visualize=False):
+def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False, verbose=False):
     episode_rewards = []
     actions_taken = []
     for episode in range(1, num_episodes + 1):
@@ -30,17 +28,19 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
         total_reward = 0
 
         while not done:
-            action = agent.select_action(state)
-            actions_taken.append(action)
+            action, context = agent.select_action(state, env)
+            x, y = context.get("position", None)
+            actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
-            agent.store_transition(state, action, reward, next_state, done)
+
+            if verbose:
+                print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
+
+            agent.store_transition(state, action, reward, next_state, context, done)
             agent.update()
             state = next_state
             total_reward += reward
-
-            if visualize:
-                visualize_env(env)  # visualize current env state
 
         episode_rewards.append(total_reward)
 
@@ -49,34 +49,43 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             print(f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}, Epsilon: {agent.epsilon:.3f}")
 
     env.close()
-    plot_rewards(
-        rewards=episode_rewards,
-        title="Training Performance",
-        rolling_window=20,
-        save_path="plots/training_rewards.png",
-        show=True
-    )
-    plot_action_frequencies(actions_taken,
-                            action_labels=['Left', 'Right', 'Forward', 'Pickup', 'Drop', 'Toggle', 'Done'])
-
+    if visualize:
+        graphing.plot_losses(agent.training_logs)
+        graphing.plot_prob_shift(agent.training_logs)
+        action_counts = graphing.get_action_counts_per_state(actions_taken)
+        graphing.plot_action_histograms(action_counts)
+        graphing.plot_rewards(
+            rewards=episode_rewards,
+            title="Training Performance",
+            rolling_window=20,
+            save_path="plots/training_rewards.png",
+            show=True
+        )
+        # actions = [action for _, _, action in actions_taken]
+        # graphing.plot_action_frequencies(actions,
+        #                         action_labels=['Left', 'Right', 'Forward', 'Pickup', 'Drop', 'Toggle', 'Done'])
     if log_rewards:
         return episode_rewards
     else:
         return None
 
-def train(use_shield=False, verbose=False):
+def train(use_shield=False, verbose=False, visualize=False):
     env = create_environment()
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
-
-    agent = DQNAgent(state_dim, action_dim, use_shield=use_shield, verbose=verbose)
-    run_training(agent, env)
+    agent = DQNAgent(state_dim,
+                     action_dim,
+                     use_shield=use_shield,
+                     verbose=verbose,
+                     requirements_path = 'src/requirements/forward_on_flag.cnf',
+                     env=env)
+    run_training(agent, env, verbose=verbose, visualize=visualize)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train DQN agent with optional shield and verbose.")
     parser.add_argument('--use_shield', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
-
+    parser.add_argument('--visualize', action='store_true', help='Visualize action frequencies and rewards during training')
     args = parser.parse_args()
 
-    train(use_shield=args.use_shield, verbose=args.verbose)
+    train(use_shield=args.use_shield, verbose=args.verbose, visualize=args.visualize)

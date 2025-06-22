@@ -1,21 +1,26 @@
 import torch
+import os
+import re
 from pishield.propositional_requirements.shield_layer import ShieldLayer as PropositionalShieldLayer
 from pishield.linear_requirements.shield_layer import ShieldLayer as LinearShieldLayer
 
 class ShieldController:
-    def __init__(self, requirements_path, num_actions, num_flags=1, flag_logic_fn=None, threshold=0.5):
+    def __init__(self, requirements_path, num_actions, flag_logic_fn=None, threshold=0.5):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
-        self.num_flags = num_flags
         self.flag_logic_fn = flag_logic_fn or self.default_flag_logic
         self.flag_logic_batch = self._batchify(self.flag_logic_fn)
 
-        # Generate var names: 0 to {total_vars-1}
-        self.var_names = [f"y_{i}" for i in range(num_actions + num_flags)]
-        self.ordering_names = [f"{i}" for i in range(num_actions + num_flags)]
+        # Parse var names from file
+        self.var_names = self._extract_vars_from_requirements()
         self.num_vars = len(self.var_names)
+
+        # Compute action and flag names based on position
         self.action_names = self.var_names[:num_actions]
         self.flag_names = self.var_names[num_actions:]
+        self.num_flags = len(self.flag_names)
+
+        self.ordering_names = [str(i) for i in range(self.num_vars)]
         self.shield_layer = self.build_shield_layer()
 
     def _batchify(self, single_fn):
@@ -23,20 +28,32 @@ class ShieldController:
             return [single_fn(ctx) for ctx in contexts]
         return batch_fn
 
+    def _extract_vars_from_requirements(self):
+        with open(self.requirements_path, "r") as f:
+            content = f.read()
+        vars_found = set(re.findall(r"y_(\d+)", content))
+        var_indices = sorted(int(v) for v in vars_found)
+        return [f"y_{i}" for i in var_indices]
+
     def build_shield_layer(self):
-        ordering = ",".join(reversed(self.ordering_names))  # e.g. 3,2,1,0
-        # TODO: make this dynamic based on the type of shield layer (propositional or linear)
-        return PropositionalShieldLayer(
-            num_classes=self.num_vars,
-            requirements=self.requirements_path,
-            ordering_choice="custom",
-            custom_ordering=ordering,
-        )
-        # return LinearShieldLayer(
-        #     num_variables=self.num_vars,
-        #     requirements_filepath=self.requirements_path,
-        #     ordering_choice="given"
-        # )
+        ordering = ",".join(reversed(self.ordering_names))  # e.g. "3,2,1,0"
+        file_ext = os.path.splitext(self.requirements_path)[-1].lower()
+
+        if file_ext == ".cnf":
+            return PropositionalShieldLayer(
+                num_classes=self.num_vars,
+                requirements=self.requirements_path,
+                ordering_choice="custom",
+                custom_ordering=ordering,
+            )
+        elif file_ext == ".linear":
+            return LinearShieldLayer(
+                num_variables=self.num_vars,
+                requirements_filepath=self.requirements_path,
+                ordering_choice="given",
+            )
+        else:
+            raise ValueError(f"Unknown requirements file extension: {file_ext}")
 
     def default_flag_logic(self, context):
         """Fallback flag logic — always 0 for all flags"""

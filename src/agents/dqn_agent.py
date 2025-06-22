@@ -49,7 +49,6 @@ class DQNAgent:
             self.shield_controller = ShieldController(
                 requirements_path=requirements_path,
                 num_actions=action_dim,
-                num_flags=1, # TODO: make this dynamic based on the number of flags in the requirements file
                 flag_logic_fn=context_provider.position_flag_logic,
             )
         else:

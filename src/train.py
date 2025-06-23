@@ -48,6 +48,9 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
             avg_reward = np.mean(episode_rewards[-print_interval:])
             print(f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}, Epsilon: {agent.epsilon:.3f}")
 
+    # evaluation results
+    # results = agent.evaluate_policy(num_episodes=20)
+
     env.close()
     if visualize:
         graphing.plot_losses(agent.training_logs)

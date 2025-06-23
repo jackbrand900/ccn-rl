@@ -168,5 +168,60 @@ class DQNAgent:
         # Epsilon decay
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
+    def evaluate_policy(self, num_episodes=10, render=False):
+        self.q_network.eval()
+        original_epsilon = self.epsilon
+        self.epsilon = 0.0  # deterministic
+
+        total_rewards = []
+        total_shield_modifications = 0
+        total_steps = 0
+
+        for episode in range(num_episodes):
+            state = self.env.reset()
+            done = False
+            episode_reward = 0
+            episode_modifications = 0
+
+            while not done:
+                action, context = self.select_action(state, self.env)
+                state_tensor = torch.FloatTensor(state).unsqueeze(0)
+                with torch.no_grad():
+                    q_vals = self.q_network(state_tensor)
+                    probs = torch.softmax(q_vals, dim=1)
+
+                    if self.use_shield and self.shield_controller:
+                        shielded = self.shield_controller.apply(probs, context)
+                        modified = not torch.allclose(shielded[:, :self.action_dim], probs[:, :self.action_dim], atol=1e-4)
+                        if modified:
+                            episode_modifications += 1
+
+                next_state, reward, done, _ = self.env.step(action)
+                episode_reward += reward
+                total_steps += 1
+                state = next_state
+
+                if render:
+                    self.env.render()
+
+            total_rewards.append(episode_reward)
+            total_shield_modifications += episode_modifications
+            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Shield Activations = {episode_modifications}")
+
+        self.epsilon = original_epsilon  # restore
+
+        avg_reward = np.mean(total_rewards)
+        avg_shield_rate = total_shield_modifications / total_steps if total_steps > 0 else 0
+
+        print(f"\nEvaluation Summary:")
+        print(f"Average Reward: {avg_reward:.2f}")
+        print(f"Avg Shield Modifications per Step: {avg_shield_rate:.4f}")
+
+        return {
+            "avg_reward": avg_reward,
+            "avg_shield_mod_rate": avg_shield_rate,
+            "rewards": total_rewards,
+        }
+
     def enable_shield(self, enable: bool):
         self.use_shield = enable

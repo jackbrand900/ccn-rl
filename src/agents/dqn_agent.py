@@ -37,6 +37,8 @@ class DQNAgent:
         self.target_network = QNetwork(state_dim, action_dim, hidden_dim)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.q_network.to(self.device)
 
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=lr)
         self.loss_fn = nn.MSELoss()
@@ -66,27 +68,33 @@ class DQNAgent:
             action = np.random.choice(self.action_dim)
             if self.verbose:
                 print(f"[Random] Action selected: {action}")
-            return action, context
+            return action, context, False  # no shield applied during random choice
 
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(next(self.q_network.parameters()).device)
+
         with torch.no_grad():
             q_values = self.q_network(state_tensor)
             action_probs = torch.softmax(q_values, dim=1)
 
             if self.use_shield and self.shield_controller:
+                original_action = action_probs.argmax(dim=1).item()
                 corrected_probs = self.shield_controller.apply(action_probs, context, self.verbose)
+                shielded_action = corrected_probs.argmax(dim=1).item()
+                was_modified = shielded_action != original_action
             else:
                 corrected_probs = action_probs[:, :self.action_dim]
+                was_modified = False
 
             action = corrected_probs.argmax(dim=1).item()
 
             if self.verbose:
-                print(f"[Policy] Q-values: {q_values.numpy().flatten()}")
-                print(f"[Policy] Raw probs: {action_probs.numpy().flatten()}")
-                print(f"[Policy] Shielded probs: {corrected_probs.numpy().flatten()}")
+                print(f"[Policy] Q-values: {q_values.cpu().numpy().flatten()}")
+                print(f"[Policy] Raw probs: {action_probs.cpu().numpy().flatten()}")
+                print(f"[Policy] Shielded probs: {corrected_probs.cpu().numpy().flatten()}")
                 print(f"[Policy] Action selected: {action}")
+                print(f"[Policy] Shield modified: {was_modified}")
 
-        return action, context
+        return action, context, was_modified
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.replay_buffer.append((state, action, reward, next_state, context, done))
@@ -167,61 +175,6 @@ class DQNAgent:
 
         # Epsilon decay
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
-
-    def evaluate_policy(self, num_episodes=10, render=False):
-        self.q_network.eval()
-        original_epsilon = self.epsilon
-        self.epsilon = 0.0  # deterministic
-
-        total_rewards = []
-        total_shield_modifications = 0
-        total_steps = 0
-
-        for episode in range(num_episodes):
-            state = self.env.reset()
-            done = False
-            episode_reward = 0
-            episode_modifications = 0
-
-            while not done:
-                action, context = self.select_action(state, self.env)
-                state_tensor = torch.FloatTensor(state).unsqueeze(0)
-                with torch.no_grad():
-                    q_vals = self.q_network(state_tensor)
-                    probs = torch.softmax(q_vals, dim=1)
-
-                    if self.use_shield and self.shield_controller:
-                        shielded = self.shield_controller.apply(probs, context)
-                        modified = not torch.allclose(shielded[:, :self.action_dim], probs[:, :self.action_dim], atol=1e-4)
-                        if modified:
-                            episode_modifications += 1
-
-                next_state, reward, done, _ = self.env.step(action)
-                episode_reward += reward
-                total_steps += 1
-                state = next_state
-
-                if render:
-                    self.env.render()
-
-            total_rewards.append(episode_reward)
-            total_shield_modifications += episode_modifications
-            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Shield Activations = {episode_modifications}")
-
-        self.epsilon = original_epsilon  # restore
-
-        avg_reward = np.mean(total_rewards)
-        avg_shield_rate = total_shield_modifications / total_steps if total_steps > 0 else 0
-
-        print(f"\nEvaluation Summary:")
-        print(f"Average Reward: {avg_reward:.2f}")
-        print(f"Avg Shield Modifications per Step: {avg_shield_rate:.4f}")
-
-        return {
-            "avg_reward": avg_reward,
-            "avg_shield_mod_rate": avg_shield_rate,
-            "rewards": total_rewards,
-        }
 
     def enable_shield(self, enable: bool):
         self.use_shield = enable

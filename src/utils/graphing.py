@@ -189,33 +189,26 @@ def moving_average(values, window=10):
     return np.convolve(values, np.ones(window) / window, mode='valid')
 
 def plot_losses(logs, window=10, save_path=None):
-    # Smooth each loss
-    td_loss = moving_average(logs["td_loss"], window)
-    req_loss = moving_average(logs["req_loss"], window)
-    consistency_loss = moving_average(logs["consistency_loss"], window)
-    smoothed_steps = range(len(td_loss))  # all logs are same length after smoothing
+    keys = ["td_loss", "req_loss", "consistency_loss", "policy_loss", "value_loss"]
+    available = [k for k in keys if k in logs]
+    smoothed = {k: moving_average(logs[k], window) for k in available}
 
-    # Create subplots
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharex=True)
+    if not smoothed:
+        print("No loss keys found in logs.")
+        return
 
-    # TD Loss
-    axes[0].plot(smoothed_steps, td_loss, color="blue")
-    axes[0].set_title("TD Loss")
-    axes[0].set_xlabel("Training Steps")
-    axes[0].set_ylabel("Loss")
-    axes[0].grid(True)
+    # Subplots: one per available loss
+    fig, axes = plt.subplots(1, len(available), figsize=(6 * len(available), 5), sharex=True)
 
-    # Requirements Loss
-    axes[1].plot(smoothed_steps, req_loss, color="orange")
-    axes[1].set_title("Requirements Loss")
-    axes[1].set_xlabel("Training Steps")
-    axes[1].grid(True)
+    if len(available) == 1:
+        axes = [axes]
 
-    # Consistency Loss
-    axes[2].plot(smoothed_steps, consistency_loss, color="green")
-    axes[2].set_title("Consistency Loss")
-    axes[2].set_xlabel("Training Steps")
-    axes[2].grid(True)
+    for ax, key in zip(axes, available):
+        ax.plot(smoothed[key])
+        ax.set_title(key.replace("_", " ").title())
+        ax.set_xlabel("Training Steps")
+        ax.set_ylabel("Loss")
+        ax.grid(True)
 
     plt.tight_layout()
     if save_path:

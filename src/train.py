@@ -4,6 +4,7 @@ import src.utils.graphing as graphing
 import argparse
 from gymnasium.envs.registration import register
 from src.agents.dqn_agent import DQNAgent
+from src.agents.ppo_agent import PPOAgent
 from minigrid.wrappers import FullyObsWrapper, FlatObsWrapper
 
 # Register the environment with Gymnasium
@@ -14,12 +15,14 @@ if 'MiniGrid-Empty-5x5-v0' not in gym.envs.registry.keys():
         kwargs={'size': 5},
     )
 
+
 def create_environment():
     env = gym.make("MiniGrid-Empty-5x5-v0")
     env = FlatObsWrapper(env)
     return env
 
-def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False, verbose=False):
+
+def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, visualize=False, verbose=False):
     episode_rewards = []
     actions_taken = []
     for episode in range(1, num_episodes + 1):
@@ -46,7 +49,10 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            print(f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}, Epsilon: {agent.epsilon:.3f}")
+            log_msg = f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}"
+            if hasattr(agent, "epsilon"):
+                log_msg += f", Epsilon: {agent.epsilon:.3f}"
+            print(log_msg)
 
     env.close()
     if visualize:
@@ -69,23 +75,36 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
     else:
         return None
 
-def train(use_shield=False, verbose=False, visualize=False):
+
+def train(agent='dqn', use_shield=False, verbose=False, visualize=False):
     env = create_environment()
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
-    agent = DQNAgent(state_dim,
-                     action_dim,
-                     use_shield=use_shield,
-                     verbose=verbose,
-                     requirements_path = 'src/requirements/forward_on_flag.cnf',
-                     env=env)
+    if agent == 'dqn':
+        agent = DQNAgent(state_dim,
+                         action_dim,
+                         use_shield=use_shield,
+                         verbose=verbose,
+                         requirements_path='src/requirements/forward_on_flag.cnf',
+                         env=env)
+    elif agent == 'ppo':
+        agent = PPOAgent(state_dim,
+                         action_dim,
+                         use_shield=use_shield,
+                         verbose=verbose,
+                         requirements_path='src/requirements/forward_on_flag.cnf',
+                         env=env)
+    print(f"Training {agent} agent with shield: {use_shield}")
     run_training(agent, env, verbose=verbose, visualize=visualize)
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train DQN agent with optional shield and verbose.")
+    parser = argparse.ArgumentParser(description="Train RL agent (DQN or PPO) with optional shield and verbose.")
+    parser.add_argument('--agent', choices=['dqn', 'ppo'], default='dqn', help='Which agent to use: dqn or ppo')
     parser.add_argument('--use_shield', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
-    parser.add_argument('--visualize', action='store_true', help='Visualize action frequencies and rewards during training')
+    parser.add_argument('--visualize', action='store_true',
+                        help='Visualize action frequencies and rewards during training')
     args = parser.parse_args()
 
-    train(use_shield=args.use_shield, verbose=args.verbose, visualize=args.visualize)
+    train(agent=args.agent, use_shield=args.use_shield, verbose=args.verbose, visualize=args.visualize)

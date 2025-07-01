@@ -1,11 +1,10 @@
 import gymnasium as gym
 import numpy as np
+import src.utils.graphing as graphing
 import argparse
-
+import torch
 from gymnasium.envs.registration import register
 from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
-
-import src.utils.graphing as graphing
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 
@@ -25,7 +24,6 @@ custom_envs = {
     "MiniGrid-MultiRoom-N2-S4-v0": ("minigrid.envs:MultiRoomEnv", {'num_rooms': 2, 'max_room_size': 4}),
 }
 
-
 def create_environment(env_name, render=False):
     if env_name in custom_envs:
         entry_point, kwargs = custom_envs[env_name]
@@ -38,14 +36,24 @@ def create_environment(env_name, render=False):
         env = FullyObsWrapper(env)    # Full grid view
     else:
         env = FlatObsWrapper(env)     # Flattened dict to vector
-
     return env
 
+def reset_env(env):
+    result = env.reset()
+    return result[0] if isinstance(result, tuple) else result
+
+def step_env(env, action):
+    result = env.step(action)
+    if len(result) == 5:
+        next_state, reward, terminated, truncated, info = result
+        done = terminated or truncated
+    else:
+        next_state, reward, done, info = result
+    return next_state, reward, done, info
 
 def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False, verbose=False, render=False):
     episode_rewards = []
     actions_taken = []
-
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
         if isinstance(state, dict):
@@ -56,10 +64,9 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
         total_reward = 0
 
         while not done:
-            action, context = agent.select_action(state, env)
+            action, context, modified = agent.select_action(state, env)
             x, y = context.get("position", None)
             actions_taken.append((x, y, action))
-
             next_state, reward, terminated, truncated, _ = env.step(action)
             if render:
                 env.render()
@@ -89,8 +96,11 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
             print(log_msg)
 
-    env.close()
+    # evaluation results
+    print("\nBeginning evaluation...")
+    results = evaluate_policy(agent, env, num_episodes=20)
 
+    env.close()
     if visualize:
         graphing.plot_losses(agent.training_logs)
         graphing.plot_prob_shift(agent.training_logs)
@@ -141,6 +151,52 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
     print(f"Training {agent.__class__.__name__} agent on {env_name} with shield: {use_shield}, render: {render}")
     run_training(agent, env, verbose=verbose, visualize=visualize, render=render)
 
+def evaluate_policy(agent, env, num_episodes=10, render=False):
+    agent.q_network.eval()
+    original_epsilon = agent.epsilon
+    agent.epsilon = 0.0  # deterministic actions
+
+    total_rewards = []
+    total_shield_modifications = 0
+    total_steps = 0
+
+    for episode in range(num_episodes):
+        state = reset_env(env)
+        done = False
+        episode_reward = 0
+        episode_modifications = 0
+
+        while not done:
+            action, context, was_modified = agent.select_action(state, env)
+            if was_modified:
+                episode_modifications += 1
+            next_state, reward, done, _ = step_env(env, action)
+
+            episode_reward += reward
+            total_steps += 1
+            state = next_state
+
+            if render:
+                env.render()
+
+        total_rewards.append(episode_reward)
+        total_shield_modifications += episode_modifications
+        print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Shield Activations = {episode_modifications}")
+
+    agent.epsilon = original_epsilon  # restore exploration setting
+
+    avg_reward = np.mean(total_rewards)
+    avg_shield_rate = total_shield_modifications / total_steps if total_steps > 0 else 0
+
+    print(f"\nEvaluation Summary:")
+    print(f"Average Reward: {avg_reward:.2f}")
+    print(f"Avg Shield Modifications per Step: {avg_shield_rate:.4f}")
+
+    return {
+        "avg_reward": avg_reward,
+        "avg_shield_mod_rate": avg_shield_rate,
+        "rewards": total_rewards,
+    }
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN or PPO) with optional shield and environment.")

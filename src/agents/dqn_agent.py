@@ -37,6 +37,8 @@ class DQNAgent:
         self.target_network = QNetwork(state_dim, action_dim, hidden_dim)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.q_network.to(self.device)
 
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=lr)
         self.loss_fn = nn.MSELoss()
@@ -66,27 +68,33 @@ class DQNAgent:
             action = np.random.choice(self.action_dim)
             if self.verbose:
                 print(f"[Random] Action selected: {action}")
-            return action, context
+            return action, context, False  # no shield applied during random choice
 
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(next(self.q_network.parameters()).device)
+
         with torch.no_grad():
             q_values = self.q_network(state_tensor)
             action_probs = torch.softmax(q_values, dim=1)
 
             if self.use_shield and self.shield_controller:
+                original_action = action_probs.argmax(dim=1).item()
                 corrected_probs = self.shield_controller.apply(action_probs, context, self.verbose)
+                shielded_action = corrected_probs.argmax(dim=1).item()
+                was_modified = shielded_action != original_action
             else:
                 corrected_probs = action_probs[:, :self.action_dim]
+                was_modified = False
 
             action = corrected_probs.argmax(dim=1).item()
 
             if self.verbose:
-                print(f"[Policy] Q-values: {q_values.numpy().flatten()}")
-                print(f"[Policy] Raw probs: {action_probs.numpy().flatten()}")
-                print(f"[Policy] Shielded probs: {corrected_probs.numpy().flatten()}")
+                print(f"[Policy] Q-values: {q_values.cpu().numpy().flatten()}")
+                print(f"[Policy] Raw probs: {action_probs.cpu().numpy().flatten()}")
+                print(f"[Policy] Shielded probs: {corrected_probs.cpu().numpy().flatten()}")
                 print(f"[Policy] Action selected: {action}")
+                print(f"[Policy] Shield modified: {was_modified}")
 
-        return action, context
+        return action, context, was_modified
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.replay_buffer.append((state, action, reward, next_state, context, done))

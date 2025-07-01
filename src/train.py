@@ -159,6 +159,7 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
     print(f"Training {agent.__class__.__name__} agent on {env_name} with shield: {use_shield}, render: {render}")
     run_training(agent, env, verbose=verbose, visualize=visualize, render=render)
 
+
 # TODO: make this work for both DQN and PPO agents.
 def evaluate_policy(agent, env, num_episodes=10, render=False):
     agent.q_network.eval()

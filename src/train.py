@@ -8,6 +8,7 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 
+
 def register_env_if_needed(env_id, entry_point, kwargs=None):
     if env_id not in gym.envs.registry.keys():
         register(
@@ -15,6 +16,7 @@ def register_env_if_needed(env_id, entry_point, kwargs=None):
             entry_point=entry_point,
             kwargs=kwargs or {}
         )
+
 
 custom_envs = {
     "MiniGrid-Empty-5x5-v0": ("minigrid.envs:EmptyEnv", {'size': 5}),
@@ -24,6 +26,7 @@ custom_envs = {
     "MiniGrid-MultiRoom-N2-S4-v0": ("minigrid.envs:MultiRoomEnv", {'num_rooms': 2, 'max_room_size': 4}),
 }
 
+
 def create_environment(env_name, render=False):
     if env_name in custom_envs:
         entry_point, kwargs = custom_envs[env_name]
@@ -32,15 +35,17 @@ def create_environment(env_name, render=False):
     env = gym.make(env_name, render_mode="human" if render else None)
 
     if render:
-        env = RGBImgObsWrapper(env)   # 3xWxH RGB
-        env = FullyObsWrapper(env)    # Full grid view
+        env = RGBImgObsWrapper(env)  # 3xWxH RGB
+        env = FullyObsWrapper(env)  # Full grid view
     else:
-        env = FlatObsWrapper(env)     # Flattened dict to vector
+        env = FlatObsWrapper(env)  # Flattened dict to vector
     return env
+
 
 def reset_env(env):
     result = env.reset()
     return result[0] if isinstance(result, tuple) else result
+
 
 def step_env(env, action):
     result = env.step(action)
@@ -51,7 +56,9 @@ def step_env(env, action):
         next_state, reward, done, info = result
     return next_state, reward, done, info
 
-def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False, verbose=False, render=False):
+
+def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False, verbose=False,
+                 render=False):
     episode_rewards = []
     actions_taken = []
     for episode in range(1, num_episodes + 1):
@@ -97,8 +104,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
             print(log_msg)
 
     # evaluation results
-    print("\nBeginning evaluation...")
-    results = evaluate_policy(agent, env, num_episodes=20)
+    # print("\nBeginning evaluation...")
+    # results = evaluate_policy(agent, env, num_episodes=20)
 
     env.close()
     if visualize:
@@ -117,7 +124,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
     return episode_rewards if log_rewards else None
 
 
-def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_name='MiniGrid-Empty-5x5-v0', render=False):
+def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_name='MiniGrid-Empty-5x5-v0',
+          render=False):
     env = create_environment(env_name, render=render)
     print("Observation space:", env.observation_space)
 
@@ -151,6 +159,7 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
     print(f"Training {agent.__class__.__name__} agent on {env_name} with shield: {use_shield}, render: {render}")
     run_training(agent, env, verbose=verbose, visualize=visualize, render=render)
 
+# TODO: make this work for both DQN and PPO agents.
 def evaluate_policy(agent, env, num_episodes=10, render=False):
     agent.q_network.eval()
     original_epsilon = agent.epsilon
@@ -197,6 +206,7 @@ def evaluate_policy(agent, env, num_episodes=10, render=False):
         "avg_shield_mod_rate": avg_shield_rate,
         "rewards": total_rewards,
     }
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN or PPO) with optional shield and environment.")

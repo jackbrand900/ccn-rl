@@ -94,7 +94,7 @@ class PPOAgent:
         self.last_raw_probs = raw_probs.squeeze(0).detach()
         self.last_shielded_probs = shielded_probs.squeeze(0).detach()
 
-        return action.item(), context
+        return action.item(), context, False # TODO: add was_modified check
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.memory.append((

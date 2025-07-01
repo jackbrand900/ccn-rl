@@ -112,11 +112,11 @@ class PPOAgent:
         states, actions, rewards, next_states, contexts, dones, log_probs, values, raw_probs, shielded_probs = zip(*self.memory)
         returns, advantages = self._compute_gae(rewards, values, dones)
 
-        states = torch.FloatTensor(states)
+        states = torch.FloatTensor(np.array(states))
         actions = torch.LongTensor(actions)
-        old_log_probs = torch.FloatTensor(log_probs)
-        returns = torch.FloatTensor(returns)
-        advantages = torch.FloatTensor(advantages)
+        returns = torch.FloatTensor(np.array(returns))
+        advantages = torch.FloatTensor(np.array(advantages))
+        old_log_probs = torch.FloatTensor(np.array(log_probs))
         raw_probs = torch.stack(raw_probs)
         shielded_probs = torch.stack(shielded_probs)
 

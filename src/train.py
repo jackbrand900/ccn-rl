@@ -104,8 +104,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
             print(log_msg)
 
     # evaluation results
-    # print("\nBeginning evaluation...")
-    # results = evaluate_policy(agent, env, num_episodes=20)
+    print("\nBeginning evaluation...")
+    results = evaluate_policy(agent, env, num_episodes=20)
 
     env.close()
     if visualize:
@@ -160,11 +160,17 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
     run_training(agent, env, verbose=verbose, visualize=visualize, render=render)
 
 
-# TODO: make this work for both DQN and PPO agents.
 def evaluate_policy(agent, env, num_episodes=10, render=False):
-    agent.q_network.eval()
-    original_epsilon = agent.epsilon
-    agent.epsilon = 0.0  # deterministic actions
+    # Handle epsilon (if it exists, as in DQN)
+    if hasattr(agent, 'epsilon'):
+        original_epsilon = agent.epsilon
+        agent.epsilon = 0.0  # deterministic actions
+
+    # Set to eval mode if supported
+    if hasattr(agent, 'q_network') and hasattr(agent.q_network, 'eval'):
+        agent.q_network.eval()
+    elif hasattr(agent, 'policy') and hasattr(agent.policy, 'eval'):
+        agent.policy.eval()
 
     total_rewards = []
     total_shield_modifications = 0
@@ -177,11 +183,24 @@ def evaluate_policy(agent, env, num_episodes=10, render=False):
         episode_modifications = 0
 
         while not done:
-            action, context, was_modified = agent.select_action(state, env)
+            # Ensure the state is flattened if it's a dict
+            if isinstance(state, dict):
+                state = state['image'].flatten()
+            else:
+                state = state.flatten()
+
+            # Use agent's select_action interface
+            try:
+                action, context, was_modified = agent.select_action(state, env)
+            except ValueError:
+                action = agent.select_action(state)
+                context = {}
+                was_modified = False
+
             if was_modified:
                 episode_modifications += 1
-            next_state, reward, done, _ = step_env(env, action)
 
+            next_state, reward, done, _ = step_env(env, action)
             episode_reward += reward
             total_steps += 1
             state = next_state
@@ -193,7 +212,9 @@ def evaluate_policy(agent, env, num_episodes=10, render=False):
         total_shield_modifications += episode_modifications
         print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Shield Activations = {episode_modifications}")
 
-    agent.epsilon = original_epsilon  # restore exploration setting
+    # Restore exploration settings
+    if hasattr(agent, 'epsilon'):
+        agent.epsilon = original_epsilon
 
     avg_reward = np.mean(total_rewards)
     avg_shield_rate = total_shield_modifications / total_steps if total_steps > 0 else 0
@@ -207,6 +228,7 @@ def evaluate_policy(agent, env, num_episodes=10, render=False):
         "avg_shield_mod_rate": avg_shield_rate,
         "rewards": total_rewards,
     }
+
 
 
 if __name__ == "__main__":

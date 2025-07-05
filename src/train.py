@@ -2,11 +2,11 @@ import gymnasium as gym
 import numpy as np
 import src.utils.graphing as graphing
 import argparse
-import torch
 from gymnasium.envs.registration import register
 from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
+from src.agents.a2c_agent import A2CAgent
 
 
 def register_env_if_needed(env_id, entry_point, kwargs=None):
@@ -153,6 +153,12 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
                          verbose=verbose,
                          requirements_path=requirements_path,
                          env=env)
+    elif agent == 'a2c':
+        agent = A2CAgent(state_dim, action_dim,
+                         use_shield=use_shield,
+                         verbose=verbose,
+                         requirements_path=requirements_path,
+                         env=env)
     else:
         raise ValueError("Unsupported agent type.")
 
@@ -211,7 +217,7 @@ def evaluate_policy(agent, env, num_episodes=10, render=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN or PPO) with optional shield and environment.")
-    parser.add_argument('--agent', choices=['dqn', 'ppo'], default='dqn', help='Which agent to use: dqn or ppo')
+    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='dqn', help='Which agent to use: dqn, ppo, or a2c')
     parser.add_argument('--use_shield', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('--visualize', action='store_true', help='Visualize training plots')

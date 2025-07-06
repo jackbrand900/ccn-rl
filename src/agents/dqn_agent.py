@@ -62,7 +62,7 @@ class DQNAgent:
         else:
             self.shield_controller = None
 
-    def select_action(self, state, env=None):
+    def select_action(self, state, env=None, do_apply_shield=True):
         context = context_provider.build_context(env, self)
         if np.random.rand() < self.epsilon:
             action = np.random.choice(self.action_dim)
@@ -76,7 +76,7 @@ class DQNAgent:
             q_values = self.q_network(state_tensor)
             action_probs = torch.softmax(q_values, dim=1)
 
-            if self.use_shield and self.shield_controller:
+            if do_apply_shield and self.shield_controller:
                 original_action = action_probs.argmax(dim=1).item()
                 corrected_probs = self.shield_controller.apply(action_probs, context, self.verbose)
                 shielded_action = corrected_probs.argmax(dim=1).item()

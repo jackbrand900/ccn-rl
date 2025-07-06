@@ -42,21 +42,24 @@ class A2CAgent:
             self.shield_controller = ShieldController(
                 requirements_path=requirements_path,
                 num_actions=action_dim,
-                flag_logic_fn=context_provider.position_flag_logic,
+                flag_logic_fn=context_provider.key_flag_logic,
             )
         else:
             self.shield_controller = None
 
-    def select_action(self, state, env=None):
+    def select_action(self, state, env=None, do_apply_shield=True):
         context = context_provider.build_context(env or self.env, self)
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
         logits, value = self.model(state_tensor)
         raw_probs = torch.softmax(logits, dim=-1)
 
-        if self.use_shield and self.shield_controller:
+        if do_apply_shield and self.shield_controller:
             shielded_probs = self.shield_controller.apply(raw_probs, context, self.verbose)
         else:
             shielded_probs = raw_probs
+
+        # Detect if the shield changed the probabilities
+        was_modified = not torch.allclose(raw_probs, shielded_probs, atol=1e-6)
 
         dist = Categorical(probs=shielded_probs)
         action = dist.sample()
@@ -67,7 +70,7 @@ class A2CAgent:
         self.last_raw_probs = raw_probs.squeeze(0).detach()
         self.last_shielded_probs = shielded_probs.squeeze(0).detach()
 
-        return action.item(), context, False  # TODO: detect modification if needed
+        return action.item(), context, was_modified
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.memory.append((state, action, reward, next_state, context, done,

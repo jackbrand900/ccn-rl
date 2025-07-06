@@ -55,7 +55,7 @@ class PPOAgent:
             self.shield_controller = ShieldController(
                 requirements_path=requirements_path,
                 num_actions=action_dim,
-                flag_logic_fn=context_provider.position_flag_logic,
+                flag_logic_fn=context_provider.key_flag_logic,
             )
         else:
             self.shield_controller = None
@@ -69,7 +69,8 @@ class PPOAgent:
             "prob_shift": [],
         }
 
-    def select_action(self, state, env=None):
+    def select_action(self, state, env=None, key_pos=None):
+        env.key_pos = key_pos
         context = context_provider.build_context(env or self.env, self)
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
         logits, value = self.policy(state_tensor)

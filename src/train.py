@@ -7,6 +7,8 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
+from src.utils import env_helpers
+from src.utils.env_helpers import find_key
 
 
 def register_env_if_needed(env_id, entry_point, kwargs=None):
@@ -57,12 +59,14 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False, verbose=False,
+def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, visualize=False, verbose=False,
                  render=False):
     episode_rewards = []
     actions_taken = []
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
+        key_pos = find_key(env)
+        # print(f"[DEBUG] Key is at position: {key_pos}")
         if isinstance(state, dict):
             state = state['image'].flatten()
         else:
@@ -71,7 +75,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
         total_reward = 0
 
         while not done:
-            action, context, modified = agent.select_action(state, env)
+            action, context, modified = agent.select_action(state, env, key_pos)
             x, y = context.get("position", None)
             actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, _ = env.step(action)
@@ -128,7 +132,6 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
           render=False):
     env = create_environment(env_name, render=render)
     print("Observation space:", env.observation_space)
-
     obs_space = env.observation_space
 
     if isinstance(obs_space, gym.spaces.Box):
@@ -139,7 +142,7 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
         raise ValueError(f"Unsupported observation space type: {obs_space}")
 
     action_dim = env.action_space.n
-    requirements_path = 'src/requirements/forward_on_flag.cnf'
+    requirements_path = 'src/requirements/pickup_on_key.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(state_dim, action_dim,
@@ -166,7 +169,6 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
     run_training(agent, env, verbose=verbose, visualize=visualize, render=render)
 
 
-# TODO: make this work for both DQN and PPO agents.
 def evaluate_policy(agent, env, num_episodes=10, render=False):
     agent.q_network.eval()
     original_epsilon = agent.epsilon
@@ -216,7 +218,7 @@ def evaluate_policy(agent, env, num_episodes=10, render=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train RL agent (DQN or PPO) with optional shield and environment.")
+    parser = argparse.ArgumentParser(description="Train RL agent (DQN, A2C, PPO) with optional shield and environment.")
     parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='dqn', help='Which agent to use: dqn, ppo, or a2c')
     parser.add_argument('--use_shield', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')

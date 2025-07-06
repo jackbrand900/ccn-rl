@@ -4,6 +4,9 @@ import re
 from pishield.propositional_requirements.shield_layer import ShieldLayer as PropositionalShieldLayer
 from pishield.linear_requirements.shield_layer import ShieldLayer as LinearShieldLayer
 
+from src.utils.env_helpers import is_in_front_of_key
+
+
 class ShieldController:
     def __init__(self, requirements_path, num_actions, flag_logic_fn=None, threshold=0.5):
         self.requirements_path = requirements_path
@@ -34,6 +37,16 @@ class ShieldController:
         vars_found = set(re.findall(r"y_(\d+)", content))
         var_indices = sorted(int(v) for v in vars_found)
         return [f"y_{i}" for i in var_indices]
+
+    def flag_logic_with_key_check(self, context):
+        """
+        context: dict with keys 'obs' and 'direction', optionally 'position'
+        Returns: dict like {'y_7': 1} if in front of key, assuming y_7 is your flag
+        """
+        obs = context['obs']  # shape (7,7,3) tensor or np.array
+        direction = context['direction']  # 0=right, 1=down, 2=left, 3=up
+        in_front = is_in_front_of_key(obs, direction)
+        return {"y_7": int(in_front)}  # or whatever your flag var is
 
     def build_shield_layer(self):
         ordering = ",".join(reversed(self.ordering_names))  # e.g. "3,2,1,0"

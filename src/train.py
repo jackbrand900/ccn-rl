@@ -59,13 +59,14 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, visualize=False, verbose=False,
+def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, visualize=False, verbose=False,
                  render=False):
     episode_rewards = []
     actions_taken = []
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
         key_pos = find_key(env)
+        env.key_pos = key_pos # TODO: this is only for key door things
         # print(f"[DEBUG] Key is at position: {key_pos}")
         if isinstance(state, dict):
             state = state['image'].flatten()
@@ -75,7 +76,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
         total_reward = 0
 
         while not done:
-            action, context, modified = agent.select_action(state, env, key_pos)
+            action, context, modified = agent.select_action(state, env)
             x, y = context.get("position", None)
             actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, _ = env.step(action)
@@ -108,8 +109,8 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             print(log_msg)
 
     # evaluation results
-    # print("\nBeginning evaluation...")
-    # results = evaluate_policy(agent, env, num_episodes=20)
+    print("\nBeginning evaluation...")
+    results = evaluate_policy(agent, env, num_episodes=20)
 
     env.close()
     if visualize:
@@ -170,9 +171,14 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
 
 
 def evaluate_policy(agent, env, num_episodes=10, render=False):
-    agent.q_network.eval()
-    original_epsilon = agent.epsilon
-    agent.epsilon = 0.0  # deterministic actions
+    # Set agent to evaluation mode if possible
+    if hasattr(agent, 'q_network') and hasattr(agent.q_network, 'eval'):
+        agent.q_network.eval()
+
+    # Store original exploration parameter if it exists
+    original_epsilon = getattr(agent, 'epsilon', None)
+    if original_epsilon is not None:
+        agent.epsilon = 0.0  # Force deterministic policy if epsilon-greedy
 
     total_rewards = []
     total_shield_modifications = 0
@@ -185,14 +191,26 @@ def evaluate_policy(agent, env, num_episodes=10, render=False):
         episode_modifications = 0
 
         while not done:
-            action, context, was_modified = agent.select_action(state, env)
-            if was_modified:
-                episode_modifications += 1
+            # Attempt to get (action, context, was_modified), fall back if needed
+            try:
+                result = agent.select_action(state, env)
+                if isinstance(result, tuple) and len(result) == 3:
+                    action, context, was_modified = result
+                else:
+                    action = result
+                    was_modified = False
+            except TypeError:
+                action = agent.select_action(state, env)
+                was_modified = False
+
             next_state, reward, done, _ = step_env(env, action)
 
             episode_reward += reward
             total_steps += 1
             state = next_state
+
+            if was_modified:
+                episode_modifications += 1
 
             if render:
                 env.render()
@@ -201,7 +219,9 @@ def evaluate_policy(agent, env, num_episodes=10, render=False):
         total_shield_modifications += episode_modifications
         print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Shield Activations = {episode_modifications}")
 
-    agent.epsilon = original_epsilon  # restore exploration setting
+    # Restore original exploration setting
+    if original_epsilon is not None:
+        agent.epsilon = original_epsilon
 
     avg_reward = np.mean(total_rewards)
     avg_shield_rate = total_shield_modifications / total_steps if total_steps > 0 else 0

@@ -50,12 +50,13 @@ class PPOAgent:
         self.last_value = None
         self.last_raw_probs = None
         self.last_shielded_probs = None
+        self.last_obs = None
 
         if use_shield:
             self.shield_controller = ShieldController(
                 requirements_path=requirements_path,
                 num_actions=action_dim,
-                flag_logic_fn=context_provider.key_flag_logic,
+                flag_logic_fn=context_provider.cartpole_emergency_flag_logic,
             )
         else:
             self.shield_controller = None
@@ -70,6 +71,7 @@ class PPOAgent:
         }
 
     def select_action(self, state, env=None, do_apply_shield=True):
+        self.last_obs = state
         context = context_provider.build_context(env or self.env, self)
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
         logits, value = self.policy(state_tensor)

@@ -101,7 +101,9 @@ class ShieldController:
             if flag_active:
                 print(f"[SHIELD ACTIVE] Flags: {flags}")
                 if changed:
-                    print(f"[SHIELD MODIFIED OUTPUT] Before: {action_probs.cpu().numpy().flatten()} → After: {corrected.cpu().numpy().flatten()}")
+                    raw_np = action_probs.detach().cpu().numpy().flatten()
+                    corrected_np = corrected.detach().cpu().numpy().flatten()
+                    print(f"[SHIELD MODIFIED OUTPUT] Before: {raw_np} → After: {corrected_np}")
                 else:
                     print(f"[SHIELD ACTIVE BUT NO CHANGE] Action output remained the same.")
 

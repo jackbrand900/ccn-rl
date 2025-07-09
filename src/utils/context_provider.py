@@ -1,3 +1,5 @@
+import numpy as np
+
 import src.utils.env_helpers as env_helpers
 
 
@@ -20,7 +22,7 @@ def build_context(env, agent):
             "obs": obs,
         })
     else:
-        obs = getattr(agent, "last_obs", None)
+        obs = agent.last_obs if hasattr(agent, "last_obs") else None
         context["obs"] = obs
 
     return context
@@ -72,12 +74,53 @@ def cartpole_flag_logic(context):
     if obs is None:
         return {}
 
-    cart_position = obs[0]
-    pole_angle = obs[2]
+    pos, vel, angle, angle_vel = obs
+
+    def soft_flag(x, center, width=0.8):
+        return float(np.clip((x - center) / width, 0, 1))
 
     return {
-        "y_2": int(cart_position > 1.0),  # flag: cart is right of center
-        "y_3": int(cart_position < -1.0),  # flag: cart is left of center
-        "y_4": int(pole_angle > 0.1),  # flag: pole leaning right
-        "y_5": int(pole_angle < -0.1),  # flag: pole leaning left
+        "y_2": soft_flag(pos, 0.8),  # cart right
+        "y_3": soft_flag(-pos, 0.8),  # cart left
+        "y_4": soft_flag(angle if angle_vel > 0 else 0, 0.05),  # pole falling right
+        "y_5": soft_flag(-angle if angle_vel < 0 else 0, 0.05),  # pole falling left
+    }
+
+
+def cartpole_flag_logic_advanced(context,
+                                 theta_thresh=0.05,
+                                 theta_scale=0.5,
+                                 pos_thresh=0.8,
+                                 pos_scale=0.5,
+                                 emergency_thresh=0.15,
+                                 emergency_scale=0.15):
+    obs = context.get("obs")
+    if obs is None:
+        return {}
+
+    pos, vel, angle, angle_vel = obs
+
+    def ramp(x, threshold, scale):
+        return float(np.clip((x - threshold) / scale, 0, 1))
+
+    flags = {
+        "y_2": ramp(angle, theta_thresh, theta_scale) * ramp(angle_vel, 0.5, 0.5),  # falling right
+        "y_3": ramp(-angle, theta_thresh, theta_scale) * ramp(-angle_vel, 0.5, 0.5),  # falling left
+        "y_4": ramp(pos, pos_thresh, pos_scale) * ramp(vel, 0.5, 0.5),  # cart right
+        "y_5": ramp(-pos, pos_thresh, pos_scale) * ramp(-vel, 0.5, 0.5),  # cart left
+        "y_6": ramp(abs(angle), emergency_thresh, emergency_scale),  # emergency
+    }
+
+    return flags
+
+
+def cartpole_emergency_flag_logic(context):
+    obs = context.get("obs")
+    if obs is None:
+        return {}
+
+    _, _, angle, _ = obs
+    return {
+        "y_2": int(angle < -0.15),  # tipping far to the left
+        "y_3": int(angle > 0.15),  # tipping far to the right
     }

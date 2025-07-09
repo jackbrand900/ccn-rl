@@ -152,7 +152,7 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
         raise ValueError(f"Unsupported observation space type: {obs_space}")
 
     action_dim = env.action_space.n
-    requirements_path = 'src/requirements/pickup_on_key.cnf'
+    requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(state_dim, action_dim,

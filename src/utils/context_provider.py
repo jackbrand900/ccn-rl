@@ -2,20 +2,28 @@ import src.utils.env_helpers as env_helpers
 
 
 def build_context(env, agent):
-    position = env_helpers.extract_agent_pos(env)
-    timestep = agent.learn_step_counter
-
-    obs_dict = env.unwrapped.gen_obs()
-    obs = obs_dict["image"]
-    direction = env.unwrapped.agent_dir
-
-    return {
-        "position": position,
-        "timestep": timestep,
-        "obs": obs,
-        "direction": direction,
+    env_id = env.spec.id if hasattr(env, "spec") and env.spec else ""
+    context = {
+        "timestep": getattr(agent, "learn_step_counter", 0),
         "env": env,
     }
+
+    if "MiniGrid" in env_id:
+        position = env_helpers.extract_agent_pos(env)
+        direction = env.unwrapped.agent_dir
+        obs_dict = env.unwrapped.gen_obs()
+        obs = obs_dict["image"]
+
+        context.update({
+            "position": position,
+            "direction": direction,
+            "obs": obs,
+        })
+    else:
+        obs = getattr(agent, "last_obs", None)
+        context["obs"] = obs
+
+    return context
 
 
 def position_flag_logic(context):
@@ -42,8 +50,8 @@ def key_flag_logic(context):
 
     # Compute global front position
     front_deltas = {
-        0: (1, 0),   # right
-        1: (0, 1),   # down
+        0: (1, 0),  # right
+        1: (0, 1),  # down
         2: (-1, 0),  # left
         3: (0, -1),  # up
     }
@@ -57,3 +65,19 @@ def key_flag_logic(context):
     # print(f"[FLAG] Grid check says key_at_front = {key_at_front}")
 
     return {"y_7": int(key_at_front)}
+
+
+def cartpole_flag_logic(context):
+    obs = context.get("obs")
+    if obs is None:
+        return {}
+
+    cart_position = obs[0]
+    pole_angle = obs[2]
+
+    return {
+        "y_2": int(cart_position > 1.0),  # flag: cart is right of center
+        "y_3": int(cart_position < -1.0),  # flag: cart is left of center
+        "y_4": int(pole_angle > 0.1),  # flag: pole leaning right
+        "y_5": int(pole_angle < -0.1),  # flag: pole leaning left
+    }

@@ -7,8 +7,10 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
-from src.utils import env_helpers
+from src.utils import env_helpers, context_provider
+import torch
 from src.utils.env_helpers import find_key
+from src.utils.shield_controller import ShieldController
 
 
 def register_env_if_needed(env_id, entry_point, kwargs=None):
@@ -198,15 +200,25 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
     if original_epsilon is not None:
         agent.epsilon = 0.0  # Force deterministic policy if epsilon-greedy
 
+    violations_per_episode = []
     total_rewards = []
     total_shield_modifications = 0
     total_steps = 0
+    total_violations = 0
+
+    # Dynamically create a shield controller if needed for violation checking
+    if not eval_with_shield and (not hasattr(agent, "shield_controller") or agent.shield_controller is None):
+        agent.shield_controller = ShieldController(
+            requirements_path='src/requirements/emergency_cartpole.cnf',  # or make this configurable
+            num_actions=agent.action_dim,
+        )
 
     for episode in range(num_episodes):
         state = reset_env(env)
         done = False
         episode_reward = 0
         episode_modifications = 0
+        episode_violations = 0
 
         while not done:
             # Attempt to get (action, context, was_modified), fall back if needed
@@ -217,6 +229,12 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
                 else:
                     action = result
                     was_modified = False
+
+                if not eval_with_shield and agent.shield_controller:
+                    violation = agent.shield_controller.would_violate(action, context)
+                    total_violations += violation
+                    episode_violations += violation
+
             except TypeError:
                 action = agent.select_action(state, env, do_apply_shield=eval_with_shield)
                 was_modified = False
@@ -235,6 +253,7 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
 
         total_rewards.append(episode_reward)
         total_shield_modifications += episode_modifications
+        violations_per_episode.append(episode_violations)
         print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Shield Activations = {episode_modifications}")
 
     # Restore original exploration setting
@@ -243,11 +262,13 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
 
     avg_reward = np.mean(total_rewards)
     avg_shield_rate = total_shield_modifications / total_steps if total_steps > 0 else 0
+    avg_violation_rate = total_violations / total_steps if total_steps > 0 else 0
 
     print(f"\nEvaluation Summary:")
     print(f"Average Reward: {avg_reward:.2f}")
     print(f"Avg Shield Modifications per Step: {avg_shield_rate:.4f}")
-
+    print(f"Total Constraint Violations: {total_violations}")
+    print(f"Avg Constraint Violations per Step: {avg_violation_rate:.4f}")
     graphing.plot_rewards(
         rewards=total_rewards,
         title=f"Evaluation Rewards Using Shield: {eval_with_shield}",
@@ -255,6 +276,13 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
         ylabel="Reward",
         rolling_window=5,
         save_path="plots/evaluation_rewards.png",
+        show=True
+    )
+    graphing.plot_violations(
+        violations=violations_per_episode,
+        total_steps=total_steps,
+        title=f"Constraint Violations per Episode",
+        save_path=f"plots/evaluation_violations_{'with' if eval_with_shield else 'without'}_shield.png",
         show=True
     )
 

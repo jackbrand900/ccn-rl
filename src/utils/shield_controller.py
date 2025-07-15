@@ -5,13 +5,13 @@ from pishield.propositional_requirements.shield_layer import ShieldLayer as Prop
 from pishield.linear_requirements.shield_layer import ShieldLayer as LinearShieldLayer
 
 from src.utils.env_helpers import is_in_front_of_key
-
+from src.utils.req_file_to_logic_fn import get_flag_logic_fn
 
 class ShieldController:
-    def __init__(self, requirements_path, num_actions, flag_logic_fn=None, threshold=0.5):
+    def __init__(self, requirements_path, num_actions):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
-        self.flag_logic_fn = flag_logic_fn or self.default_flag_logic
+        self.flag_logic_fn = get_flag_logic_fn(self.requirements_path) or self.default_flag_logic
         self.flag_logic_batch = self._batchify(self.flag_logic_fn)
 
         # Parse var names from file
@@ -119,3 +119,27 @@ class ShieldController:
         full_input = torch.cat([action_probs, flag_tensor], dim=1)
         shielded_output = self.shield_layer(full_input)
         return shielded_output[:, :self.num_actions]
+
+    def count_violations(self, action_probs, context):
+        corrected = self.apply(action_probs, context, verbose=False)
+        was_modified = not torch.allclose(action_probs, corrected, atol=1e-5)
+        return int(was_modified)
+
+    def would_violate(self, selected_action, context):
+        """
+        Checks whether the selected action violates the constraints.
+        Returns 1 if it does, 0 if not.
+        """
+        one_hot = torch.zeros(1, self.num_actions, dtype=torch.float32)
+        one_hot[0, selected_action] = 1.0
+
+        # Generate flags
+        flags = self.flag_logic_fn(context)
+        flag_values = [flags.get(name, 0) for name in self.flag_names]
+        flag_tensor = torch.tensor(flag_values, dtype=one_hot.dtype).unsqueeze(0)
+
+        # Concatenate and check what shield outputs
+        input_tensor = torch.cat([one_hot, flag_tensor], dim=1)
+        corrected = self.shield_layer(input_tensor)
+        corrected_action = corrected[0, :self.num_actions].argmax().item()
+        return int(corrected_action != selected_action)

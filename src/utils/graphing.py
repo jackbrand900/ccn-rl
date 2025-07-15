@@ -13,36 +13,46 @@ def plot_rewards(
         save_path=None,
         show=True
 ):
-    """
-    Plot rewards over episodes with optional rolling average.
-
-    Args:
-        rewards (list or np.array): List of rewards per episode.
-        title (str): Plot title.
-        xlabel (str): X-axis label.
-        ylabel (str): Y-axis label.
-        rolling_window (int): Window size for smoothing.
-        save_path (str or None): If provided, save the plot to this path.
-        show (bool): If True, display the plot.
-    """
     episodes = np.arange(1, len(rewards) + 1)
     rewards = np.array(rewards)
 
     plt.figure(figsize=(10, 6))
-    plt.plot(episodes, rewards, label="Episode Reward", alpha=0.6)
+    ax = plt.gca()
 
+    # Plot raw rewards
+    ax.plot(episodes, rewards, label="Episode Reward", alpha=0.6)
+
+    avg_reward = np.mean(rewards)
+    std_reward = np.std(rewards)
+
+    # Rolling mean and std
     if rolling_window > 1:
-        rolling_mean = np.convolve(
-            rewards, np.ones(rolling_window) / rolling_window, mode='valid'
-        )
+        rolling_mean = np.convolve(rewards, np.ones(rolling_window) / rolling_window, mode='valid')
+        rolling_std = np.std([rewards[max(0, i - rolling_window):i] for i in range(rolling_window, len(rewards) + 1)], axis=1)
         rolling_episodes = np.arange(rolling_window, len(rewards) + 1)
-        plt.plot(rolling_episodes, rolling_mean, label=f"{rolling_window}-Episode Average", linewidth=2)
 
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.title(title)
-    plt.legend()
-    plt.grid(alpha=0.3)
+        ax.plot(rolling_episodes, rolling_mean, label=f"{rolling_window}-Episode Average", linewidth=2)
+        ax.fill_between(rolling_episodes,
+                        rolling_mean - rolling_std,
+                        rolling_mean + rolling_std,
+                        alpha=0.2,
+                        color="gray",
+                        label="±1 Std Dev")
+
+    # Add stats to top-left
+    stats_text = f"Mean: {avg_reward:.2f}\nStd Dev: {std_reward:.2f}"
+    ax.text(0.02, 0.95, stats_text, transform=ax.transAxes,
+            verticalalignment='top', horizontalalignment='left',
+            fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.5))
+
+    # Add legend to top-right
+    ax.legend(loc='upper right')
+
+    # Labels and formatting
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(alpha=0.3)
 
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -53,6 +63,7 @@ def plot_rewards(
         plt.show()
     else:
         plt.close()
+
 
 def plot_action_frequencies(actions, action_labels=None, title="Action Selection Frequencies", save_path=None, show=True):
     """
@@ -230,3 +241,47 @@ def plot_prob_shift(logs, window=10, save_path=None):
     if save_path:
         plt.savefig(save_path)
     plt.show()
+
+def plot_violations(
+        violations,
+        total_steps,
+        title="Constraint Violations per Episode",
+        save_path=None,
+        show=True
+):
+    episodes = np.arange(1, len(violations) + 1)
+    violations = np.array(violations)
+
+    total_violations = int(np.sum(violations))
+    avg_violations_per_step = total_violations / total_steps if total_steps > 0 else 0
+
+    plt.figure(figsize=(10, 4))
+    ax = plt.gca()
+
+    ax.plot(episodes, violations, color='red', label="Violations")
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Violations")
+    ax.set_title(title)
+    ax.grid(True)
+    ax.legend(loc="upper right")
+
+    # Top-left annotation
+    stats_text = (
+        f"Total Violations: {total_violations}\n"
+        f"Avg/Step: {avg_violations_per_step:.4f}"
+    )
+    ax.text(0.02, 0.95, stats_text, transform=ax.transAxes,
+            verticalalignment='top', horizontalalignment='left',
+            fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.5))
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path)
+        print(f"Violation plot saved to {save_path}")
+
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+

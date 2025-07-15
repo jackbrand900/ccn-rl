@@ -7,11 +7,14 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
-from src.utils import env_helpers, context_provider
-import torch
 from src.utils.env_helpers import find_key
 from src.utils.shield_controller import ShieldController
 
+
+register(
+    id="CarRacingIntersection-v0",
+    entry_point="src.envs.custom_car_racing_with_intersection:CustomCarRacing",  # <- adjust path to your file
+)
 
 def register_env_if_needed(env_id, entry_point, kwargs=None):
     if env_id not in gym.envs.registry.keys():
@@ -29,6 +32,8 @@ custom_envs = {
     "MiniGrid-DoorKey-6x6-v0": ("minigrid.envs:DoorKeyEnv", {'size': 6}),
     "MiniGrid-MultiRoom-N2-S4-v0": ("minigrid.envs:MultiRoomEnv", {'num_rooms': 2, 'max_room_size': 4}),
     "CartPole-v1": (None, None),
+    "CarRacing-v3": (None, None),
+    "CarRacingIntersection-v0": (None, None)
 }
 
 
@@ -41,6 +46,14 @@ def create_environment(env_name, render=False):
         # Handle CartPole rendering differently
         if env_name == "CartPole-v1":
             env = gym.make(env_name, render_mode="human" if render else None)
+            return env
+
+        if env_name == "CarRacing-v3":
+            env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
+            return env
+
+        if env_name == "CarRacingIntersection-v0":
+            env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
             return env
 
         # Handle MiniGrid environments
@@ -153,7 +166,11 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
     else:
         raise ValueError(f"Unsupported observation space type: {obs_space}")
 
-    action_dim = env.action_space.n
+    if isinstance(env.action_space, gym.spaces.Discrete):
+        action_dim = env.action_space.n
+    else:
+        action_dim = env.action_space.shape[0]
+
     requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':

@@ -200,6 +200,7 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
     if original_epsilon is not None:
         agent.epsilon = 0.0  # Force deterministic policy if epsilon-greedy
 
+    violations_per_episode = []
     total_rewards = []
     total_shield_modifications = 0
     total_steps = 0
@@ -217,6 +218,7 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
         done = False
         episode_reward = 0
         episode_modifications = 0
+        episode_violations = 0
 
         while not done:
             # Attempt to get (action, context, was_modified), fall back if needed
@@ -231,6 +233,7 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
                 if not eval_with_shield and agent.shield_controller:
                     violation = agent.shield_controller.would_violate(action, context)
                     total_violations += violation
+                    episode_violations += violation
 
             except TypeError:
                 action = agent.select_action(state, env, do_apply_shield=eval_with_shield)
@@ -250,6 +253,7 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
 
         total_rewards.append(episode_reward)
         total_shield_modifications += episode_modifications
+        violations_per_episode.append(episode_violations)
         print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Shield Activations = {episode_modifications}")
 
     # Restore original exploration setting
@@ -272,6 +276,13 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
         ylabel="Reward",
         rolling_window=5,
         save_path="plots/evaluation_rewards.png",
+        show=True
+    )
+    graphing.plot_violations(
+        violations=violations_per_episode,
+        total_steps=total_steps,
+        title=f"Constraint Violations per Episode",
+        save_path=f"plots/evaluation_violations_{'with' if eval_with_shield else 'without'}_shield.png",
         show=True
     )
 

@@ -26,22 +26,30 @@ custom_envs = {
     "MiniGrid-Empty-6x6-v0": ("minigrid.envs:EmptyEnv", {'size': 6}),
     "MiniGrid-DoorKey-6x6-v0": ("minigrid.envs:DoorKeyEnv", {'size': 6}),
     "MiniGrid-MultiRoom-N2-S4-v0": ("minigrid.envs:MultiRoomEnv", {'num_rooms': 2, 'max_room_size': 4}),
+    "CartPole-v1": (None, None),
 }
 
 
 def create_environment(env_name, render=False):
     if env_name in custom_envs:
         entry_point, kwargs = custom_envs[env_name]
-        register_env_if_needed(env_name, entry_point, kwargs)
+        if entry_point:
+            register_env_if_needed(env_name, entry_point, kwargs)
 
-    env = gym.make(env_name, render_mode="human" if render else None)
+        # Handle CartPole rendering differently
+        if env_name == "CartPole-v1":
+            env = gym.make(env_name, render_mode="human" if render else None)
+            return env
 
-    if render:
-        env = RGBImgObsWrapper(env)  # 3xWxH RGB
-        env = FullyObsWrapper(env)  # Full grid view
-    else:
-        env = FlatObsWrapper(env)  # Flattened dict to vector
-    return env
+        # Handle MiniGrid environments
+        env = gym.make(env_name, render_mode="human" if render else None)
+        if "MiniGrid" in env_name:
+            if render:
+                env = RGBImgObsWrapper(env)
+                env = FullyObsWrapper(env)
+            else:
+                env = FlatObsWrapper(env)
+        return env
 
 
 def reset_env(env):
@@ -65,8 +73,12 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
     actions_taken = []
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
-        key_pos = find_key(env)
-        env.key_pos = key_pos  # TODO: this is only for key door things (i.e. providing context)
+        try:  # TODO: extract this to the context provider
+            key_pos = find_key(env)
+            env.key_pos = key_pos
+        except AttributeError:
+            key_pos = None  # Not a MiniGrid environment
+
         if isinstance(state, dict):
             state = state['image'].flatten()
         else:
@@ -76,7 +88,9 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
 
         while not done:
             action, context, modified = agent.select_action(state, env)
-            x, y = context.get("position", None)
+            # TODO: make this environment agnostic
+            pos = context.get("position", None)
+            x, y = pos if pos is not None else (None, None)
             actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, _ = env.step(action)
             if render:
@@ -111,8 +125,8 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
     if visualize:
         graphing.plot_losses(agent.training_logs)
         graphing.plot_prob_shift(agent.training_logs)
-        action_counts = graphing.get_action_counts_per_state(actions_taken)
-        graphing.plot_action_histograms(action_counts)
+        # action_counts = graphing.get_action_counts_per_state(actions_taken)
+        # graphing.plot_action_histograms(action_counts)
         graphing.plot_rewards(
             rewards=episode_rewards,
             title="Training Performance",
@@ -138,7 +152,7 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
         raise ValueError(f"Unsupported observation space type: {obs_space}")
 
     action_dim = env.action_space.n
-    requirements_path = 'src/requirements/pickup_on_key.cnf'
+    requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(state_dim, action_dim,
@@ -270,6 +284,7 @@ if __name__ == "__main__":
                                env_name=args.env,
                                render=args.render)
 
-    # results = evaluate_policy(trained_agent, env, eval_with_shield=args.eval_with_shield, num_episodes=20, visualize=args.visualize, render=args.render)
+    # results = evaluate_policy(trained_agent, env, eval_with_shield=args.eval_with_shield, num_episodes=20,
+    # visualize=args.visualize, render=args.render)
     results1 = evaluate_policy(trained_agent, env, eval_with_shield=False, num_episodes=100, visualize=args.visualize)
     results2 = evaluate_policy(trained_agent, env, eval_with_shield=True, num_episodes=100, visualize=args.visualize)

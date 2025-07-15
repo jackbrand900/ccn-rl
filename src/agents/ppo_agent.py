@@ -28,7 +28,7 @@ class ActorCritic(nn.Module):
 
 class PPOAgent:
     def __init__(self, state_dim, action_dim, hidden_dim=64, lr=3e-4, gamma=0.99, clip_eps=0.2,
-                 ent_coef=0.01, lambda_req=0.05, lambda_consistency=0.05, use_shield=True,
+                 ent_coef=0.01, lambda_req=0.0, lambda_consistency=0.0, use_shield=True,
                  verbose=False, requirements_path=None, env=None):
 
         self.gamma = gamma

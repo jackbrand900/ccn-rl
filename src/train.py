@@ -7,8 +7,10 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
-from src.utils import env_helpers
+from src.utils import env_helpers, context_provider
+import torch
 from src.utils.env_helpers import find_key
+from src.utils.shield_controller import ShieldController
 
 
 def register_env_if_needed(env_id, entry_point, kwargs=None):
@@ -201,6 +203,15 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
     total_rewards = []
     total_shield_modifications = 0
     total_steps = 0
+    total_violations = 0
+
+    # Dynamically create a shield controller if needed for violation checking
+    if not eval_with_shield and (not hasattr(agent, "shield_controller") or agent.shield_controller is None):
+        agent.shield_controller = ShieldController(
+            requirements_path='src/requirements/emergency_cartpole.cnf',  # or make this configurable
+            num_actions=agent.action_dim,
+            flag_logic_fn=context_provider.cartpole_emergency_flag_logic,
+        )
 
     for episode in range(num_episodes):
         state = reset_env(env)
@@ -217,6 +228,12 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
                 else:
                     action = result
                     was_modified = False
+
+                if not eval_with_shield and agent.shield_controller:
+                    violation = agent.shield_controller.would_violate(action, context)
+                    print(f"Total violations: {total_violations}")
+                    total_violations += violation
+
             except TypeError:
                 action = agent.select_action(state, env, do_apply_shield=eval_with_shield)
                 was_modified = False
@@ -243,11 +260,13 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
 
     avg_reward = np.mean(total_rewards)
     avg_shield_rate = total_shield_modifications / total_steps if total_steps > 0 else 0
+    avg_violation_rate = total_violations / total_steps if total_steps > 0 else 0
 
     print(f"\nEvaluation Summary:")
     print(f"Average Reward: {avg_reward:.2f}")
     print(f"Avg Shield Modifications per Step: {avg_shield_rate:.4f}")
-
+    print(f"Total Constraint Violations: {total_violations}")
+    print(f"Avg Constraint Violations per Step: {avg_violation_rate:.4f}")
     graphing.plot_rewards(
         rewards=total_rewards,
         title=f"Evaluation Rewards Using Shield: {eval_with_shield}",

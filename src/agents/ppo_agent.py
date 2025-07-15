@@ -145,6 +145,7 @@ class PPOAgent:
             loss = (policy_loss + 0.5 * value_loss - self.ent_coef * entropy +
                     self.lambda_req * req_loss + self.lambda_consistency * consistency_loss)
 
+            # focal loss, similar approach with reinforcement learning?
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()

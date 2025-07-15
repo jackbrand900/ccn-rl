@@ -5,6 +5,7 @@ import numpy as np
 from torch.distributions import Categorical
 
 from src.utils.shield_controller import ShieldController
+from src.utils.req_file_to_logic_fn import get_flag_logic_fn
 import src.utils.context_provider as context_provider
 
 
@@ -56,7 +57,6 @@ class PPOAgent:
             self.shield_controller = ShieldController(
                 requirements_path=requirements_path,
                 num_actions=action_dim,
-                flag_logic_fn=context_provider.cartpole_emergency_flag_logic,
             )
         else:
             self.shield_controller = None

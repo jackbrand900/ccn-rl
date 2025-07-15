@@ -5,13 +5,13 @@ from pishield.propositional_requirements.shield_layer import ShieldLayer as Prop
 from pishield.linear_requirements.shield_layer import ShieldLayer as LinearShieldLayer
 
 from src.utils.env_helpers import is_in_front_of_key
-
+from src.utils.req_file_to_logic_fn import get_flag_logic_fn
 
 class ShieldController:
-    def __init__(self, requirements_path, num_actions, flag_logic_fn=None, threshold=0.5):
+    def __init__(self, requirements_path, num_actions):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
-        self.flag_logic_fn = flag_logic_fn or self.default_flag_logic
+        self.flag_logic_fn = get_flag_logic_fn(self.requirements_path) or self.default_flag_logic
         self.flag_logic_batch = self._batchify(self.flag_logic_fn)
 
         # Parse var names from file

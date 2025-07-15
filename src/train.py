@@ -210,7 +210,6 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
         agent.shield_controller = ShieldController(
             requirements_path='src/requirements/emergency_cartpole.cnf',  # or make this configurable
             num_actions=agent.action_dim,
-            flag_logic_fn=context_provider.cartpole_emergency_flag_logic,
         )
 
     for episode in range(num_episodes):
@@ -231,7 +230,6 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
 
                 if not eval_with_shield and agent.shield_controller:
                     violation = agent.shield_controller.would_violate(action, context)
-                    print(f"Total violations: {total_violations}")
                     total_violations += violation
 
             except TypeError:

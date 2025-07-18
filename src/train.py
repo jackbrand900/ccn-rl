@@ -1,5 +1,8 @@
 import gymnasium as gym
 import numpy as np
+from gym.wrappers import FrameStack
+from gymnasium.wrappers import TimeLimit
+
 import src.utils.graphing as graphing
 import argparse
 from gymnasium.envs.registration import register
@@ -50,10 +53,12 @@ def create_environment(env_name, render=False):
 
         if env_name == "CarRacing-v3":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
+            env = TimeLimit(env, max_episode_steps=500)
             return env
 
         if env_name == "CarRacingIntersection-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
+            env = TimeLimit(env, max_episode_steps=200)
             return env
 
         # Handle MiniGrid environments
@@ -95,35 +100,43 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             key_pos = None  # Not a MiniGrid environment
 
         if isinstance(state, dict):
-            state = state['image'].flatten()
-        else:
+            state = state['image']
+
+        # Only flatten if it's not an image
+        if isinstance(state, np.ndarray) and state.ndim < 3:
             state = state.flatten()
         done = False
         total_reward = 0
-
+        batch_size = 128
+        step_count = 0
         while not done:
             action, context, modified = agent.select_action(state, env)
             # TODO: make this environment agnostic
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
+            # print(f"Action taken: {action}")
             actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, _ = env.step(action)
             if render:
                 env.render()
 
             if isinstance(next_state, dict):
-                next_state = next_state['image'].flatten()
-            else:
+                next_state = next_state['image']
+
+            # Only flatten if it's not already an image
+            if isinstance(next_state, np.ndarray) and next_state.ndim < 3:
                 next_state = next_state.flatten()
 
-            next_state = next_state.flatten()
+            # next_state = next_state.flatten()
             done = terminated or truncated
 
             if verbose:
                 print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
 
             agent.store_transition(state, action, reward, next_state, context, done)
-            agent.update()
+            step_count += 1
+            if step_count % batch_size == 0:
+                agent.update(batch_size=batch_size)
             state = next_state
             total_reward += reward
 

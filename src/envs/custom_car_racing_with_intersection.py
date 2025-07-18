@@ -1,7 +1,20 @@
 import math
 import pygame
 from pygame import gfxdraw
-from gymnasium.envs.box2d.car_racing import CarRacing, TRACK_WIDTH, SCALE, WINDOW_W, WINDOW_H, VIDEO_W, VIDEO_H, STATE_W, STATE_H
+from Box2D.b2 import polygonShape, fixtureDef
+from gymnasium.envs.box2d.car_racing import (
+    CarRacing, TRACK_WIDTH, SCALE, WINDOW_W, WINDOW_H, VIDEO_W, VIDEO_H, STATE_W, STATE_H
+)
+
+class TileData: # TODO: change this to use Github repo you found
+    def __init__(self, road_friction, road_visited, color, idx):
+        self.road_friction = road_friction
+        self.road_visited = road_visited
+        self.color = color
+        self.idx = idx  # required by Gymnasium internal logic
+
+    def __hash__(self):
+        return id(self)
 
 class CustomCarRacing(CarRacing):
     def _create_track(self):
@@ -11,17 +24,16 @@ class CustomCarRacing(CarRacing):
 
         spacing = 10.0
         num_tiles = 20
-        width = TRACK_WIDTH
         center_x, center_y = 0.0, 0.0
 
         def add_connected_tile(x1, y1, x2, y2):
             angle = math.atan2(y2 - y1, x2 - x1)
-            dx = width * math.cos(angle)
-            dy = width * math.sin(angle)
+            dx = TRACK_WIDTH * math.cos(angle)
+            dy = TRACK_WIDTH * math.sin(angle)
 
             # Perpendicular offset
-            ox = width * math.sin(angle)
-            oy = -width * math.cos(angle)
+            ox = TRACK_WIDTH * math.sin(angle)
+            oy = -TRACK_WIDTH * math.cos(angle)
 
             road1_l = (x1 - ox, y1 - oy)
             road1_r = (x1 + ox, y1 + oy)
@@ -29,6 +41,24 @@ class CustomCarRacing(CarRacing):
             road2_r = (x2 + ox, y2 + oy)
 
             self.road_poly.append(([road1_l, road1_r, road2_r, road2_l], self.road_color))
+
+            center_pos = ((x1 + x2) / 2, (y1 + y2) / 2)
+            length = math.hypot(x2 - x1, y2 - y1)
+            box = polygonShape(box=(length / 2, TRACK_WIDTH))
+
+            tile = self.world.CreateStaticBody(
+                position=center_pos,
+                angle=angle,
+                fixtures=fixtureDef(shape=box, friction=1.0)
+            )
+            tile.color = self.road_color
+            tile.userData = TileData(
+                road_friction=1.0,
+                road_visited=False,
+                color=self.road_color,
+                idx=len(self.road)  # <--- this line added
+            )
+            self.road.append(tile)
 
         # Horizontal segment (left to right)
         for i in range(-num_tiles, num_tiles):
@@ -49,14 +79,12 @@ class CustomCarRacing(CarRacing):
             y2 = center_y + (i + 1) * spacing
             add_connected_tile(center_x, y1, center_x, y2)
 
-        # Car start position: far left of intersection, rotated 90 degrees clockwise
+        # Car start position: far left of horizontal road, facing right
         start_x = center_x - num_tiles * spacing
         start_y = center_y
-        start_heading = -math.pi / 2  # 90 degrees clockwise from facing center
+        start_heading = 0.0  # Facing right
 
-        self.track = [(0.0, start_heading, start_x + TRACK_WIDTH, start_y)]
-
-        # Optional: define intersection zone for use in logic
+        self.track = [(0.0, start_heading, start_x, start_y)]
         self.intersection_zone = ((-10, -10), (10, 10))
         return True
 
@@ -77,18 +105,16 @@ class CustomCarRacing(CarRacing):
 
         self.surf = pygame.Surface((WINDOW_W, WINDOW_H))
 
-        # Zoom out view
-        zoom = 1.0 * SCALE  # smaller than default (2.7 * SCALE)
+        zoom = 1.0 * SCALE
         angle = -self.car.hull.angle
 
-        # Center camera on car
         scroll_x = -self.car.hull.position[0] * zoom
         scroll_y = -self.car.hull.position[1] * zoom
         trans = pygame.math.Vector2((scroll_x, scroll_y)).rotate_rad(angle)
         trans = (WINDOW_W / 2 + trans[0], WINDOW_H / 4 + trans[1])
 
         self._render_road(zoom, trans, angle)
-        self.car.draw(self.surf, zoom, trans, angle, True)
+        self.car.draw(self.surf, zoom, trans, angle)
 
         self.surf = pygame.transform.flip(self.surf, False, True)
         self._render_indicators(WINDOW_W, WINDOW_H)

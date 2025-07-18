@@ -72,9 +72,9 @@ class ShieldController:
         """Fallback flag logic — always 0 for all flags"""
         return {flag: 0 for flag in self.flag_names}
 
-    def apply(self, action_probs, context, verbose=False):
+    def apply(self, action_probs, context, verbose=False, mode="hard"):
         # === Apply flag logic ===
-        flags = self.flag_logic_fn(context)
+        flags = self.flag_logic_fn(context, mode)
         flag_values = [flags.get(name, 0) for name in self.flag_names]
 
         # Expand flags to match batch size

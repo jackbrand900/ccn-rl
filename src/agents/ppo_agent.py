@@ -26,9 +26,42 @@ class ActorCritic(nn.Module):
         value = self.critic(x)
         return logits, value
 
+class CNNActorCritic(nn.Module):
+    def __init__(self, input_channels, action_dim, hidden_dim=256):
+        super().__init__()
+
+        # CNN Encoder (tuned for 96x96 inputs; adjust if yours differ)
+        self.cnn = nn.Sequential(
+            nn.Conv2d(input_channels, 32, kernel_size=8, stride=4),  # -> 32x23x23
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),              # -> 64x10x10
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1),              # -> 64x8x8
+            nn.ReLU(),
+        )
+
+        conv_output_dim = 64 * 8 * 8  # flatten dimension
+
+        self.actor = nn.Sequential(
+            nn.Linear(conv_output_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim)
+        )
+        self.critic = nn.Sequential(
+            nn.Linear(conv_output_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        )
+
+    def forward(self, x):
+        x = x / 255.0  # Normalize image input
+        x = self.cnn(x)
+        x = x.view(x.size(0), -1)
+        logits = self.actor(x)
+        value = self.critic(x)
+        return logits, value
+
 
 class PPOAgent:
-    def __init__(self, state_dim, action_dim, hidden_dim=64, lr=3e-4, gamma=0.99, clip_eps=0.2,
+    def __init__(self, state_dim, action_dim, hidden_dim=64, lr=3e-4, gamma=0.999, clip_eps=0.2,
                  ent_coef=0.01, lambda_req=0.0, lambda_consistency=0.0, use_shield=True,
                  verbose=False, requirements_path=None, env=None):
 
@@ -42,7 +75,8 @@ class PPOAgent:
         self.env = env
         self.action_dim = action_dim
 
-        self.policy = ActorCritic(state_dim, action_dim, hidden_dim)
+        self.policy = CNNActorCritic(input_channels=3, action_dim=action_dim, hidden_dim=hidden_dim)
+        # self.policy = ActorCritic(state_dim, action_dim, hidden_dim)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
         self.memory = []
 
@@ -73,12 +107,16 @@ class PPOAgent:
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
         context = context_provider.build_context(env or self.env, self)
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        # state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        if isinstance(state, np.ndarray) and state.ndim == 3:
+            state = np.transpose(state, (2, 0, 1))
+        state_tensor = torch.FloatTensor(state).unsqueeze(0) / 255.0  # Normalize and batch
         logits, value = self.policy(state_tensor)
         raw_probs = torch.softmax(logits, dim=-1)
 
         if do_apply_shield and self.shield_controller:
             shielded_probs = self.shield_controller.apply(raw_probs, context, self.verbose)
+            shielded_probs = shielded_probs / shielded_probs.sum(dim=-1, keepdim=True)
         else:
             shielded_probs = raw_probs
 
@@ -118,6 +156,8 @@ class PPOAgent:
         returns, advantages = self._compute_gae(rewards, values, dones)
 
         states = torch.FloatTensor(np.array(states))
+        if states.ndim == 4 and states.shape[-1] == 3:
+            states = states.permute(0, 3, 1, 2)  # NHWC → NCHW
         actions = torch.LongTensor(actions)
         returns = torch.FloatTensor(np.array(returns))
         advantages = torch.FloatTensor(np.array(advantages))

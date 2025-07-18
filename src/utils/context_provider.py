@@ -114,13 +114,14 @@ def cartpole_flag_logic_advanced(context,
     return flags
 
 
-def cartpole_emergency_flag_logic(context):
+def cartpole_emergency_flag_logic(context, mode="hard"):
     obs = context.get("obs")
     if obs is None:
         return {}
 
     _, _, angle, _ = obs
+    flag_active_val = 1.0 if mode == "hard" else 0.8
     return {
-        "y_2": int(angle < -0.15),  # tipping far to the left
-        "y_3": int(angle > 0.15),  # tipping far to the right
+        "y_2": flag_active_val if angle < -0.15 else 0.0,  # tipping far to the left
+        "y_3": flag_active_val if angle > 0.15 else 0.0,  # tipping far to the right
     }

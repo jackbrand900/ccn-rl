@@ -1,29 +1,20 @@
-import random
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
 from collections import deque
-from src.models.network import QNetwork
+
+import numpy as np
+from torch import optim
+import torch
+import random
+
+from src.models.network import ModularNetwork
+from src.utils import context_provider
 from src.utils.shield_controller import ShieldController
-import src.utils.context_provider as context_provider
+from src.utils.preprocessing import prepare_input, prepare_batch
 
 class DQNAgent:
-    def __init__(self,
-                 state_dim,
-                 action_dim,
-                 hidden_dim=64,
-                 lr=1e-3,
-                 gamma=0.99,
-                 epsilon=1.0,
-                 epsilon_decay=0.995,
-                 epsilon_min=0.01,
-                 target_update_freq=1000,
-                 use_shield=True,
-                 verbose=False,
-                 requirements_path=None,
-                 env=None):
-        self.state_dim = state_dim
+    def __init__(self, input_shape, action_dim, hidden_dim=64, use_cnn=False, lr=1e-3, gamma=0.99,
+                 epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01, target_update_freq=1000,
+                 use_shield=True, verbose=False, requirements_path=None, env=None, mode='hard'):
+
         self.action_dim = action_dim
         self.gamma = gamma
         self.epsilon = epsilon
@@ -32,35 +23,25 @@ class DQNAgent:
         self.use_shield = use_shield
         self.verbose = verbose
         self.env = env
+        self.learn_step_counter = 0
+        self.batch_size = 64
 
-        self.q_network = QNetwork(state_dim, action_dim, hidden_dim)
-        self.target_network = QNetwork(state_dim, action_dim, hidden_dim)
+        self.q_network = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
+                                        hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False)
+        self.target_network = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
+                                             hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.q_network.to(self.device)
 
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=lr)
-        self.loss_fn = nn.MSELoss()
         self.replay_buffer = deque(maxlen=10000)
-        self.batch_size = 64
-        self.learn_step_counter = 0
         self.target_update_freq = target_update_freq
-        self.training_logs = {
-            "td_loss": [],
-            "req_loss": [],
-            "consistency_loss": [],
-            "prob_shift": []
-        }
 
-        if self.use_shield:
-            self.shield_controller = ShieldController(
-                requirements_path=requirements_path,
-                num_actions=action_dim,
-                flag_logic_fn=context_provider.position_flag_logic,
-            )
-        else:
-            self.shield_controller = None
+        self.shield_controller = ShieldController(requirements_path, action_dim, mode) if use_shield else None
+
+        self.training_logs = {
+            "td_loss": [], "req_loss": [], "consistency_loss": [], "prob_shift": []
+        }
 
     def select_action(self, state, env=None, do_apply_shield=True):
         context = context_provider.build_context(env, self)
@@ -68,28 +49,26 @@ class DQNAgent:
             action = np.random.choice(self.action_dim)
             if self.verbose:
                 print(f"[Random] Action selected: {action}")
-            return action, context, False  # no shield applied during random choice
+            return action, context, False
 
-        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(next(self.q_network.parameters()).device)
+        state_tensor = prepare_input(state, use_cnn=self.q_network.use_cnn)
 
         with torch.no_grad():
             q_values = self.q_network(state_tensor)
-            action_probs = torch.softmax(q_values, dim=1)
+            raw_probs = torch.softmax(q_values, dim=1)
 
             if do_apply_shield and self.shield_controller:
-                original_action = action_probs.argmax(dim=1).item()
-                corrected_probs = self.shield_controller.apply(action_probs, context, self.verbose)
-                shielded_action = corrected_probs.argmax(dim=1).item()
-                was_modified = shielded_action != original_action
+                corrected_probs = self.shield_controller.apply(raw_probs, context, self.verbose)
+                was_modified = not torch.allclose(raw_probs, corrected_probs, atol=1e-6)
             else:
-                corrected_probs = action_probs[:, :self.action_dim]
+                corrected_probs = raw_probs
                 was_modified = False
 
             action = corrected_probs.argmax(dim=1).item()
 
             if self.verbose:
                 print(f"[Policy] Q-values: {q_values.cpu().numpy().flatten()}")
-                print(f"[Policy] Raw probs: {action_probs.cpu().numpy().flatten()}")
+                print(f"[Policy] Raw probs: {raw_probs.cpu().numpy().flatten()}")
                 print(f"[Policy] Shielded probs: {corrected_probs.cpu().numpy().flatten()}")
                 print(f"[Policy] Action selected: {action}")
                 print(f"[Policy] Shield modified: {was_modified}")
@@ -97,58 +76,35 @@ class DQNAgent:
         return action, context, was_modified
 
     def store_transition(self, state, action, reward, next_state, context, done):
+        if self.q_network.use_cnn and state.ndim == 1:
+            state = state.reshape(96, 96, 3)
+            next_state = next_state.reshape(96, 96, 3)
         self.replay_buffer.append((state, action, reward, next_state, context, done))
 
-    def update(self):
-        if len(self.replay_buffer) < self.batch_size:
+    def update(self, batch_size=None):
+        if len(self.replay_buffer) < batch_size:
             return
 
-        # Sample and unpack
-        batch = random.sample(self.replay_buffer, self.batch_size)
+        batch = random.sample(self.replay_buffer, batch_size)
         states, actions, rewards, next_states, contexts, dones = zip(*batch)
 
-        # Convert to tensors
-        states = torch.FloatTensor(np.array(states))
-        next_states = torch.FloatTensor(np.array(next_states))
+        states = prepare_batch(states, use_cnn=self.q_network.use_cnn)
+        next_states = prepare_batch(next_states, use_cnn=self.q_network.use_cnn)
+
         actions = torch.LongTensor(actions).unsqueeze(1)
         rewards = torch.FloatTensor(rewards).unsqueeze(1)
         dones = torch.FloatTensor(dones).unsqueeze(1)
 
-        # --- TD Loss ---
-        q_out = self.q_network(states)
-        q_values = q_out.gather(1, actions)
-
         with torch.no_grad():
-            next_q = self.target_network(next_states)
-            next_max_q = next_q.max(1, keepdim=True)[0]
-            target_q_values = rewards + self.gamma * next_max_q * (1 - dones)
+            raw_probs = torch.softmax(self.q_network(states), dim=1)
+            if self.use_shield and self.shield_controller:
+                shielded_probs = self.shield_controller.apply_batch(raw_probs, list(contexts))
+            else:
+                shielded_probs = raw_probs
 
-        td_loss = self.loss_fn(q_values, target_q_values)
-
-        # --- Requirements Loss ---
-        raw_probs = torch.softmax(q_out, dim=1)
-
-        if self.use_shield and self.shield_controller:
-            shielded_probs = self.shield_controller.apply_batch(raw_probs, list(contexts))
-        else:
-            shielded_probs = raw_probs[:, :self.action_dim]
-
-        goal = torch.zeros_like(shielded_probs)
-        goal.scatter_(1, actions, 1.0)
-
-        req_loss = nn.BCELoss()(shielded_probs, goal)
-
-        # --- Consistency Loss (encourage raw probs ≈ shielded probs) ---
-        consistency_loss = torch.nn.MSELoss()(raw_probs[:, :self.action_dim], shielded_probs)
-
-        # --- Total Loss ---
-        lambda_td = 1.0
-        lambda_req = 0.05
-        lambda_consistency = 0.05
-        total_loss = (
-                lambda_td * td_loss +
-                lambda_req * req_loss +
-                lambda_consistency * consistency_loss
+        total_loss, logs = self.q_network.compute_q_loss(
+            states, actions, rewards, dones, next_states, self.target_network,
+            gamma=self.gamma, shielded_probs=shielded_probs
         )
 
         self.optimizer.zero_grad()
@@ -156,25 +112,23 @@ class DQNAgent:
         self.optimizer.step()
 
         if self.verbose:
-            print(f"[Update] TD Loss: {td_loss.item():.4f}, Req Loss: {req_loss.item():.4f}, Consistency: {consistency_loss.item():.4f}, Total: {total_loss.item():.4f}")
+            print({k: f"{v:.4f}" for k, v in logs.items()})
 
+        for k in self.training_logs:
+            self.training_logs[k].append(logs.get(k, 0.0))
 
-        # Log metrics
-        self.training_logs["td_loss"].append(td_loss.item())
-        self.training_logs["req_loss"].append(req_loss.item())
-        self.training_logs["consistency_loss"].append(consistency_loss.item())
-
-        # Compute average per-batch L1 shift in probability due to the shield
-        prob_shift = torch.abs(shielded_probs - raw_probs[:, :self.action_dim]).mean().item()
-        self.training_logs["prob_shift"].append(prob_shift)
-
-        # Target network update
         self.learn_step_counter += 1
         if self.learn_step_counter % self.target_update_freq == 0:
             self.target_network.load_state_dict(self.q_network.state_dict())
 
-        # Epsilon decay
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
     def enable_shield(self, enable: bool):
         self.use_shield = enable
+
+    def get_weights(self):
+        return self.q_network.state_dict()
+
+    def load_weights(self, weights):
+        self.q_network.load_state_dict(weights)
+

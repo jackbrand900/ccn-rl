@@ -1,5 +1,7 @@
 import gymnasium as gym
 import numpy as np
+from gymnasium.wrappers import TimeLimit
+import torch
 import src.utils.graphing as graphing
 import argparse
 from gymnasium.envs.registration import register
@@ -7,11 +9,15 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
-from src.utils import env_helpers, context_provider
-import torch
+from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 from src.utils.shield_controller import ShieldController
+import copy
 
+register(
+    id="CarRacingIntersection-v0",
+    entry_point="src.envs.custom_car_racing_with_intersection:CustomCarRacing",  # <- adjust path to your file
+)
 
 def register_env_if_needed(env_id, entry_point, kwargs=None):
     if env_id not in gym.envs.registry.keys():
@@ -29,6 +35,8 @@ custom_envs = {
     "MiniGrid-DoorKey-6x6-v0": ("minigrid.envs:DoorKeyEnv", {'size': 6}),
     "MiniGrid-MultiRoom-N2-S4-v0": ("minigrid.envs:MultiRoomEnv", {'num_rooms': 2, 'max_room_size': 4}),
     "CartPole-v1": (None, None),
+    "CarRacing-v3": (None, None),
+    "CarRacingIntersection-v0": (None, None)
 }
 
 
@@ -43,6 +51,16 @@ def create_environment(env_name, render=False):
             env = gym.make(env_name, render_mode="human" if render else None)
             return env
 
+        if env_name == "CarRacing-v3":
+            env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
+            env = TimeLimit(env, max_episode_steps=200)
+            return env
+
+        if env_name == "CarRacingIntersection-v0":
+            env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
+            env = TimeLimit(env, max_episode_steps=200)
+            return env
+
         # Handle MiniGrid environments
         env = gym.make(env_name, render_mode="human" if render else None)
         if "MiniGrid" in env_name:
@@ -52,6 +70,20 @@ def create_environment(env_name, render=False):
             else:
                 env = FlatObsWrapper(env)
         return env
+
+
+def preprocess_state(state, use_cnn=False):
+    if isinstance(state, dict):
+        state = state['image']
+    if isinstance(state, np.ndarray):
+        if use_cnn:
+            if state.ndim == 3:  # (H, W, C)
+                state = state.astype(np.float32)
+            else:
+                raise ValueError(f"Unexpected CNN state shape: {state.shape}")
+        else:
+            state = state.flatten().astype(np.float32)
+    return state
 
 
 def reset_env(env):
@@ -69,48 +101,48 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, visualize=False, verbose=False,
+def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
                  render=False):
     episode_rewards = []
+    best_avg_reward = float('-inf')
+    best_weights = None
     actions_taken = []
     for episode in range(1, num_episodes + 1):
+        use_cnn = getattr(agent, "use_cnn", False)
+
         state, _ = env.reset()
+        state = preprocess_state(state, use_cnn=use_cnn)
         try:  # TODO: extract this to the context provider
             key_pos = find_key(env)
             env.key_pos = key_pos
         except AttributeError:
             key_pos = None  # Not a MiniGrid environment
 
-        if isinstance(state, dict):
-            state = state['image'].flatten()
-        else:
-            state = state.flatten()
         done = False
         total_reward = 0
-
+        batch_size = 64
         while not done:
             action, context, modified = agent.select_action(state, env)
             # TODO: make this environment agnostic
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
+            # print(f"Action taken: {action}")
             actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, _ = env.step(action)
             if render:
                 env.render()
 
-            if isinstance(next_state, dict):
-                next_state = next_state['image'].flatten()
-            else:
-                next_state = next_state.flatten()
+            next_state = preprocess_state(next_state, use_cnn=use_cnn)
 
-            next_state = next_state.flatten()
+            # next_state = next_state.flatten()
             done = terminated or truncated
 
             if verbose:
                 print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
 
+            # print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
             agent.store_transition(state, action, reward, next_state, context, done)
-            agent.update()
+            agent.update(batch_size=batch_size)
             state = next_state
             total_reward += reward
 
@@ -122,6 +154,10 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             if hasattr(agent, "epsilon"):
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
             print(log_msg)
+            if avg_reward > best_avg_reward:
+                best_avg_reward = avg_reward
+                best_weights = copy.deepcopy(agent.get_weights())
+                print(f"[Checkpoint] New best avg reward: {best_avg_reward:.2f} at episode {episode}")
 
     env.close()
     if visualize:
@@ -137,14 +173,26 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             show=True
         )
 
-    return episode_rewards if log_rewards else None
+    return agent, episode_rewards, best_weights, best_avg_reward
 
 
-def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_name='MiniGrid-Empty-5x5-v0',
+def train(agent='dqn',
+          use_shield=False,
+          mode='hard',
+          verbose=False,
+          visualize=False,
+          env_name='MiniGrid-Empty-5x5-v0',
           render=False):
     env = create_environment(env_name, render=render)
     print("Observation space:", env.observation_space)
     obs_space = env.observation_space
+
+    env_config = config_by_env(env_name)
+    input_shape = obs_space.shape
+    use_cnn = env_config['use_cnn']
+    print(f"[DEBUG] use_cnn: {use_cnn}")
+    print(f"[DEBUG] Gym observation shape: {obs_space.shape}")
+    print(f"[DEBUG] Input shape passed to ModularNetwork: {input_shape}")
 
     if isinstance(obs_space, gym.spaces.Box):
         state_dim = int(np.prod(obs_space.shape))
@@ -153,32 +201,57 @@ def train(agent='dqn', use_shield=False, verbose=False, visualize=False, env_nam
     else:
         raise ValueError(f"Unsupported observation space type: {obs_space}")
 
-    action_dim = env.action_space.n
+    if isinstance(env.action_space, gym.spaces.Discrete):
+        action_dim = env.action_space.n
+    else:
+        action_dim = env.action_space.shape[0]
+
     requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
-        agent = DQNAgent(state_dim, action_dim,
+        agent = DQNAgent(input_shape=input_shape,
+                         action_dim=action_dim,
                          use_shield=use_shield,
+                         mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
-                         env=env)
+                         env=env,
+                         use_cnn=use_cnn)
     elif agent == 'ppo':
-        agent = PPOAgent(state_dim, action_dim,
+        agent = PPOAgent(input_shape=input_shape,
+                         action_dim=action_dim,
                          use_shield=use_shield,
+                         mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
-                         env=env)
+                         env=env,
+                         use_cnn=use_cnn)
     elif agent == 'a2c':
-        agent = A2CAgent(state_dim, action_dim,
+        agent = A2CAgent(input_shape=input_shape,
+                         action_dim=action_dim,
                          use_shield=use_shield,
+                         mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
-                         env=env)
+                         env=env,
+                         use_cnn=use_cnn)
     else:
         raise ValueError("Unsupported agent type.")
 
     print(f"Training {agent.__class__.__name__} agent on {env_name} with shield: {use_shield}, render: {render}")
-    run_training(agent, env, verbose=verbose, visualize=visualize, render=render)
+    agent_trained, _, best_weights, best_avg_reward = run_training(
+        agent, env,
+        verbose=verbose,
+        visualize=visualize,
+        render=render,
+        use_cnn=use_cnn
+    )
+
+    if hasattr(agent_trained, 'load_weights') and best_weights is not None:
+        print(f"\n[Post-Training] Loading best weights with avg reward: {best_avg_reward:.2f}")
+        agent_trained.load_weights(best_weights)
+
+    agent.load_weights(best_weights)
     return agent, env
 
 
@@ -298,6 +371,7 @@ if __name__ == "__main__":
     parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='dqn',
                         help='Which agent to use: dqn, ppo, or a2c')
     parser.add_argument('--use_shield', action='store_true', help='Enable PiShield constraints during training')
+    parser.add_argument('--mode', choices=['soft', 'hard'], default='hard', help='Constraint mode')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('--visualize', action='store_true', help='Visualize training plots')
     parser.add_argument('--render', action='store_true', help='Render environment (RGB image)')
@@ -307,6 +381,7 @@ if __name__ == "__main__":
 
     trained_agent, env = train(agent=args.agent,
                                use_shield=args.use_shield,
+                               mode=args.mode,
                                verbose=args.verbose,
                                visualize=args.visualize,
                                env_name=args.env,

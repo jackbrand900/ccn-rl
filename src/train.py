@@ -109,7 +109,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             state = state.flatten()
         done = False
         total_reward = 0
-        batch_size = 128
+        batch_size = 64
         while not done:
             action, context, modified = agent.select_action(state, env)
             # TODO: make this environment agnostic
@@ -222,15 +222,15 @@ def train(agent='dqn',
         raise ValueError("Unsupported agent type.")
 
     print(f"Training {agent.__class__.__name__} agent on {env_name} with shield: {use_shield}, render: {render}")
-    agent, _, best_weights, best_avg_reward = run_training(
+    agent_trained, _, best_weights, best_avg_reward = run_training(
         agent, env,
         verbose=verbose,
         visualize=visualize,
         render=render
     )
-    if hasattr(agent, 'load_weights') and best_weights is not None:
-            print(f"\n[Post-Training] Loading best weights with avg reward: {best_avg_reward:.2f}")
-            agent.load_weights(best_weights)
+    if hasattr(agent_trained, 'load_weights') and best_weights is not None:
+        print(f"\n[Post-Training] Loading best weights with avg reward: {best_avg_reward:.2f}")
+        agent_trained.load_weights(best_weights)
     return agent, env
 
 

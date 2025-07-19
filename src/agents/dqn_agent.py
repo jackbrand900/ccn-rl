@@ -8,7 +8,7 @@ import random
 from src.models.network import ModularNetwork
 from src.utils import context_provider
 from src.utils.shield_controller import ShieldController
-
+from src.utils.preprocessing import prepare_input, prepare_batch
 
 class DQNAgent:
     def __init__(self, input_shape, action_dim, hidden_dim=64, use_cnn=False, lr=1e-3, gamma=0.99,
@@ -51,7 +51,7 @@ class DQNAgent:
                 print(f"[Random] Action selected: {action}")
             return action, context, False
 
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        state_tensor = prepare_input(state, use_cnn=self.q_network.use_cnn)
 
         with torch.no_grad():
             q_values = self.q_network(state_tensor)
@@ -76,6 +76,9 @@ class DQNAgent:
         return action, context, was_modified
 
     def store_transition(self, state, action, reward, next_state, context, done):
+        if self.q_network.use_cnn and state.ndim == 1:
+            state = state.reshape(96, 96, 3)
+            next_state = next_state.reshape(96, 96, 3)
         self.replay_buffer.append((state, action, reward, next_state, context, done))
 
     def update(self, batch_size=None):
@@ -85,8 +88,9 @@ class DQNAgent:
         batch = random.sample(self.replay_buffer, batch_size)
         states, actions, rewards, next_states, contexts, dones = zip(*batch)
 
-        states = torch.FloatTensor(np.array(states))
-        next_states = torch.FloatTensor(np.array(next_states))
+        states = prepare_batch(states, use_cnn=self.q_network.use_cnn)
+        next_states = prepare_batch(next_states, use_cnn=self.q_network.use_cnn)
+
         actions = torch.LongTensor(actions).unsqueeze(1)
         rewards = torch.FloatTensor(rewards).unsqueeze(1)
         dones = torch.FloatTensor(dones).unsqueeze(1)

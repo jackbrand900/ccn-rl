@@ -3,13 +3,13 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from torch.distributions import Categorical
-
+from src.utils.preprocessing import prepare_input, prepare_batch
 from src.models.network import ModularNetwork
 from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
 
 class A2CAgent:
-    def __init__(self, state_dim, action_dim, hidden_dim=128, lr=1e-3, gamma=0.99, use_cnn=False,
+    def __init__(self, input_shape, action_dim, hidden_dim=128, lr=1e-3, gamma=0.99, use_cnn=False,
                  use_shield=True, verbose=False, requirements_path=None, env=None, mode='hard'):
 
         self.gamma = gamma
@@ -18,7 +18,7 @@ class A2CAgent:
         self.env = env
         self.learn_step_counter = 0
 
-        self.model = ModularNetwork(input_shape=state_dim, output_dim=action_dim,
+        self.model = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
                                     hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=True)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
@@ -36,7 +36,7 @@ class A2CAgent:
 
     def select_action(self, state, env=None, do_apply_shield=True):
         context = context_provider.build_context(env or self.env, self)
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        state_tensor = prepare_input(state, use_cnn=self.model.use_cnn)
         logits, value = self.model(state_tensor)
         raw_probs = torch.softmax(logits, dim=-1)
 
@@ -60,9 +60,13 @@ class A2CAgent:
         return action.item(), context, was_modified
 
     def store_transition(self, state, action, reward, next_state, context, done):
+        state = prepare_input(state, use_cnn=self.model.use_cnn).squeeze(0)
+        next_state = prepare_input(next_state, use_cnn=self.model.use_cnn).squeeze(0)
+
         self.memory.append((state, action, reward, next_state, context, done,
                             self.last_log_prob, self.last_value,
                             self.last_raw_probs, self.last_shielded_probs))
+
 
     def update(self, batch_size=None):
         if not self.memory:
@@ -72,7 +76,8 @@ class A2CAgent:
 
         states, actions, rewards, next_states, contexts, dones, log_probs, values, raw_probs, shielded_probs = zip(*self.memory)
 
-        states = torch.FloatTensor(np.array(states))
+        states = prepare_batch(states, use_cnn=self.model.use_cnn)
+        next_states = prepare_batch(next_states, use_cnn=self.model.use_cnn)
         actions = torch.LongTensor(actions)
         rewards = torch.FloatTensor(rewards)
         dones = torch.FloatTensor(dones)
@@ -81,7 +86,7 @@ class A2CAgent:
         shielded_probs = torch.stack(shielded_probs)
 
         with torch.no_grad():
-            _, next_values = self.model(torch.FloatTensor(np.array(next_states)))
+            _, next_values = self.model(next_states)
             targets = rewards + self.gamma * next_values.squeeze() * (1 - dones)
             advantages = targets - values.squeeze()
 
@@ -91,7 +96,7 @@ class A2CAgent:
         entropy = dist.entropy().mean()
 
         policy_loss = -(advantages.detach() * new_log_probs).mean()
-        value_loss = nn.MSELoss()(predicted_values.squeeze(), targets)
+        value_loss = nn.MSELoss()(predicted_values.view(-1), targets.view(-1))
 
         # Constraint losses (optional for PiShield alignment)
         goal = torch.zeros_like(shielded_probs)

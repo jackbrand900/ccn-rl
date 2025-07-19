@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+from src.utils.preprocessing import prepare_input, prepare_batch
 import torch.optim as optim
 import numpy as np
 from torch.distributions import Categorical
@@ -52,7 +52,7 @@ class PPOAgent:
         self.last_obs = state
         context = context_provider.build_context(env or self.env, self)
 
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        state_tensor = prepare_input(state, use_cnn=self.use_cnn)
 
         action, log_prob, value, raw_probs = self.policy.select_action(state_tensor)
 
@@ -91,7 +91,7 @@ class PPOAgent:
         states, actions, rewards, next_states, contexts, dones, log_probs, values, raw_probs, shielded_probs = zip(*self.memory)
         returns, advantages = self._compute_gae(rewards, values, dones)
 
-        states = torch.FloatTensor(np.array(states))
+        states = prepare_batch(states, use_cnn=self.use_cnn)
         if self.use_cnn and states.ndim == 4 and states.shape[-1] == 3:
             states = states.permute(0, 3, 1, 2)
 

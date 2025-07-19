@@ -1,5 +1,5 @@
-import torch.nn as nn
 import torch
+import torch.nn as nn
 from torch.distributions import Categorical
 
 
@@ -25,20 +25,22 @@ class ModularNetwork(nn.Module):
         self.actor_critic = actor_critic
 
         if use_cnn:
-            # Ensure correct order regardless of (HWC) or (CHW)
-            if len(input_shape) == 3:
-                h, w, c = input_shape if input_shape[-1] == 3 else (input_shape[1], input_shape[2], input_shape[0])
+            # Ensure correct shape order
+            if len(input_shape) == 3 and input_shape[-1] == 3:
+                h, w, c = input_shape
+            elif len(input_shape) == 3 and input_shape[0] == 3:
+                c, h, w = input_shape
             else:
-                raise ValueError(f"Unexpected input shape: {input_shape}")
+                raise ValueError(f"Expected input shape (H, W, C) or (C, H, W), got {input_shape}")
 
             self.encoder = nn.Sequential(
                 nn.Conv2d(c, 32, kernel_size=8, stride=4), nn.ReLU(),
                 nn.Conv2d(32, 64, kernel_size=4, stride=2), nn.ReLU(),
                 nn.Conv2d(64, 64, kernel_size=3, stride=1), nn.ReLU(),
             )
+
             with torch.no_grad():
-                dummy = torch.zeros(1, h, w, c)  # HWC like the actual input
-                dummy = dummy.permute(0, 3, 1, 2).float() / 255.0  # Convert to CHW like in forward()
+                dummy = torch.zeros(1, c, h, w).float() / 255.0
                 conv_out = self.encoder(dummy)
                 conv_out_dim = conv_out.reshape(1, -1).size(1)
                 print(f"[DEBUG] conv_out shape: {conv_out.shape}, flattened: {conv_out_dim}")
@@ -61,17 +63,11 @@ class ModularNetwork(nn.Module):
                 nn.Linear(hidden_dim, output_dim)
             )
 
-    def select_action(self, state_tensor):
-        logits, value = self.forward(state_tensor)
-        probs = torch.softmax(logits, dim=-1)
-        dist = Categorical(probs=probs)
-        action = dist.sample()
-        log_prob = dist.log_prob(action)
-        return action.item(), log_prob, value.squeeze(), probs.squeeze(0)
-
     def forward(self, x):
         if self.use_cnn:
-            x = x.permute(0, 3, 1, 2) if x.shape[-1] == 3 else x
+            if x.shape[1] == 96 and x.shape[2] == 96 and x.shape[-1] == 3:
+                # NHWC → NCHW
+                x = x.permute(0, 3, 1, 2)
             x = x.float() / 255.0
         x = self.encoder(x)
         x = x.reshape(x.size(0), -1)
@@ -81,6 +77,15 @@ class ModularNetwork(nn.Module):
         else:
             return self.q_net(x)
 
+    def select_action(self, state_tensor):
+        logits, value = self.forward(state_tensor)
+        probs = torch.softmax(logits, dim=-1)
+        dist = Categorical(probs=probs)
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+        return action.item(), log_prob, value.squeeze(), probs.squeeze(0)
+
+    # --- Loss functions below unchanged ---
     def compute_losses(self, states, actions, old_log_probs, advantages, returns, shielded_probs,
                        clip_eps=0.2, ent_coef=0.01, lambda_req=0.0, lambda_consistency=0.0):
         logits, new_values = self.forward(states)

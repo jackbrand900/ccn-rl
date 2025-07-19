@@ -53,7 +53,7 @@ def create_environment(env_name, render=False):
 
         if env_name == "CarRacing-v3":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=500)
+            env = TimeLimit(env, max_episode_steps=200)
             return env
 
         if env_name == "CarRacingIntersection-v0":
@@ -101,7 +101,7 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, visualize=False, verbose=False,
+def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
                  render=False):
     episode_rewards = []
     best_avg_reward = float('-inf')
@@ -140,6 +140,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             if verbose:
                 print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
 
+            # print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
             agent.store_transition(state, action, reward, next_state, context, done)
             agent.update(batch_size=batch_size)
             state = next_state
@@ -187,8 +188,11 @@ def train(agent='dqn',
     obs_space = env.observation_space
 
     env_config = config_by_env(env_name)
-    input_shape = env_config['input_shape']
+    input_shape = obs_space.shape
     use_cnn = env_config['use_cnn']
+    print(f"[DEBUG] use_cnn: {use_cnn}")
+    print(f"[DEBUG] Gym observation shape: {obs_space.shape}")
+    print(f"[DEBUG] Input shape passed to ModularNetwork: {input_shape}")
 
     if isinstance(obs_space, gym.spaces.Box):
         state_dim = int(np.prod(obs_space.shape))
@@ -223,8 +227,8 @@ def train(agent='dqn',
                          env=env,
                          use_cnn=use_cnn)
     elif agent == 'a2c':
-        agent = A2CAgent(state_dim,
-                         action_dim,
+        agent = A2CAgent(input_shape=input_shape,
+                         action_dim=action_dim,
                          use_shield=use_shield,
                          mode=mode,
                          verbose=verbose,
@@ -239,7 +243,8 @@ def train(agent='dqn',
         agent, env,
         verbose=verbose,
         visualize=visualize,
-        render=render
+        render=render,
+        use_cnn=use_cnn
     )
 
     if hasattr(agent_trained, 'load_weights') and best_weights is not None:

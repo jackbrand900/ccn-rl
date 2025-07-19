@@ -72,6 +72,20 @@ def create_environment(env_name, render=False):
         return env
 
 
+def preprocess_state(state, use_cnn=False):
+    if isinstance(state, dict):
+        state = state['image']
+    if isinstance(state, np.ndarray):
+        if use_cnn:
+            if state.ndim == 3:  # (H, W, C)
+                state = state.astype(np.float32)
+            else:
+                raise ValueError(f"Unexpected CNN state shape: {state.shape}")
+        else:
+            state = state.flatten().astype(np.float32)
+    return state
+
+
 def reset_env(env):
     result = env.reset()
     return result[0] if isinstance(result, tuple) else result
@@ -94,19 +108,16 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
     best_weights = None
     actions_taken = []
     for episode in range(1, num_episodes + 1):
+        use_cnn = getattr(agent, "use_cnn", False)
+
         state, _ = env.reset()
+        state = preprocess_state(state, use_cnn=use_cnn)
         try:  # TODO: extract this to the context provider
             key_pos = find_key(env)
             env.key_pos = key_pos
         except AttributeError:
             key_pos = None  # Not a MiniGrid environment
 
-        if isinstance(state, dict):
-            state = state['image']
-
-        # Only flatten if it's not an image
-        if isinstance(state, np.ndarray) and state.ndim < 3:
-            state = state.flatten()
         done = False
         total_reward = 0
         batch_size = 64
@@ -121,12 +132,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             if render:
                 env.render()
 
-            if isinstance(next_state, dict):
-                next_state = next_state['image']
-
-            # Only flatten if it's not already an image
-            if isinstance(next_state, np.ndarray) and next_state.ndim < 3:
-                next_state = next_state.flatten()
+            next_state = preprocess_state(next_state, use_cnn=use_cnn)
 
             # next_state = next_state.flatten()
             done = terminated or truncated

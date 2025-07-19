@@ -31,8 +31,10 @@ class ModularNetwork(nn.Module):
                 nn.Conv2d(64, 64, kernel_size=3, stride=1), nn.ReLU(),
             )
             with torch.no_grad():
-                dummy = torch.zeros(1, *input_shape).to(next(self.encoder.parameters()).device)
-                conv_out_dim = self.encoder(dummy).view(1, -1).size(1)
+                dummy = torch.zeros(1, *input_shape)
+                dummy = dummy.permute(0, 3, 1, 2) if input_shape[-1] == 3 else dummy  # (HWC) to (CHW)
+                conv_out = self.encoder(dummy.float())
+                conv_out_dim = conv_out.view(1, -1).size(1)
         else:
             self.encoder = nn.Identity()
             conv_out_dim = input_shape if isinstance(input_shape, int) else int(torch.tensor(input_shape).prod())
@@ -63,9 +65,11 @@ class ModularNetwork(nn.Module):
 
     def forward(self, x):
         if self.use_cnn:
+            x = x.permute(0, 3, 1, 2) if x.shape[-1] == 3 else x  # HWC to CHW
             x = x.float() / 255.0
+
         x = self.encoder(x)
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)
 
         if self.actor_critic:
             return self.actor(x), self.critic(x)

@@ -1,8 +1,7 @@
 import gymnasium as gym
 import numpy as np
-from gym.wrappers import FrameStack
 from gymnasium.wrappers import TimeLimit
-
+import torch
 import src.utils.graphing as graphing
 import argparse
 from gymnasium.envs.registration import register
@@ -10,9 +9,10 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
+from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 from src.utils.shield_controller import ShieldController
-
+import copy
 
 register(
     id="CarRacingIntersection-v0",
@@ -149,7 +149,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             print(log_msg)
             if avg_reward > best_avg_reward:
                 best_avg_reward = avg_reward
-                best_weights = agent.get_weights()
+                best_weights = copy.deepcopy(agent.get_weights())
                 print(f"[Checkpoint] New best avg reward: {best_avg_reward:.2f} at episode {episode}")
 
     env.close()
@@ -180,6 +180,10 @@ def train(agent='dqn',
     print("Observation space:", env.observation_space)
     obs_space = env.observation_space
 
+    env_config = config_by_env(env_name)
+    input_shape = env_config['input_shape']
+    use_cnn = env_config['use_cnn']
+
     if isinstance(obs_space, gym.spaces.Box):
         state_dim = int(np.prod(obs_space.shape))
     elif isinstance(obs_space, gym.spaces.Dict) and 'image' in obs_space.spaces:
@@ -195,21 +199,23 @@ def train(agent='dqn',
     requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
-        agent = DQNAgent(state_dim,
-                         action_dim,
+        agent = DQNAgent(input_shape=input_shape,
+                         action_dim=action_dim,
                          use_shield=use_shield,
                          mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
-                         env=env)
+                         env=env,
+                         use_cnn=use_cnn)
     elif agent == 'ppo':
-        agent = PPOAgent(state_dim,
-                         action_dim,
+        agent = PPOAgent(input_shape=input_shape,
+                         action_dim=action_dim,
                          use_shield=use_shield,
                          mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
-                         env=env)
+                         env=env,
+                         use_cnn=use_cnn)
     elif agent == 'a2c':
         agent = A2CAgent(state_dim,
                          action_dim,
@@ -217,7 +223,8 @@ def train(agent='dqn',
                          mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
-                         env=env)
+                         env=env,
+                         use_cnn=use_cnn)
     else:
         raise ValueError("Unsupported agent type.")
 
@@ -228,9 +235,12 @@ def train(agent='dqn',
         visualize=visualize,
         render=render
     )
+
     if hasattr(agent_trained, 'load_weights') and best_weights is not None:
         print(f"\n[Post-Training] Loading best weights with avg reward: {best_avg_reward:.2f}")
         agent_trained.load_weights(best_weights)
+
+    agent.load_weights(best_weights)
     return agent, env
 
 

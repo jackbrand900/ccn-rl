@@ -14,6 +14,7 @@ class ShieldController:
         self.requirements_path = requirements_path
         self.num_actions = num_actions
         self.flag_logic_fn = get_flag_logic_fn(self.requirements_path) or self.default_flag_logic
+        self.mode = mode
         flag_active_val = 0.8 if mode == "soft" else 1.0
         self.flag_logic_fn = partial(self.flag_logic_fn, flag_active_val=flag_active_val)
         self.flag_logic_batch = self._batchify(self.flag_logic_fn)
@@ -95,6 +96,10 @@ class ShieldController:
         # === Mask out flags and return corrected action distribution ===
         corrected = shielded_output[:, :self.num_actions]
 
+        # === Normalize if in soft mode ===
+        if self.mode == "soft":
+            corrected = corrected / corrected.sum(dim=1, keepdim=True)
+
         # === Optional debug output ===
         flag_active = any(flag_values)
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
@@ -122,7 +127,13 @@ class ShieldController:
         flag_tensor = torch.tensor(flag_values, device=action_probs.device, dtype=action_probs.dtype)
         full_input = torch.cat([action_probs, flag_tensor], dim=1)
         shielded_output = self.shield_layer(full_input)
-        return shielded_output[:, :self.num_actions]
+        corrected = shielded_output[:, :self.num_actions]
+
+        if self.mode == "soft":
+            corrected = corrected / corrected.sum(dim=1, keepdim=True)
+
+        return corrected
+
 
     def count_violations(self, action_probs, context):
         corrected = self.apply(action_probs, context, verbose=False)

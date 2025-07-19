@@ -9,7 +9,7 @@ from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
 
 class A2CAgent:
-    def __init__(self, state_dim, action_dim, hidden_dim=128, lr=1e-3, gamma=0.99,
+    def __init__(self, state_dim, action_dim, hidden_dim=128, lr=1e-3, gamma=0.99, use_cnn=False,
                  use_shield=True, verbose=False, requirements_path=None, env=None, mode='hard'):
 
         self.gamma = gamma
@@ -19,7 +19,7 @@ class A2CAgent:
         self.learn_step_counter = 0
 
         self.model = ModularNetwork(input_shape=state_dim, output_dim=action_dim,
-                                    hidden_dim=hidden_dim, use_cnn=False, actor_critic=True)
+                                    hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=True)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
         self.memory = []

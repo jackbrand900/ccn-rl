@@ -1,3 +1,5 @@
+from functools import partial
+
 import torch
 import os
 import re
@@ -8,10 +10,12 @@ from src.utils.env_helpers import is_in_front_of_key
 from src.utils.req_file_to_logic_fn import get_flag_logic_fn
 
 class ShieldController:
-    def __init__(self, requirements_path, num_actions):
+    def __init__(self, requirements_path, num_actions, mode="hard"):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
         self.flag_logic_fn = get_flag_logic_fn(self.requirements_path) or self.default_flag_logic
+        flag_active_val = 0.8 if mode == "soft" else 1.0
+        self.flag_logic_fn = partial(self.flag_logic_fn, flag_active_val=flag_active_val)
         self.flag_logic_batch = self._batchify(self.flag_logic_fn)
 
         # Parse var names from file
@@ -72,9 +76,9 @@ class ShieldController:
         """Fallback flag logic — always 0 for all flags"""
         return {flag: 0 for flag in self.flag_names}
 
-    def apply(self, action_probs, context, verbose=False, mode="hard"):
+    def apply(self, action_probs, context, verbose=False):
         # === Apply flag logic ===
-        flags = self.flag_logic_fn(context, mode)
+        flags = self.flag_logic_fn(context)
         flag_values = [flags.get(name, 0) for name in self.flag_names]
 
         # Expand flags to match batch size

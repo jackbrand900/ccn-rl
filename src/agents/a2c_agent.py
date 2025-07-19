@@ -4,27 +4,13 @@ import torch.optim as optim
 import numpy as np
 from torch.distributions import Categorical
 
+from src.models.network import ModularNetwork
 from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
 
-class A2CNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_dim=128):
-        super().__init__()
-        self.shared = nn.Sequential(
-            nn.Linear(state_dim, hidden_dim), nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim), nn.ReLU()
-        )
-        self.policy_head = nn.Linear(hidden_dim, action_dim)
-        self.value_head = nn.Linear(hidden_dim, 1)
-
-    def forward(self, x):
-        x = self.shared(x)
-        return self.policy_head(x), self.value_head(x)
-
-
 class A2CAgent:
     def __init__(self, state_dim, action_dim, hidden_dim=128, lr=1e-3, gamma=0.99,
-                 use_shield=True, verbose=False, requirements_path=None, env=None):
+                 use_shield=True, verbose=False, requirements_path=None, env=None, mode='hard'):
 
         self.gamma = gamma
         self.use_shield = use_shield
@@ -32,7 +18,8 @@ class A2CAgent:
         self.env = env
         self.learn_step_counter = 0
 
-        self.model = A2CNetwork(state_dim, action_dim, hidden_dim)
+        self.model = ModularNetwork(input_shape=state_dim, output_dim=action_dim,
+                                    hidden_dim=hidden_dim, use_cnn=False, actor_critic=True)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
         self.memory = []
@@ -42,7 +29,7 @@ class A2CAgent:
             self.shield_controller = ShieldController(
                 requirements_path=requirements_path,
                 num_actions=action_dim,
-                flag_logic_fn=context_provider.key_flag_logic,
+                mode=mode,
             )
         else:
             self.shield_controller = None
@@ -77,7 +64,7 @@ class A2CAgent:
                             self.last_log_prob, self.last_value,
                             self.last_raw_probs, self.last_shielded_probs))
 
-    def update(self):
+    def update(self, batch_size=None):
         if not self.memory:
             return
 
@@ -124,3 +111,9 @@ class A2CAgent:
         self.training_logs["prob_shift"].append((shielded_probs - raw_probs).abs().mean().item())
 
         self.memory.clear()
+
+    def get_weights(self):
+        return self.model.state_dict()
+
+    def load_weights(self, weights):
+        self.model.load_state_dict(weights)

@@ -28,12 +28,12 @@ def build_context(env, agent):
     return context
 
 
-def position_flag_logic(context):
+def position_flag_logic(context, flag_active_val=1.0):
     pos = context.get("position", None)
-    return {"y_7": int(pos == (1, 1))}
+    return {"y_7": flag_active_val if (pos == (1, 1)) else 0}
 
 
-def key_flag_logic(context):
+def key_flag_logic(context, flag_active_val=1.0):
     direction = context.get("direction")
     position = context.get("position")
     env = context.get("env")
@@ -66,7 +66,7 @@ def key_flag_logic(context):
     # print(f"[FLAG] Key @ {key_pos} — Exists: {key_obj is not None}")
     # print(f"[FLAG] Grid check says key_at_front = {key_at_front}")
 
-    return {"y_7": int(key_at_front)}
+    return {"y_7": flag_active_val if key_at_front else 0}
 
 
 def cartpole_flag_logic(context):
@@ -114,13 +114,13 @@ def cartpole_flag_logic_advanced(context,
     return flags
 
 
-def cartpole_emergency_flag_logic(context, mode="hard"):
+def cartpole_emergency_flag_logic(context, flag_active_val=1.0):
     obs = context.get("obs")
     if obs is None:
         return {}
 
     _, _, angle, _ = obs
-    flag_active_val = 1.0 if mode == "hard" else 0.8
+
     return {
         "y_2": flag_active_val if angle < -0.15 else 0.0,  # tipping far to the left
         "y_3": flag_active_val if angle > 0.15 else 0.0,  # tipping far to the right

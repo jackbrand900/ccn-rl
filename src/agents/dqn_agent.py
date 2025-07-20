@@ -1,5 +1,4 @@
 from collections import deque
-
 import numpy as np
 from torch import optim
 import torch
@@ -10,10 +9,14 @@ from src.utils import context_provider
 from src.utils.shield_controller import ShieldController
 from src.utils.preprocessing import prepare_input, prepare_batch
 
+
 class DQNAgent:
     def __init__(self, input_shape, action_dim, hidden_dim=64, use_cnn=False, lr=1e-3, gamma=0.99,
                  epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01, target_update_freq=1000,
                  use_shield=True, verbose=False, requirements_path=None, env=None, mode='hard'):
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"[DQNAgent] Using device: {self.device}")
 
         self.action_dim = action_dim
         self.gamma = gamma
@@ -27,9 +30,9 @@ class DQNAgent:
         self.batch_size = 64
 
         self.q_network = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
-                                        hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False)
+                                        hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False).to(self.device)
         self.target_network = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
-                                             hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False)
+                                             hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False).to(self.device)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()
 
@@ -51,7 +54,7 @@ class DQNAgent:
                 print(f"[Random] Action selected: {action}")
             return action, context, False
 
-        state_tensor = prepare_input(state, use_cnn=self.q_network.use_cnn)
+        state_tensor = prepare_input(state, use_cnn=self.q_network.use_cnn).to(self.device)
 
         with torch.no_grad():
             q_values = self.q_network(state_tensor)
@@ -88,12 +91,12 @@ class DQNAgent:
         batch = random.sample(self.replay_buffer, batch_size)
         states, actions, rewards, next_states, contexts, dones = zip(*batch)
 
-        states = prepare_batch(states, use_cnn=self.q_network.use_cnn)
-        next_states = prepare_batch(next_states, use_cnn=self.q_network.use_cnn)
+        states = prepare_batch(states, use_cnn=self.q_network.use_cnn).to(self.device)
+        next_states = prepare_batch(next_states, use_cnn=self.q_network.use_cnn).to(self.device)
 
-        actions = torch.LongTensor(actions).unsqueeze(1)
-        rewards = torch.FloatTensor(rewards).unsqueeze(1)
-        dones = torch.FloatTensor(dones).unsqueeze(1)
+        actions = torch.LongTensor(actions).unsqueeze(1).to(self.device)
+        rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
+        dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
 
         with torch.no_grad():
             raw_probs = torch.softmax(self.q_network(states), dim=1)
@@ -131,4 +134,3 @@ class DQNAgent:
 
     def load_weights(self, weights):
         self.q_network.load_state_dict(weights)
-

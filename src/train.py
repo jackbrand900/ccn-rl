@@ -53,7 +53,7 @@ def create_environment(env_name, render=False):
 
         if env_name == "CarRacing-v3":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=200)
+            env = TimeLimit(env, max_episode_steps=500)
             return env
 
         if env_name == "CarRacingIntersection-v0":
@@ -120,7 +120,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
 
         done = False
         total_reward = 0
-        batch_size = 64
+        batch_size = 128
         while not done:
             action, context, modified = agent.select_action(state, env)
             # TODO: make this environment agnostic
@@ -194,6 +194,8 @@ def train(agent='dqn',
     print(f"[DEBUG] Gym observation shape: {obs_space.shape}")
     print(f"[DEBUG] Input shape passed to ModularNetwork: {input_shape}")
 
+    torch.backends.cudnn.benchmark = True
+    print(f"[DEBUG] Using benchmark")
     if isinstance(obs_space, gym.spaces.Box):
         state_dim = int(np.prod(obs_space.shape))
     elif isinstance(obs_space, gym.spaces.Dict) and 'image' in obs_space.spaces:

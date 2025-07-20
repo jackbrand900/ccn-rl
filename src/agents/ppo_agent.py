@@ -24,9 +24,10 @@ class PPOAgent:
         self.env = env
         self.action_dim = action_dim
         self.use_cnn = use_cnn
-
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.policy = ModularNetwork(input_shape, action_dim, hidden_dim,
-                                     use_cnn=use_cnn, actor_critic=True)
+                                     use_cnn=use_cnn, actor_critic=True).to(self.device)
+        print(f"[PPOAgent] Using device: {self.device}")
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
         self.memory = []
 
@@ -52,7 +53,7 @@ class PPOAgent:
         self.last_obs = state
         context = context_provider.build_context(env or self.env, self)
 
-        state_tensor = prepare_input(state, use_cnn=self.use_cnn)
+        state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
         action, log_prob, value, raw_probs = self.policy.select_action(state_tensor)
 
@@ -63,7 +64,7 @@ class PPOAgent:
 
             dist = Categorical(probs=shielded_probs)
             action = dist.sample().item()
-            log_prob = dist.log_prob(torch.tensor(action))
+            log_prob = dist.log_prob(torch.tensor(action).to(self.device))
         else:
             shielded_probs = raw_probs
             was_modified = False
@@ -91,16 +92,17 @@ class PPOAgent:
         states, actions, rewards, next_states, contexts, dones, log_probs, values, raw_probs, shielded_probs = zip(*self.memory)
         returns, advantages = self._compute_gae(rewards, values, dones)
 
-        states = prepare_batch(states, use_cnn=self.use_cnn)
+        states = prepare_batch(states, use_cnn=self.use_cnn).to(self.device)
         if self.use_cnn and states.ndim == 4 and states.shape[-1] == 3:
             states = states.permute(0, 3, 1, 2)
 
-        actions = torch.LongTensor(actions)
-        returns = torch.FloatTensor(np.array(returns))
-        advantages = torch.FloatTensor(np.array(advantages))
-        old_log_probs = torch.FloatTensor(np.array(log_probs))
-        raw_probs = torch.stack(raw_probs)
-        shielded_probs = torch.stack(shielded_probs)
+        actions = torch.LongTensor(actions).to(self.device)
+        returns = torch.FloatTensor(np.array(returns)).to(self.device)
+        advantages = torch.FloatTensor(np.array(advantages)).to(self.device)
+        old_log_probs = torch.FloatTensor(np.array(log_probs)).to(self.device)
+        raw_probs = torch.stack(raw_probs).to(self.device)
+        shielded_probs = torch.stack(shielded_probs).to(self.device)
+
 
         for _ in range(epochs):
             loss, logs = self.policy.compute_losses(

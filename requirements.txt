@@ -1,8 +1,0 @@
-torch
-gym
-numpy==1.23.5
-gym-minigrid
-optuna
-optuna-dashboard
-pyaml
-pishield

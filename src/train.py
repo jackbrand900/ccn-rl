@@ -1,6 +1,6 @@
 import gymnasium as gym
 import numpy as np
-from gymnasium.wrappers import TimeLimit
+from gymnasium.wrappers import TimeLimit, TransformObservation, FrameStackObservation
 import torch
 import src.utils.graphing as graphing
 import argparse
@@ -12,6 +12,8 @@ from src.agents.a2c_agent import A2CAgent
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 from src.utils.shield_controller import ShieldController
+from PIL import Image
+from gymnasium.spaces import Box
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -42,6 +44,10 @@ custom_envs = {
     "CarRacingWithTrafficLights-v0": (None, None)
 }
 
+def to_grayscale(obs):
+    # Downsample to 48x48 or even 32x32
+    img = Image.fromarray(obs).convert('L').resize((48, 48))
+    return np.array(img, dtype=np.uint8)
 
 def create_environment(env_name, render=False):
     if env_name in custom_envs:
@@ -61,7 +67,13 @@ def create_environment(env_name, render=False):
 
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=500)
+
+            # Define the transformed space: grayscale (96, 96), uint8
+            transformed_obs_space = Box(low=0, high=255, shape=(48, 48), dtype=np.uint8)
+
+            env = TransformObservation(env, to_grayscale, observation_space=transformed_obs_space)
+            env = FrameStackObservation(env, 8)  # Now shape: (6, 96, 96)
+            env = TimeLimit(env, max_episode_steps=500)  # ✅ Set timestep limit
             return env
 
         # Handle MiniGrid environments
@@ -104,12 +116,13 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
+def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
                  render=False):
     episode_rewards = []
     best_avg_reward = float('-inf')
     best_weights = None
     actions_taken = []
+    modifications = 0
     for episode in range(1, num_episodes + 1):
         use_cnn = getattr(agent, "use_cnn", False)
 
@@ -126,6 +139,9 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
         batch_size = 128
         while not done:
             action, context, modified = agent.select_action(state, env)
+            if modified:
+                modifications += 1
+
             # TODO: make this environment agnostic
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
@@ -155,7 +171,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=Fa
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            log_msg = f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}"
+            log_msg = f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}, Num Modifications: {modifications}"
             if hasattr(agent, "epsilon"):
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
             print(log_msg)

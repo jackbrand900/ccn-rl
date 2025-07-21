@@ -52,7 +52,6 @@ class PPOAgent:
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
         context = context_provider.build_context(env or self.env, self)
-
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
         action, log_prob, value, raw_probs = self.policy.select_action(state_tensor)
@@ -117,8 +116,8 @@ class PPOAgent:
             loss.backward()
             self.optimizer.step()
 
-            if self.verbose:
-                print({k: f"{v:.4f}" for k, v in logs.items()})
+            # if self.verbose:
+            #     print({k: f"{v:.4f}" for k, v in logs.items()})
 
         prob_shift = torch.abs(shielded_probs - raw_probs).mean().item()
         for k in self.training_logs:

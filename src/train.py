@@ -12,11 +12,14 @@ from src.agents.a2c_agent import A2CAgent
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 from src.utils.shield_controller import ShieldController
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
 
 register(
-    id="CarRacingIntersection-v0",
-    entry_point="src.envs.custom_car_racing_with_intersection:CustomCarRacing",  # <- adjust path to your file
+    id="CarRacingWithTrafficLights-v0",
+    entry_point="src.envs.car_racing_with_lights:CarRacingWithTrafficLights",
 )
 
 def register_env_if_needed(env_id, entry_point, kwargs=None):
@@ -36,7 +39,7 @@ custom_envs = {
     "MiniGrid-MultiRoom-N2-S4-v0": ("minigrid.envs:MultiRoomEnv", {'num_rooms': 2, 'max_room_size': 4}),
     "CartPole-v1": (None, None),
     "CarRacing-v3": (None, None),
-    "CarRacingIntersection-v0": (None, None)
+    "CarRacingWithTrafficLights-v0": (None, None)
 }
 
 
@@ -53,12 +56,12 @@ def create_environment(env_name, render=False):
 
         if env_name == "CarRacing-v3":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=500)
+            env = TimeLimit(env, max_episode_steps=200)
             return env
 
-        if env_name == "CarRacingIntersection-v0":
+        if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=200)
+            env = TimeLimit(env, max_episode_steps=500)
             return env
 
         # Handle MiniGrid environments
@@ -101,7 +104,7 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
+def run_training(agent, env, num_episodes=100, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
                  render=False):
     episode_rewards = []
     best_avg_reward = float('-inf')
@@ -128,7 +131,9 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             x, y = pos if pos is not None else (None, None)
             # print(f"Action taken: {action}")
             actions_taken.append((x, y, action))
-            next_state, reward, terminated, truncated, _ = env.step(action)
+            next_state, reward, terminated, truncated, info = env.step(action)
+            # if context['at_red_light'] and verbose:
+            #     print(f"[Episode {episode}] 🚦 At red light!")
             if render:
                 env.render()
 
@@ -137,8 +142,8 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             # next_state = next_state.flatten()
             done = terminated or truncated
 
-            if verbose:
-                print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
+            # if verbose:
+            #     print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
 
             # print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
             agent.store_transition(state, action, reward, next_state, context, done)
@@ -208,7 +213,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/emergency_cartpole.cnf'
+    requirements_path = 'src/requirements/wheel_on_grass.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -281,12 +286,9 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
     total_steps = 0
     total_violations = 0
 
-    # Dynamically create a shield controller if needed for violation checking
-    if not eval_with_shield and (not hasattr(agent, "shield_controller") or agent.shield_controller is None):
-        agent.shield_controller = ShieldController(
-            requirements_path='src/requirements/emergency_cartpole.cnf',  # or make this configurable
-            num_actions=agent.action_dim,
-        )
+    # # Dynamically create a shield controller if needed for violation checking
+    # if not eval_with_shield and (not hasattr(agent, "shield_controller") or agent.shield_controller is None):
+    #     agent.shield_controller = ShieldController(requirements_path, action_dim, mode)
 
     for episode in range(num_episodes):
         state = reset_env(env)

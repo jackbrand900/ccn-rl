@@ -18,3 +18,6 @@ python -m src.train --agent ppo --env MiniGrid-Empty-6x6-v0 --use_shield
 
 # Train DQN on MultiRoom environment with verbose logging
 python -m src.train --agent dqn --env MiniGrid-MultiRoom-N2-S4-v0 --verbose
+
+
+ssh -i ~/Downloads/jack_key_gpu.pem ubuntu@129.213.16.101

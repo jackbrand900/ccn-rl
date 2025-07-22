@@ -25,16 +25,27 @@ class ModularNetwork(nn.Module):
         self.actor_critic = actor_critic
 
         if use_cnn:
+            # Accept both 3D (H, W, C) or (C, H, W) and 4D (stack, H, W, C) or (stack, C, H, W)
             if len(input_shape) == 3:
                 if input_shape[-1] == 3:
                     h, w, c = input_shape
+                    in_channels = c
                 else:
                     c, h, w = input_shape
+                    in_channels = c
+            elif len(input_shape) == 4:
+                # Assume (stack, H, W, C) or (stack, C, H, W)
+                if input_shape[-1] == 3:
+                    stack, h, w, c = input_shape
+                    in_channels = stack * c
+                else:
+                    stack, c, h, w = input_shape
+                    in_channels = stack * c
             else:
-                raise ValueError(f"Expected 3D input shape, got {input_shape}")
+                raise ValueError(f"Expected 3D or 4D input shape, got {input_shape}")
 
             self.encoder = nn.Sequential(
-                nn.Conv2d(c, 32, kernel_size=8, stride=4),
+                nn.Conv2d(in_channels, 32, kernel_size=8, stride=4),
                 nn.ReLU(),
                 nn.Conv2d(32, 64, kernel_size=4, stride=2),
                 nn.ReLU(),
@@ -43,7 +54,7 @@ class ModularNetwork(nn.Module):
             )
 
             with torch.no_grad():
-                dummy = torch.zeros(1, c, h, w).float() / 255.0
+                dummy = torch.zeros(1, in_channels, h, w).float() / 255.0
                 conv_out = self.encoder(dummy)
                 norm_shape = conv_out.shape[1:]
                 conv_out_dim = conv_out.reshape(1, -1).size(1)
@@ -73,7 +84,13 @@ class ModularNetwork(nn.Module):
 
     def forward(self, x):
         if self.use_cnn:
-            if x.ndim == 4 and x.shape[-1] == 3:
+            # Handle input shape for stacked frames
+            if x.ndim == 5:
+                # (batch, stack, H, W, C) -> (batch, stack * C, H, W)
+                b, stack, h, w, c = x.shape
+                x = x.permute(0, 1, 4, 2, 3).reshape(b, stack * c, h, w)
+            elif x.ndim == 4 and x.shape[-1] == 3:
+                # (batch, H, W, C) -> (batch, C, H, W)
                 x = x.permute(0, 3, 1, 2)
             x = x.float() / 255.0
         x = self.encoder(x)

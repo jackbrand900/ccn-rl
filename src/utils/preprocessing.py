@@ -11,7 +11,16 @@ def prepare_input(state, use_cnn=False):
                 state_tensor = state_tensor.permute(2, 0, 1)
             # If already (C, H, W), do nothing
         elif state_tensor.ndim == 4:
-            raise ValueError("Expected single state (not batch) with shape (C, H, W) or (H, W, C)")
+            # Handle (stack, H, W, C) → (stack * C, H, W)
+            if state_tensor.shape[-1] == 3:
+                stack, h, w, c = state_tensor.shape
+                state_tensor = state_tensor.permute(0, 3, 1, 2).reshape(stack * c, h, w)
+            else:
+                # (stack, C, H, W) → (stack * C, H, W)
+                stack, c, h, w = state_tensor.shape
+                state_tensor = state_tensor.reshape(stack * c, h, w)
+        else:
+            raise ValueError(f"Expected single state with shape (C, H, W), (H, W, C), (stack, H, W, C), or (stack, C, H, W), got {state_tensor.shape}")
 
         state_tensor = state_tensor.unsqueeze(0) / 255.0  # Add batch and normalize
     else:
@@ -31,8 +40,17 @@ def prepare_batch(states, use_cnn=False):
             if states.shape[-1] == 3:
                 states_tensor = torch.FloatTensor(states).permute(0, 3, 1, 2) / 255.0
             else:
-                # Already [B, C, H, W] — stacked grayscale
+                # Already [B, C, H, W]
                 states_tensor = torch.FloatTensor(states) / 255.0
+        elif states.ndim == 5:
+            # [B, stack, H, W, C] → [B, stack * C, H, W]
+            if states.shape[-1] == 3:
+                B, stack, H, W, C = states.shape
+                states_tensor = torch.FloatTensor(states).permute(0, 1, 4, 2, 3).reshape(B, stack * C, H, W) / 255.0
+            else:
+                # [B, stack, C, H, W] → [B, stack * C, H, W]
+                B, stack, C, H, W = states.shape
+                states_tensor = torch.FloatTensor(states).reshape(B, stack * C, H, W) / 255.0
         else:
             raise ValueError(f"Unexpected image shape: {states.shape}")
     else:

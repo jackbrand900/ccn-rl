@@ -9,10 +9,11 @@ from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
 
 class PPOAgent:
-    def __init__(self, input_shape, action_dim, hidden_dim=128, use_cnn=False, lr=1e-4,
-                 gamma=0.98, clip_eps=0.1, ent_coef=0.005, lambda_req=0.0,
+    def __init__(self, input_shape, action_dim, hidden_dim=256, use_cnn=False, lr=3e-4,
+                 gamma=0.99, clip_eps=0.2, ent_coef=0.01, lambda_req=0.0,
                  lambda_consistency=0.0, use_shield=True, verbose=False,
-                 requirements_path=None, env=None, mode='hard'):
+                 requirements_path=None, env=None, mode='hard',
+                 batch_size=4096, epochs=8):
 
         self.gamma = gamma
         self.clip_eps = clip_eps
@@ -31,6 +32,9 @@ class PPOAgent:
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.995)
         self.memory = []
+
+        self.batch_size = batch_size
+        self.epochs = epochs
 
         self.learn_step_counter = 0
         self.last_log_prob = None
@@ -83,7 +87,9 @@ class PPOAgent:
             self.last_raw_probs, self.last_shielded_probs
         ))
 
-    def update(self, batch_size=128, epochs=8):
+    def update(self, batch_size=None, epochs=None):
+        batch_size = batch_size or self.batch_size
+        epochs = epochs or self.epochs
         if len(self.memory) < batch_size:
             return
 

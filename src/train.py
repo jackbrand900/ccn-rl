@@ -18,6 +18,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
+import cv2
 
 register(
     id="CarRacingWithTrafficLights-v0",
@@ -44,10 +45,16 @@ custom_envs = {
     "CarRacingWithTrafficLights-v0": (None, None)
 }
 
-def to_grayscale(obs):
-    # Downsample to 48x48 or even 32x32
-    img = Image.fromarray(obs).convert('L').resize((48, 48))
-    return np.array(img, dtype=np.uint8)
+# def to_grayscale(obs):
+#     obs = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)  # shape (96, 96)
+#     obs = cv2.resize(obs, (48, 48))
+#     obs = obs.astype(np.float32) / 255.0  # Normalize to [0, 1]
+#     return obs  # shape (48, 48)
+
+# def resize_rgb(obs):
+#     obs = cv2.resize(obs, (96, 96))  # or 64×64 if performance needed
+#     obs = obs.astype(np.float32) / 255.0
+#     return obs  # shape: (96, 96, 3)
 
 def create_environment(env_name, render=False):
     if env_name in custom_envs:
@@ -69,10 +76,10 @@ def create_environment(env_name, render=False):
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
 
             # Define the transformed space: grayscale (96, 96), uint8
-            transformed_obs_space = Box(low=0, high=255, shape=(48, 48), dtype=np.uint8)
+            # transformed_obs_space = Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32)
 
-            env = TransformObservation(env, to_grayscale, observation_space=transformed_obs_space)
-            env = FrameStackObservation(env, 8)  # Now shape: (6, 96, 96)
+            # env = TransformObservation(env, resize_rgb, observation_space=transformed_obs_space)
+            env = FrameStackObservation(env, 4) 
             env = TimeLimit(env, max_episode_steps=500)  # ✅ Set timestep limit
             return env
 
@@ -93,6 +100,8 @@ def preprocess_state(state, use_cnn=False):
     if isinstance(state, np.ndarray):
         if use_cnn:
             if state.ndim == 3:  # (H, W, C)
+                state = state.astype(np.float32)
+            elif state.ndim == 4:  # (stack, H, W, C)
                 state = state.astype(np.float32)
             else:
                 raise ValueError(f"Unexpected CNN state shape: {state.shape}")
@@ -116,7 +125,7 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
+def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
                  render=False):
     episode_rewards = []
     best_avg_reward = float('-inf')
@@ -200,6 +209,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
 def train(agent='dqn',
           use_shield=False,
           mode='hard',
+          num_episodes=500,
           verbose=False,
           visualize=False,
           env_name='MiniGrid-Empty-5x5-v0',
@@ -265,6 +275,7 @@ def train(agent='dqn',
     agent_trained, _, best_weights, best_avg_reward = run_training(
         agent, env,
         verbose=verbose,
+        num_episodes=num_episodes,
         visualize=visualize,
         render=render,
         use_cnn=use_cnn
@@ -397,11 +408,13 @@ if __name__ == "__main__":
     parser.add_argument('--render', action='store_true', help='Render environment (RGB image)')
     parser.add_argument('--env', type=str, default='MiniGrid-Empty-5x5-v0', help='Gym environment to train on')
     parser.add_argument('--eval_with_shield', action='store_true', help='Enable shield during evaluation')
+    parser.add_argument('--num_episodes', type=int, default=500, help='Number of training episodes')
     args = parser.parse_args()
 
     trained_agent, env = train(agent=args.agent,
                                use_shield=args.use_shield,
                                mode=args.mode,
+                               num_episodes=args.num_episodes,
                                verbose=args.verbose,
                                visualize=args.visualize,
                                env_name=args.env,

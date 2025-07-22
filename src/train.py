@@ -1,6 +1,6 @@
 import gymnasium as gym
 import numpy as np
-from gymnasium.wrappers import TimeLimit, TransformObservation, FrameStack
+from gymnasium.wrappers import TimeLimit, TransformObservation, FrameStack, AtariPreprocessing
 import torch
 import src.utils.graphing as graphing
 import argparse
@@ -94,9 +94,10 @@ def create_environment(env_name, render=False):
             #     return obs.astype(np.float32) / 255.0
 
             # env = TransformObservation(env, resize_obs, observation_space=Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32))
-
-            env = FrameStack(env, 4)  # Stack 4 frames (useful for DQN, PPO, etc.)
-            env = TimeLimit(env, max_episode_steps=100)  # Cap the episode length
+            env = gym.make(env_name, render_mode="rgb_array" if render else None, frameskip=1)
+            env = AtariPreprocessing(env, frame_skip=4, scale_obs=True, terminal_on_life_loss=True)
+            env = FrameStack(env, 4)
+            env = TimeLimit(env, max_episode_steps=1000)  # ✅ Set timestep limit
             return env
 
         if env_name == "ALE/Seaquest-v5":
@@ -108,7 +109,7 @@ def create_environment(env_name, render=False):
             #     return obs.astype(np.float32) / 255.0
             # env = TransformObservation(env, resize_obs, observation_space=Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32))
 
-            env = FrameStack(env, 4)  # stack 4 frames
+            # env = FrameStack(env, 4)  # stack 4 frames
             env = TimeLimit(env, max_episode_steps=100)
             return env
 

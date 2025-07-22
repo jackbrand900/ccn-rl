@@ -44,7 +44,7 @@ custom_envs = {
     "CarRacing-v3": (None, None),
     "CarRacingWithTrafficLights-v0": (None, None),
     "ALE/Freeway-v5": (None, None),
-
+    "ALE/Seaquest-v5": (None, None)
 }
 
 # def to_grayscale(obs):
@@ -97,6 +97,19 @@ def create_environment(env_name, render=False):
 
             env = FrameStack(env, 4)  # Stack 4 frames (useful for DQN, PPO, etc.)
             env = TimeLimit(env, max_episode_steps=100)  # Cap the episode length
+            return env
+
+        if env_name == "ALE/Seaquest-v5":
+            env = gym.make(env_name, render_mode="human" if render else None)
+
+            # Optional: resize or normalize observation if needed
+            # def resize_obs(obs):
+            #     obs = cv2.resize(obs, (96, 96))
+            #     return obs.astype(np.float32) / 255.0
+            # env = TransformObservation(env, resize_obs, observation_space=Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32))
+
+            env = FrameStack(env, 4)  # stack 4 frames
+            env = TimeLimit(env, max_episode_steps=100)
             return env
 
         # Handle MiniGrid environments

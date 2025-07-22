@@ -5,6 +5,7 @@ import src.utils.env_helpers as env_helpers
 
 def build_context(env, agent):
     env_id = env.spec.id if hasattr(env, "spec") and env.spec else ""
+    env_unwrapped = env.unwrapped
     context = {
         "timestep": getattr(agent, "learn_step_counter", 0),
         "env": env,
@@ -21,6 +22,19 @@ def build_context(env, agent):
             "direction": direction,
             "obs": obs,
         })
+
+    elif "CarRacing" in env_id:
+        obs = agent.last_obs if hasattr(agent, "last_obs") else None
+        context["obs"] = obs
+
+        # Red light flag
+        if hasattr(env_unwrapped, "red_light_active"):
+            context["at_red_light"] = env_unwrapped.red_light_active
+
+        if hasattr(env_unwrapped, "wheel_on_grass"):
+            # Store each wheel's grass status as flags y_6–y_9
+            for i, on_grass in enumerate(env_unwrapped.wheel_on_grass):
+                context[f"wheel_{i}_on_grass"] = on_grass
     else:
         obs = agent.last_obs if hasattr(agent, "last_obs") else None
         context["obs"] = obs
@@ -124,4 +138,21 @@ def cartpole_emergency_flag_logic(context, flag_active_val=1.0):
     return {
         "y_2": flag_active_val if angle < -0.15 else 0.0,  # tipping far to the left
         "y_3": flag_active_val if angle > 0.15 else 0.0,  # tipping far to the right
+    }
+
+
+def red_light_flag_logic(context, flag_active_val=1.0):
+    at_red_light = context.get("at_red_light", False)
+
+    return {
+        "y_5": flag_active_val if at_red_light else 0.0
+    }
+
+
+def wheel_on_grass_flag_logic(context, flag_active_val=1.0):
+    return {
+        "y_5": flag_active_val if context.get("wheel_0_on_grass", False) else 0.0,
+        "y_6": flag_active_val if context.get("wheel_1_on_grass", False) else 0.0,
+        "y_7": flag_active_val if context.get("wheel_2_on_grass", False) else 0.0,
+        "y_8": flag_active_val if context.get("wheel_3_on_grass", False) else 0.0,
     }

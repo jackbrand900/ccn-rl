@@ -1,6 +1,6 @@
 import gymnasium as gym
 import numpy as np
-from gymnasium.wrappers import TimeLimit
+from gymnasium.wrappers import TimeLimit, TransformObservation, FrameStack
 import torch
 import src.utils.graphing as graphing
 import argparse
@@ -12,11 +12,17 @@ from src.agents.a2c_agent import A2CAgent
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 from src.utils.shield_controller import ShieldController
+from PIL import Image
+from gymnasium.spaces import Box
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
+# import cv2
 
 register(
-    id="CarRacingIntersection-v0",
-    entry_point="src.envs.custom_car_racing_with_intersection:CustomCarRacing",  # <- adjust path to your file
+    id="CarRacingWithTrafficLights-v0",
+    entry_point="src.envs.car_racing_with_lights:CarRacingWithTrafficLights",
 )
 
 def register_env_if_needed(env_id, entry_point, kwargs=None):
@@ -36,9 +42,21 @@ custom_envs = {
     "MiniGrid-MultiRoom-N2-S4-v0": ("minigrid.envs:MultiRoomEnv", {'num_rooms': 2, 'max_room_size': 4}),
     "CartPole-v1": (None, None),
     "CarRacing-v3": (None, None),
-    "CarRacingIntersection-v0": (None, None)
+    "CarRacingWithTrafficLights-v0": (None, None),
+    "ALE/Freeway-v5": (None, None),
+    "ALE/Seaquest-v5": (None, None)
 }
 
+# def to_grayscale(obs):
+#     obs = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)  # shape (96, 96)
+#     obs = cv2.resize(obs, (48, 48))
+#     obs = obs.astype(np.float32) / 255.0  # Normalize to [0, 1]
+#     return obs  # shape (48, 48)
+
+# def resize_rgb(obs):
+#     obs = cv2.resize(obs, (96, 96))  # or 64×64 if performance needed
+#     obs = obs.astype(np.float32) / 255.0
+#     return obs  # shape: (96, 96, 3)
 
 def create_environment(env_name, render=False):
     if env_name in custom_envs:
@@ -53,12 +71,45 @@ def create_environment(env_name, render=False):
 
         if env_name == "CarRacing-v3":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=500)
+            env = TimeLimit(env, max_episode_steps=200)
             return env
 
-        if env_name == "CarRacingIntersection-v0":
+        if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=200)
+
+            # Define the transformed space: grayscale (96, 96), uint8
+            # transformed_obs_space = Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32)
+
+            # env = TransformObservation(env, resize_rgb, observation_space=transformed_obs_space)
+            env = FrameStack(env, 4)
+            env = TimeLimit(env, max_episode_steps=100)  # ✅ Set timestep limit
+            return env
+
+        if env_name == "ALE/Freeway-v5":
+            env = gym.make(env_name, render_mode="human" if render else None)
+
+            # Optional preprocessing (resize, normalize, etc.)
+            # def resize_obs(obs):
+            #     obs = cv2.resize(obs, (96, 96))  # optional
+            #     return obs.astype(np.float32) / 255.0
+
+            # env = TransformObservation(env, resize_obs, observation_space=Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32))
+
+            env = FrameStack(env, 4)  # Stack 4 frames (useful for DQN, PPO, etc.)
+            env = TimeLimit(env, max_episode_steps=100)  # Cap the episode length
+            return env
+
+        if env_name == "ALE/Seaquest-v5":
+            env = gym.make(env_name, render_mode="human" if render else None)
+
+            # Optional: resize or normalize observation if needed
+            # def resize_obs(obs):
+            #     obs = cv2.resize(obs, (96, 96))
+            #     return obs.astype(np.float32) / 255.0
+            # env = TransformObservation(env, resize_obs, observation_space=Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32))
+
+            env = FrameStack(env, 4)  # stack 4 frames
+            env = TimeLimit(env, max_episode_steps=100)
             return env
 
         # Handle MiniGrid environments
@@ -78,6 +129,8 @@ def preprocess_state(state, use_cnn=False):
     if isinstance(state, np.ndarray):
         if use_cnn:
             if state.ndim == 3:  # (H, W, C)
+                state = state.astype(np.float32)
+            elif state.ndim == 4:  # (stack, H, W, C)
                 state = state.astype(np.float32)
             else:
                 raise ValueError(f"Unexpected CNN state shape: {state.shape}")
@@ -101,12 +154,13 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
+def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
                  render=False):
     episode_rewards = []
     best_avg_reward = float('-inf')
     best_weights = None
     actions_taken = []
+    modifications = 0
     for episode in range(1, num_episodes + 1):
         use_cnn = getattr(agent, "use_cnn", False)
 
@@ -123,12 +177,17 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
         batch_size = 128
         while not done:
             action, context, modified = agent.select_action(state, env)
+            if modified:
+                modifications += 1
+
             # TODO: make this environment agnostic
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
             # print(f"Action taken: {action}")
             actions_taken.append((x, y, action))
-            next_state, reward, terminated, truncated, _ = env.step(action)
+            next_state, reward, terminated, truncated, info = env.step(action)
+            # if context['at_red_light'] and verbose:
+            #     print(f"[Episode {episode}] 🚦 At red light!")
             if render:
                 env.render()
 
@@ -137,8 +196,8 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
             # next_state = next_state.flatten()
             done = terminated or truncated
 
-            if verbose:
-                print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
+            # if verbose:
+            #     print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
 
             # print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
             agent.store_transition(state, action, reward, next_state, context, done)
@@ -150,7 +209,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            log_msg = f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}"
+            log_msg = f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}, Num Modifications: {modifications}"
             if hasattr(agent, "epsilon"):
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
             print(log_msg)
@@ -179,6 +238,7 @@ def run_training(agent, env, num_episodes=500, print_interval=10, log_rewards=Fa
 def train(agent='dqn',
           use_shield=False,
           mode='hard',
+          num_episodes=500,
           verbose=False,
           visualize=False,
           env_name='MiniGrid-Empty-5x5-v0',
@@ -208,7 +268,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/emergency_cartpole.cnf'
+    requirements_path = 'src/requirements/wheel_on_grass.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -244,6 +304,7 @@ def train(agent='dqn',
     agent_trained, _, best_weights, best_avg_reward = run_training(
         agent, env,
         verbose=verbose,
+        num_episodes=num_episodes,
         visualize=visualize,
         render=render,
         use_cnn=use_cnn
@@ -281,12 +342,9 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
     total_steps = 0
     total_violations = 0
 
-    # Dynamically create a shield controller if needed for violation checking
-    if not eval_with_shield and (not hasattr(agent, "shield_controller") or agent.shield_controller is None):
-        agent.shield_controller = ShieldController(
-            requirements_path='src/requirements/emergency_cartpole.cnf',  # or make this configurable
-            num_actions=agent.action_dim,
-        )
+    # # Dynamically create a shield controller if needed for violation checking
+    # if not eval_with_shield and (not hasattr(agent, "shield_controller") or agent.shield_controller is None):
+    #     agent.shield_controller = ShieldController(requirements_path, action_dim, mode)
 
     for episode in range(num_episodes):
         state = reset_env(env)
@@ -379,11 +437,13 @@ if __name__ == "__main__":
     parser.add_argument('--render', action='store_true', help='Render environment (RGB image)')
     parser.add_argument('--env', type=str, default='MiniGrid-Empty-5x5-v0', help='Gym environment to train on')
     parser.add_argument('--eval_with_shield', action='store_true', help='Enable shield during evaluation')
+    parser.add_argument('--num_episodes', type=int, default=500, help='Number of training episodes')
     args = parser.parse_args()
 
     trained_agent, env = train(agent=args.agent,
                                use_shield=args.use_shield,
                                mode=args.mode,
+                               num_episodes=args.num_episodes,
                                verbose=args.verbose,
                                visualize=args.visualize,
                                env_name=args.env,

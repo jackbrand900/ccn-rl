@@ -1,0 +1,8 @@
+name: car-racing
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - matplotlib
+prefix: /opt/anaconda3/envs/car-racing

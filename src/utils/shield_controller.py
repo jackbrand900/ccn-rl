@@ -39,9 +39,17 @@ class ShieldController:
     def _extract_vars_from_requirements(self):
         with open(self.requirements_path, "r") as f:
             content = f.read()
+
+        # Find all y_i style variables
         vars_found = set(re.findall(r"y_(\d+)", content))
         var_indices = sorted(int(v) for v in vars_found)
-        return [f"y_{i}" for i in var_indices]
+
+        if not var_indices:
+            raise ValueError("No variables found in constraints file.")
+
+        max_var = max(var_indices)
+        all_vars = [f"y_{i}" for i in range(max_var + 1)]
+        return all_vars
 
     def flag_logic_with_key_check(self, context):
         """
@@ -56,7 +64,8 @@ class ShieldController:
     def build_shield_layer(self):
         ordering = ",".join(reversed(self.ordering_names))  # e.g. "3,2,1,0"
         file_ext = os.path.splitext(self.requirements_path)[-1].lower()
-
+        print(f"requirements file: {self.requirements_path}")
+        print(f"num vars: {self.num_vars}, num flags: {self.num_flags}")
         if file_ext == ".cnf":
             return PropositionalShieldLayer(
                 num_classes=self.num_vars,
@@ -78,7 +87,6 @@ class ShieldController:
         return {flag: 0 for flag in self.flag_names}
 
     def apply(self, action_probs, context, verbose=False):
-        # === Apply flag logic ===
         flags = self.flag_logic_fn(context)
         flag_values = [flags.get(name, 0) for name in self.flag_names]
 
@@ -87,25 +95,17 @@ class ShieldController:
         flag_tensor = torch.tensor(flag_values, dtype=action_probs.dtype, device=action_probs.device)
         flag_tensor = flag_tensor.unsqueeze(0).expand(batch_size, -1)
 
-        # === Concatenate actions and flags ===
         full_input = torch.cat([action_probs, flag_tensor], dim=1)
-
-        # === Apply shield ===
         shielded_output = self.shield_layer(full_input)
-
-        # === Mask out flags and return corrected action distribution ===
         corrected = shielded_output[:, :self.num_actions]
-
-        # === Normalize if in soft mode ===
         if self.mode == "soft":
             corrected = corrected / corrected.sum(dim=1, keepdim=True)
 
-        # === Optional debug output ===
         flag_active = any(flag_values)
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
         if verbose:
             position = context.get("position", "N/A")
-            print(f"Position: {position}")
+            # print(f"Position: {position}")
             print(f"[DEBUG] Raw flags: {flags}, Flag values: {flag_values}")
             if flag_active:
                 print(f"[SHIELD ACTIVE] Flags: {flags}")

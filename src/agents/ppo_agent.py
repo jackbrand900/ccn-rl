@@ -9,10 +9,11 @@ from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
 
 class PPOAgent:
-    def __init__(self, input_shape, action_dim, hidden_dim=64, use_cnn=False, lr=3e-4,
-                 gamma=0.999, clip_eps=0.2, ent_coef=0.01, lambda_req=0.0,
+    def __init__(self, input_shape, action_dim, hidden_dim=256, use_cnn=False, lr=3e-4,
+                 gamma=0.99, clip_eps=0.2, ent_coef=0.01, lambda_req=0.0,
                  lambda_consistency=0.0, use_shield=True, verbose=False,
-                 requirements_path=None, env=None, mode='hard'):
+                 requirements_path=None, env=None, mode='hard',
+                 batch_size=4096, epochs=8):
 
         self.gamma = gamma
         self.clip_eps = clip_eps
@@ -29,7 +30,11 @@ class PPOAgent:
                                      use_cnn=use_cnn, actor_critic=True).to(self.device)
         print(f"[PPOAgent] Using device: {self.device}")
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.995)
         self.memory = []
+
+        self.batch_size = batch_size
+        self.epochs = epochs
 
         self.learn_step_counter = 0
         self.last_log_prob = None
@@ -52,7 +57,6 @@ class PPOAgent:
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
         context = context_provider.build_context(env or self.env, self)
-
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
         action, log_prob, value, raw_probs = self.policy.select_action(state_tensor)
@@ -83,7 +87,9 @@ class PPOAgent:
             self.last_raw_probs, self.last_shielded_probs
         ))
 
-    def update(self, batch_size=64, epochs=4):
+    def update(self, batch_size=None, epochs=None):
+        batch_size = batch_size or self.batch_size
+        epochs = epochs or self.epochs
         if len(self.memory) < batch_size:
             return
 
@@ -103,6 +109,8 @@ class PPOAgent:
         raw_probs = torch.stack(raw_probs).to(self.device)
         shielded_probs = torch.stack(shielded_probs).to(self.device)
 
+        # Normalize advantages
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         for _ in range(epochs):
             loss, logs = self.policy.compute_losses(
@@ -115,11 +123,10 @@ class PPOAgent:
 
             self.optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
             self.optimizer.step()
 
-            if self.verbose:
-                print({k: f"{v:.4f}" for k, v in logs.items()})
-
+        self.scheduler.step()
         prob_shift = torch.abs(shielded_probs - raw_probs).mean().item()
         for k in self.training_logs:
             self.training_logs[k].append(logs.get(k, 0.0))
@@ -143,4 +150,3 @@ class PPOAgent:
 
     def load_weights(self, weights):
         self.policy.load_state_dict(weights)
-

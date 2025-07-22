@@ -25,25 +25,43 @@ class ModularNetwork(nn.Module):
         self.actor_critic = actor_critic
 
         if use_cnn:
-            # Ensure correct shape order
-            if len(input_shape) == 3 and input_shape[-1] == 3:
-                h, w, c = input_shape
-            elif len(input_shape) == 3 and input_shape[0] == 3:
-                c, h, w = input_shape
+            # Accept both 3D (H, W, C) or (C, H, W) and 4D (stack, H, W, C) or (stack, C, H, W)
+            if len(input_shape) == 3:
+                if input_shape[-1] == 3:
+                    h, w, c = input_shape
+                    in_channels = c
+                else:
+                    c, h, w = input_shape
+                    in_channels = c
+            elif len(input_shape) == 4:
+                # Assume (stack, H, W, C) or (stack, C, H, W)
+                if input_shape[-1] == 3:
+                    stack, h, w, c = input_shape
+                    in_channels = stack * c
+                else:
+                    stack, c, h, w = input_shape
+                    in_channels = stack * c
             else:
-                raise ValueError(f"Expected input shape (H, W, C) or (C, H, W), got {input_shape}")
+                raise ValueError(f"Expected 3D or 4D input shape, got {input_shape}")
 
             self.encoder = nn.Sequential(
-                nn.Conv2d(c, 32, kernel_size=8, stride=4), nn.ReLU(),
-                nn.Conv2d(32, 64, kernel_size=4, stride=2), nn.ReLU(),
-                nn.Conv2d(64, 64, kernel_size=3, stride=1), nn.ReLU(),
+                nn.Conv2d(in_channels, 32, kernel_size=8, stride=4),
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=4, stride=2),
+                nn.ReLU(),
+                nn.Conv2d(64, 64, kernel_size=3, stride=1),
+                nn.ReLU(),
             )
 
             with torch.no_grad():
-                dummy = torch.zeros(1, c, h, w).float() / 255.0
+                dummy = torch.zeros(1, in_channels, h, w).float() / 255.0
                 conv_out = self.encoder(dummy)
+                norm_shape = conv_out.shape[1:]
                 conv_out_dim = conv_out.reshape(1, -1).size(1)
                 print(f"[DEBUG] conv_out shape: {conv_out.shape}, flattened: {conv_out_dim}")
+
+            self.encoder.add_module("norm", nn.LayerNorm(norm_shape))
+
         else:
             self.encoder = nn.Identity()
             conv_out_dim = input_shape if isinstance(input_shape, int) else int(torch.tensor(input_shape).prod())
@@ -51,6 +69,7 @@ class ModularNetwork(nn.Module):
         if actor_critic:
             self.actor = nn.Sequential(
                 nn.Linear(conv_out_dim, hidden_dim), nn.ReLU(),
+                nn.Dropout(p=0.2),
                 nn.Linear(hidden_dim, output_dim)
             )
             self.critic = nn.Sequential(
@@ -65,8 +84,13 @@ class ModularNetwork(nn.Module):
 
     def forward(self, x):
         if self.use_cnn:
-            if x.shape[1] == 96 and x.shape[2] == 96 and x.shape[-1] == 3:
-                # NHWC → NCHW
+            # Handle input shape for stacked frames
+            if x.ndim == 5:
+                # (batch, stack, H, W, C) -> (batch, stack * C, H, W)
+                b, stack, h, w, c = x.shape
+                x = x.permute(0, 1, 4, 2, 3).reshape(b, stack * c, h, w)
+            elif x.ndim == 4 and x.shape[-1] == 3:
+                # (batch, H, W, C) -> (batch, C, H, W)
                 x = x.permute(0, 3, 1, 2)
             x = x.float() / 255.0
         x = self.encoder(x)
@@ -85,7 +109,6 @@ class ModularNetwork(nn.Module):
         log_prob = dist.log_prob(action)
         return action.item(), log_prob, value.squeeze(), probs.squeeze(0)
 
-    # --- Loss functions below unchanged ---
     def compute_losses(self, states, actions, old_log_probs, advantages, returns, shielded_probs,
                        clip_eps=0.2, ent_coef=0.01, lambda_req=0.0, lambda_consistency=0.0):
         logits, new_values = self.forward(states)

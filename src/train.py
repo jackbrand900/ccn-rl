@@ -269,7 +269,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/wheel_on_grass.cnf'
+    requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -288,7 +288,8 @@ def train(agent='dqn',
                          verbose=verbose,
                          requirements_path=requirements_path,
                          env=env,
-                         use_cnn=use_cnn)
+                         use_cnn=use_cnn,
+                         use_shield_layer=True)
     elif agent == 'a2c':
         agent = A2CAgent(input_shape=input_shape,
                          action_dim=action_dim,

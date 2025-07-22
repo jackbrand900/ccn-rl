@@ -13,7 +13,7 @@ class PPOAgent:
                  gamma=0.99, clip_eps=0.2, ent_coef=0.01, lambda_req=0.0,
                  lambda_consistency=0.0, use_shield=True, verbose=False,
                  requirements_path=None, env=None, mode='hard',
-                 batch_size=4096, epochs=8):
+                 batch_size=4096, epochs=8, use_shield_layer=True):
 
         self.gamma = gamma
         self.clip_eps = clip_eps
@@ -21,16 +21,12 @@ class PPOAgent:
         self.lambda_req = lambda_req
         self.lambda_consistency = lambda_consistency
         self.use_shield = use_shield
+        self.use_shield_layer = use_shield_layer
         self.verbose = verbose
         self.env = env
         self.action_dim = action_dim
         self.use_cnn = use_cnn
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.policy = ModularNetwork(input_shape, action_dim, hidden_dim,
-                                     use_cnn=use_cnn, actor_critic=True).to(self.device)
-        print(f"[PPOAgent] Using device: {self.device}")
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
-        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.995)
         self.memory = []
 
         self.batch_size = batch_size
@@ -43,7 +39,12 @@ class PPOAgent:
         self.last_shielded_probs = None
         self.last_obs = None
 
-        self.shield_controller = ShieldController(requirements_path, action_dim, mode) if use_shield else None
+        self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose) if use_shield else None
+        self.policy = ModularNetwork(input_shape, action_dim, hidden_dim, use_shield_layer=self.use_shield_layer,
+                                     use_cnn=use_cnn, actor_critic=True, shield_controller=self.shield_controller).to(self.device)
+        print(f"[PPOAgent] Using device: {self.device}")
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.995)
 
         self.training_logs = {
             "policy_loss": [],
@@ -61,7 +62,7 @@ class PPOAgent:
 
         action, log_prob, value, raw_probs = self.policy.select_action(state_tensor)
 
-        if do_apply_shield and self.shield_controller:
+        if do_apply_shield and self.shield_controller and not self.policy.use_shield_layer:
             shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context, self.verbose).squeeze(0)
             shielded_probs /= shielded_probs.sum()
             was_modified = not torch.allclose(raw_probs, shielded_probs, atol=1e-6)
@@ -87,6 +88,17 @@ class PPOAgent:
             self.last_raw_probs, self.last_shielded_probs
         ))
 
+    def ensure_dict_contexts(self, contexts):
+        new_contexts = []
+        for c in contexts:
+            if isinstance(c, dict):
+                new_contexts.append(c)
+            elif isinstance(c, tuple):
+                new_contexts.append({"obs": c[0], "direction": c[1]})  # customize as needed
+            else:
+                raise ValueError(f"Invalid context type: {type(c)} - {c}")
+        return new_contexts
+
     def update(self, batch_size=None, epochs=None):
         batch_size = batch_size or self.batch_size
         epochs = epochs or self.epochs
@@ -96,6 +108,7 @@ class PPOAgent:
         self.learn_step_counter += 1
 
         states, actions, rewards, next_states, contexts, dones, log_probs, values, raw_probs, shielded_probs = zip(*self.memory)
+        contexts = self.ensure_dict_contexts(contexts)
         returns, advantages = self._compute_gae(rewards, values, dones)
 
         states = prepare_batch(states, use_cnn=self.use_cnn).to(self.device)
@@ -118,7 +131,8 @@ class PPOAgent:
                 clip_eps=self.clip_eps,
                 ent_coef=self.ent_coef,
                 lambda_req=self.lambda_req,
-                lambda_consistency=self.lambda_consistency
+                lambda_consistency=self.lambda_consistency,
+                contexts=contexts
             )
 
             self.optimizer.zero_grad()

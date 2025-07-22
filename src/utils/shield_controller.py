@@ -10,7 +10,7 @@ from src.utils.env_helpers import is_in_front_of_key
 from src.utils.req_file_to_logic_fn import get_flag_logic_fn
 
 class ShieldController:
-    def __init__(self, requirements_path, num_actions, mode="hard"):
+    def __init__(self, requirements_path, num_actions, mode="hard", verbose=False, default_flag_logic=None):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
         self.flag_logic_fn = get_flag_logic_fn(self.requirements_path) or self.default_flag_logic
@@ -27,9 +27,11 @@ class ShieldController:
         self.action_names = self.var_names[:num_actions]
         self.flag_names = self.var_names[num_actions:]
         self.num_flags = len(self.flag_names)
+        self.verbose = verbose
 
         self.ordering_names = [str(i) for i in range(self.num_vars)]
         self.shield_layer = self.build_shield_layer()
+        self.total_activations = 0
 
     def _batchify(self, single_fn):
         def batch_fn(contexts):
@@ -86,7 +88,7 @@ class ShieldController:
         """Fallback flag logic — always 0 for all flags"""
         return {flag: 0 for flag in self.flag_names}
 
-    def apply(self, action_probs, context, verbose=False):
+    def apply(self, action_probs, context):
         flags = self.flag_logic_fn(context)
         flag_values = [flags.get(name, 0) for name in self.flag_names]
 
@@ -103,7 +105,8 @@ class ShieldController:
 
         flag_active = any(flag_values)
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
-        if verbose:
+        print(f"verbose: {self.verbose}")
+        if self.verbose:
             position = context.get("position", "N/A")
             # print(f"Position: {position}")
             print(f"[DEBUG] Raw flags: {flags}, Flag values: {flag_values}")
@@ -131,6 +134,32 @@ class ShieldController:
 
         if self.mode == "soft":
             corrected = corrected / corrected.sum(dim=1, keepdim=True)
+
+        return corrected
+
+    def forward_differentiable(self, action_probs, contexts):
+        assert isinstance(contexts, list), "Contexts must be a list of dicts (batch)."
+        flag_dicts = self.flag_logic_batch(contexts)
+
+        flag_values = [
+            [flags.get(name, 0.0) for name in self.flag_names]
+            for flags in flag_dicts
+        ]
+        flag_tensor = torch.tensor(
+            flag_values, dtype=action_probs.dtype, device=action_probs.device
+        )  # shape: [B, num_flags]
+
+        full_input = torch.cat([action_probs, flag_tensor], dim=1)
+        shielded_output = self.shield_layer(full_input)
+        corrected = shielded_output[:, :self.num_actions]
+
+        if self.mode == "soft":
+            corrected = corrected / corrected.sum(dim=1, keepdim=True)
+
+        # Count activations
+        modified = ~torch.isclose(action_probs, corrected, atol=1e-5)
+        activated = modified.any(dim=1)  # shape [B]
+        self.total_activations += activated.sum().item()
 
         return corrected
 

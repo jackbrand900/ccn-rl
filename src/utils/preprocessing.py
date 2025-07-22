@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 def prepare_input(state, use_cnn=False):
-    state_tensor = torch.FloatTensor(state)
+    state_tensor = torch.FloatTensor(np.array(state))
 
     if use_cnn:
         if state_tensor.ndim == 3:

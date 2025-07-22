@@ -1,6 +1,6 @@
 import gymnasium as gym
 import numpy as np
-from gymnasium.wrappers import TimeLimit, TransformObservation, FrameStackObservation
+from gymnasium.wrappers import TimeLimit, TransformObservation, FrameStack
 import torch
 import src.utils.graphing as graphing
 import argparse
@@ -18,7 +18,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
-import cv2
+# import cv2
 
 register(
     id="CarRacingWithTrafficLights-v0",
@@ -42,7 +42,9 @@ custom_envs = {
     "MiniGrid-MultiRoom-N2-S4-v0": ("minigrid.envs:MultiRoomEnv", {'num_rooms': 2, 'max_room_size': 4}),
     "CartPole-v1": (None, None),
     "CarRacing-v3": (None, None),
-    "CarRacingWithTrafficLights-v0": (None, None)
+    "CarRacingWithTrafficLights-v0": (None, None),
+    "ALE/Freeway-v5": (None, None),
+
 }
 
 # def to_grayscale(obs):
@@ -79,8 +81,22 @@ def create_environment(env_name, render=False):
             # transformed_obs_space = Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32)
 
             # env = TransformObservation(env, resize_rgb, observation_space=transformed_obs_space)
-            env = FrameStackObservation(env, 4) 
-            env = TimeLimit(env, max_episode_steps=500)  # ✅ Set timestep limit
+            env = FrameStack(env, 4)
+            env = TimeLimit(env, max_episode_steps=100)  # ✅ Set timestep limit
+            return env
+
+        if env_name == "ALE/Freeway-v5":
+            env = gym.make(env_name, render_mode="human" if render else None)
+
+            # Optional preprocessing (resize, normalize, etc.)
+            # def resize_obs(obs):
+            #     obs = cv2.resize(obs, (96, 96))  # optional
+            #     return obs.astype(np.float32) / 255.0
+
+            # env = TransformObservation(env, resize_obs, observation_space=Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32))
+
+            env = FrameStack(env, 4)  # Stack 4 frames (useful for DQN, PPO, etc.)
+            env = TimeLimit(env, max_episode_steps=100)  # Cap the episode length
             return env
 
         # Handle MiniGrid environments

@@ -20,12 +20,12 @@ class PPOAgent:
                  ent_coef=0.01,
                  lambda_req=0.0,
                  lambda_consistency=0.0,
-                 use_shield=True,
                  verbose=False,
                  requirements_path=None,
                  env=None,
                  batch_size=4096,
                  epochs=8,
+                 use_shield_post=True,
                  use_shield_layer=True,
                  mode='hard'):
 
@@ -34,7 +34,7 @@ class PPOAgent:
         self.ent_coef = ent_coef
         self.lambda_req = lambda_req
         self.lambda_consistency = lambda_consistency
-        self.use_shield = use_shield
+        self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
         self.verbose = verbose
         self.env = env
@@ -53,7 +53,7 @@ class PPOAgent:
         self.last_shielded_probs = None
         self.last_obs = None
 
-        self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose) if use_shield else None
+        self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose)
         self.policy = ModularNetwork(input_shape, action_dim, hidden_dim, use_shield_layer=self.use_shield_layer,
                                      use_cnn=use_cnn, actor_critic=True, shield_controller=self.shield_controller).to(self.device)
         print(f"[PPOAgent] Using device: {self.device}")
@@ -74,19 +74,32 @@ class PPOAgent:
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
-        action, log_prob, value, raw_probs = self.policy.select_action(state_tensor)
+        # Always get raw_probs from the policy
+        action, log_prob, value, raw_probs, _ = self.policy.select_action(state_tensor, context)
 
-        if do_apply_shield and self.shield_controller and not self.policy.use_shield_layer:
-            shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context, self.verbose).squeeze(0)
+        # If using post hoc shielding, apply it manually
+        if self.use_shield_post and do_apply_shield:
+            shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
             shielded_probs /= shielded_probs.sum()
-            was_modified = not torch.allclose(raw_probs, shielded_probs, atol=1e-6)
-
-            dist = Categorical(probs=shielded_probs)
-            action = dist.sample().item()
-            log_prob = dist.log_prob(torch.tensor(action).to(self.device))
         else:
-            shielded_probs = raw_probs
-            was_modified = False
+            shielded_probs = raw_probs.clone()
+
+        # Always sample both to track modifications
+        dist_pre = Categorical(probs=raw_probs)
+        pre_action = dist_pre.sample().item()
+
+        dist_post = Categorical(probs=shielded_probs)
+        post_action = dist_post.sample().item()
+
+        was_modified = (pre_action != post_action)
+        shield_used = self.use_shield_post or self.use_shield_layer
+
+        if shield_used and do_apply_shield:
+            action = post_action
+            log_prob = dist_post.log_prob(torch.tensor(action).to(self.device))
+        else:
+            action = pre_action
+            log_prob = dist_pre.log_prob(torch.tensor(action).to(self.device))
 
         self.last_log_prob = log_prob.item()
         self.last_value = value.item()

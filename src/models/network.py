@@ -90,15 +90,13 @@ class ModularNetwork(nn.Module):
                 nn.Linear(hidden_dim, output_dim)
             )
 
-    def forward(self, x, context=None):
+    def forward(self, x, context=None, return_pre_post_probs=False):
         if self.use_cnn:
             # Handle input shape for stacked frames
             if x.ndim == 5:
-                # (batch, stack, H, W, C) -> (batch, stack * C, H, W)
                 b, stack, h, w, c = x.shape
                 x = x.permute(0, 1, 4, 2, 3).reshape(b, stack * c, h, w)
             elif x.ndim == 4 and x.shape[-1] == 3:
-                # (batch, H, W, C) -> (batch, C, H, W)
                 x = x.permute(0, 3, 1, 2)
             x = x.float() / 255.0
         x = self.encoder(x)
@@ -112,9 +110,7 @@ class ModularNetwork(nn.Module):
             value = None
 
         probs = torch.softmax(logits, dim=-1)
-        # print(f'Using shield layer: {self.use_shield_layer}')
-        # print(f'Using shield controller: {self.shield_controller}')
-        # print(f'Is context a list: {isinstance(context, list)}')
+        pre_shield_probs = probs.clone()
 
         if self.use_shield_layer and self.shield_controller and context is not None:
             # print('using shield layer and controller')
@@ -124,6 +120,8 @@ class ModularNetwork(nn.Module):
             # print(f"[DEBUG] Pre-shield probs: {probs}")
             probs = self.shield_controller.forward_differentiable(probs, context)
 
+        if return_pre_post_probs:
+            return logits, value, pre_shield_probs, probs
         return (logits, value) if self.actor_critic else probs
 
     def select_action(self, state_tensor, context=None):
@@ -131,15 +129,24 @@ class ModularNetwork(nn.Module):
             logits, value = self.forward(state_tensor, context=context)
         else:
             probs = self.forward(state_tensor, context=context)
-            logits = torch.log(probs + 1e-8)  # avoid log(0)
+            logits = torch.log(probs + 1e-8)
             value = None
 
-        dist = Categorical(logits=logits)
+        pre_probs = torch.softmax(logits, dim=-1)
+
+        # Apply shield if needed
+        if self.use_shield_layer and self.shield_controller and context is not None:
+            if not isinstance(context, list):
+                context = [context] * pre_probs.shape[0]
+            post_probs = self.shield_controller.forward_differentiable(pre_probs, context)
+        else:
+            post_probs = pre_probs.clone()
+
+        dist = Categorical(probs=post_probs)
         action = dist.sample()
         log_prob = dist.log_prob(action)
-        probs = torch.softmax(logits, dim=-1)
 
-        return action.item(), log_prob, value.squeeze() if value is not None else None, probs.squeeze(0)
+        return action.item(), log_prob, value.squeeze() if value is not None else None, pre_probs.squeeze(0), post_probs.squeeze(0)
 
     def compute_losses(self, states, actions, old_log_probs, advantages, returns, shielded_probs,
                        clip_eps=0.2, ent_coef=0.01, lambda_req=0.0, lambda_consistency=0.0, contexts=None):

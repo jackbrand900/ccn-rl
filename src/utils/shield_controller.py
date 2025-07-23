@@ -68,6 +68,7 @@ class ShieldController:
         file_ext = os.path.splitext(self.requirements_path)[-1].lower()
         print(f"requirements file: {self.requirements_path}")
         print(f"num vars: {self.num_vars}, num flags: {self.num_flags}")
+        print(f'Shield ordering: {ordering}')
         if file_ext == ".cnf":
             return PropositionalShieldLayer(
                 num_classes=self.num_vars,
@@ -105,7 +106,6 @@ class ShieldController:
 
         flag_active = any(flag_values)
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
-        print(f"verbose: {self.verbose}")
         if self.verbose:
             print(f"[DEBUG] Raw flags: {flags}, Flag values: {flag_values}")
             if flag_active:
@@ -158,6 +158,18 @@ class ShieldController:
         modified = ~torch.isclose(action_probs, corrected, atol=1e-5)
         activated = modified.any(dim=1)  # shape [B]
         self.shield_activations += activated.sum().item()
+
+        if self.verbose:
+            for i, (flags, raw, corr, act) in enumerate(zip(flag_dicts, action_probs, corrected, activated)):
+                print(f"[DEBUG] Raw flags: {flags}")
+                if any(flags.values()):
+                    print(f"[SHIELD ACTIVE] Flags: {flags}")
+                    if act:
+                        raw_np = raw.detach().cpu().numpy().flatten()
+                        corr_np = corr.detach().cpu().numpy().flatten()
+                        print(f"[SHIELD MODIFIED OUTPUT] Before: {raw_np} → After: {corr_np}")
+                    else:
+                        print(f"[SHIELD ACTIVE BUT NO CHANGE] Action output remained the same.")
 
         return corrected
 

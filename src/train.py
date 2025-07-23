@@ -239,7 +239,8 @@ def train(agent='dqn',
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
                          action_dim=action_dim,
-                         use_shield=use_shield,
+                         use_shield_post=use_shield_post,
+                         use_shield_layer=use_shield_layer,
                          mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
@@ -248,17 +249,18 @@ def train(agent='dqn',
     elif agent == 'ppo':
         agent = PPOAgent(input_shape=input_shape,
                          action_dim=action_dim,
-                         use_shield=use_shield,
+                         use_shield_post=use_shield_post,
+                         use_shield_layer=use_shield_layer,
                          mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
                          env=env,
-                         use_cnn=use_cnn,
-                         use_shield_layer=True)
+                         use_cnn=use_cnn)
     elif agent == 'a2c':
         agent = A2CAgent(input_shape=input_shape,
                          action_dim=action_dim,
-                         use_shield=use_shield,
+                         use_shield_post=use_shield_post,
+                         use_shield_layer=use_shield_layer,
                          mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
@@ -267,7 +269,8 @@ def train(agent='dqn',
     else:
         raise ValueError("Unsupported agent type.")
 
-    print(f"Training {agent.__class__.__name__} agent on {env_name} with shield: {use_shield}, render: {render}")
+    print(f"Training {agent.__class__.__name__} agent on {env_name} with shield post: {use_shield_post} "
+          f"with shield layer: {use_shield_layer}")
     agent_trained, _, best_weights, best_avg_reward = run_training(
         agent, env,
         verbose=verbose,
@@ -405,7 +408,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     trained_agent, env = train(agent=args.agent,
-                               use_shield=args.use_shield,
+                               use_shield_post=args.use_shield_post,
+                               use_shield_layer=args.use_shield_layer,
                                mode=args.mode,
                                num_episodes=args.num_episodes,
                                verbose=args.verbose,

@@ -9,11 +9,25 @@ from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
 
 class PPOAgent:
-    def __init__(self, input_shape, action_dim, hidden_dim=256, use_cnn=False, lr=3e-4,
-                 gamma=0.99, clip_eps=0.2, ent_coef=0.01, lambda_req=0.0,
-                 lambda_consistency=0.0, use_shield=True, verbose=False,
-                 requirements_path=None, env=None, mode='hard',
-                 batch_size=4096, epochs=8, use_shield_layer=True):
+    def __init__(self,
+                 input_shape,
+                 action_dim,
+                 hidden_dim=256,
+                 use_cnn=False,
+                 lr=3e-4,
+                 gamma=0.99,
+                 clip_eps=0.2,
+                 ent_coef=0.01,
+                 lambda_req=0.0,
+                 lambda_consistency=0.0,
+                 use_shield=True,
+                 verbose=False,
+                 requirements_path=None,
+                 env=None,
+                 batch_size=4096,
+                 epochs=8,
+                 use_shield_layer=True,
+                 mode='hard'):
 
         self.gamma = gamma
         self.clip_eps = clip_eps

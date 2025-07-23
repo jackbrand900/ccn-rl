@@ -11,9 +11,22 @@ from src.utils.preprocessing import prepare_input, prepare_batch
 
 
 class DQNAgent:
-    def __init__(self, input_shape, action_dim, hidden_dim=64, use_cnn=False, lr=1e-3, gamma=0.99,
-                 epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01, target_update_freq=1000,
-                 use_shield=True, verbose=False, requirements_path=None, env=None, mode='hard'):
+    def __init__(self,
+                 input_shape,
+                 action_dim,
+                 hidden_dim=64,
+                 use_cnn=False,
+                 lr=1e-3,
+                 gamma=0.99,
+                 epsilon=1.0,
+                 epsilon_decay=0.995,
+                 epsilon_min=0.01,
+                 target_update_freq=1000,
+                 use_shield=True,
+                 verbose=False,
+                 requirements_path=None,
+                 env=None,
+                 mode='hard'):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[DQNAgent] Using device: {self.device}")

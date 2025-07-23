@@ -9,8 +9,18 @@ from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
 
 class A2CAgent:
-    def __init__(self, input_shape, action_dim, hidden_dim=128, lr=1e-3, gamma=0.99, use_cnn=False,
-                 use_shield=True, verbose=False, requirements_path=None, env=None, mode='hard'):
+    def __init__(self,
+                 input_shape,
+                 action_dim,
+                 hidden_dim=128,
+                 lr=1e-3,
+                 gamma=0.99,
+                 use_cnn=False,
+                 use_shield=True,
+                 verbose=False,
+                 requirements_path=None,
+                 env=None,
+                 mode='hard'):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[A2CAgent] Using device: {self.device}")

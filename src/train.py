@@ -1,6 +1,6 @@
 import gymnasium as gym
 import numpy as np
-from gymnasium.wrappers import TimeLimit, TransformObservation, FrameStack, AtariPreprocessing
+from gymnasium.wrappers import TimeLimit, FrameStack, AtariPreprocessing
 import torch
 import src.utils.graphing as graphing
 import argparse
@@ -11,9 +11,6 @@ from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
-from src.utils.shield_controller import ShieldController
-from PIL import Image
-from gymnasium.spaces import Box
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -47,17 +44,6 @@ custom_envs = {
     "ALE/Seaquest-v5": (None, None)
 }
 
-# def to_grayscale(obs):
-#     obs = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)  # shape (96, 96)
-#     obs = cv2.resize(obs, (48, 48))
-#     obs = obs.astype(np.float32) / 255.0  # Normalize to [0, 1]
-#     return obs  # shape (48, 48)
-
-# def resize_rgb(obs):
-#     obs = cv2.resize(obs, (96, 96))  # or 64×64 if performance needed
-#     obs = obs.astype(np.float32) / 255.0
-#     return obs  # shape: (96, 96, 3)
-
 def create_environment(env_name, render=False):
     if env_name in custom_envs:
         entry_point, kwargs = custom_envs[env_name]
@@ -76,11 +62,6 @@ def create_environment(env_name, render=False):
 
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-
-            # Define the transformed space: grayscale (96, 96), uint8
-            # transformed_obs_space = Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32)
-
-            # env = TransformObservation(env, resize_rgb, observation_space=transformed_obs_space)
             env = FrameStack(env, 4)
             env = TimeLimit(env, max_episode_steps=100)  # ✅ Set timestep limit
             return env
@@ -88,12 +69,6 @@ def create_environment(env_name, render=False):
         if env_name == "ALE/Freeway-v5":
             env = gym.make(env_name, render_mode="human" if render else None)
 
-            # Optional preprocessing (resize, normalize, etc.)
-            # def resize_obs(obs):
-            #     obs = cv2.resize(obs, (96, 96))  # optional
-            #     return obs.astype(np.float32) / 255.0
-
-            # env = TransformObservation(env, resize_obs, observation_space=Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32))
             env = gym.make(env_name, render_mode="rgb_array" if render else None, frameskip=1)
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True, terminal_on_life_loss=True)
             env = FrameStack(env, 4)
@@ -102,13 +77,6 @@ def create_environment(env_name, render=False):
 
         if env_name == "ALE/Seaquest-v5":
             env = gym.make(env_name, render_mode="human" if render else None)
-
-            # Optional: resize or normalize observation if needed
-            # def resize_obs(obs):
-            #     obs = cv2.resize(obs, (96, 96))
-            #     return obs.astype(np.float32) / 255.0
-            # env = TransformObservation(env, resize_obs, observation_space=Box(low=0.0, high=1.0, shape=(96, 96, 3), dtype=np.float32))
-
             # env = FrameStack(env, 4)  # stack 4 frames
             env = TimeLimit(env, max_episode_steps=100)
             return env
@@ -194,13 +162,11 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
 
             next_state = preprocess_state(next_state, use_cnn=use_cnn)
 
-            # next_state = next_state.flatten()
             done = terminated or truncated
 
             # if verbose:
             #     print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
 
-            # print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
             agent.store_transition(state, action, reward, next_state, context, done)
             agent.update(batch_size=batch_size)
             state = next_state
@@ -223,8 +189,6 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
     if visualize:
         graphing.plot_losses(agent.training_logs)
         graphing.plot_prob_shift(agent.training_logs)
-        # action_counts = graphing.get_action_counts_per_state(actions_taken)
-        # graphing.plot_action_histograms(action_counts)
         graphing.plot_rewards(
             rewards=episode_rewards,
             title="Training Performance",
@@ -237,7 +201,8 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
 
 
 def train(agent='dqn',
-          use_shield=False,
+          use_shield_post=False,
+          use_shield_layer=False,
           mode='hard',
           num_episodes=500,
           verbose=False,
@@ -344,10 +309,6 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
     total_steps = 0
     total_violations = 0
 
-    # # Dynamically create a shield controller if needed for violation checking
-    # if not eval_with_shield and (not hasattr(agent, "shield_controller") or agent.shield_controller is None):
-    #     agent.shield_controller = ShieldController(requirements_path, action_dim, mode)
-
     for episode in range(num_episodes):
         state = reset_env(env)
         done = False
@@ -432,7 +393,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN, A2C, PPO) with optional shield and environment.")
     parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='dqn',
                         help='Which agent to use: dqn, ppo, or a2c')
-    parser.add_argument('--use_shield', action='store_true', help='Enable PiShield constraints during training')
+    parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
+    parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')
     parser.add_argument('--mode', choices=['soft', 'hard'], default='hard', help='Constraint mode')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('--visualize', action='store_true', help='Visualize training plots')

@@ -31,7 +31,7 @@ class ShieldController:
 
         self.ordering_names = [str(i) for i in range(self.num_vars)]
         self.shield_layer = self.build_shield_layer()
-        self.total_activations = 0
+        self.shield_activations = 0
 
     def _batchify(self, single_fn):
         def batch_fn(contexts):
@@ -107,8 +107,6 @@ class ShieldController:
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
         print(f"verbose: {self.verbose}")
         if self.verbose:
-            position = context.get("position", "N/A")
-            # print(f"Position: {position}")
             print(f"[DEBUG] Raw flags: {flags}, Flag values: {flag_values}")
             if flag_active:
                 print(f"[SHIELD ACTIVE] Flags: {flags}")
@@ -159,15 +157,9 @@ class ShieldController:
         # Count activations
         modified = ~torch.isclose(action_probs, corrected, atol=1e-5)
         activated = modified.any(dim=1)  # shape [B]
-        self.total_activations += activated.sum().item()
+        self.shield_activations += activated.sum().item()
 
         return corrected
-
-
-    def count_violations(self, action_probs, context):
-        corrected = self.apply(action_probs, context, verbose=False)
-        was_modified = not torch.allclose(action_probs, corrected, atol=1e-5)
-        return int(was_modified)
 
     def would_violate(self, selected_action, context):
         """

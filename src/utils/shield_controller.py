@@ -96,9 +96,17 @@ class ShieldController:
         flag_values = [flags.get(name, 0) for name in self.flag_names]
 
         # Expand flags to match batch size
-        batch_size = action_probs.size(0)
+        batch_size = action_probs.size(0)  # batch dimension
+
         flag_tensor = torch.tensor(flag_values, dtype=action_probs.dtype, device=action_probs.device)
-        flag_tensor = flag_tensor.unsqueeze(0).expand(batch_size, -1)
+
+        # If flag_tensor is 1D, add batch dimension and expand to batch_size
+        if flag_tensor.dim() == 1:
+            flag_tensor = flag_tensor.unsqueeze(0).expand(batch_size, -1)
+
+        # Check shapes for debug
+        if action_probs.dim() != 2 or flag_tensor.dim() != 2:
+            raise ValueError(f"Expected 2D tensors but got action_probs.dim()={action_probs.dim()}, flag_tensor.dim()={flag_tensor.dim()}")
 
         full_input = torch.cat([action_probs, flag_tensor], dim=1)
         shielded_output = self.shield_layer(full_input)

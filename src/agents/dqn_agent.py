@@ -15,12 +15,12 @@ class DQNAgent:
     def __init__(self,
                  input_shape,
                  action_dim,
-                 hidden_dim=64,
+                 hidden_dim=72,
                  use_cnn=False,
-                 lr=1e-3,
+                 lr=1e-4,
                  gamma=0.99,
                  epsilon=1.0,
-                 epsilon_decay=0.995,
+                 epsilon_decay=0.999,
                  epsilon_min=0.01,
                  target_update_freq=1000,
                  use_shield_post=True,
@@ -83,46 +83,34 @@ class DQNAgent:
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.q_network.use_cnn).to(self.device)
 
-        # Use ModularNetwork's action selection if using the shield layer
         if self.use_shield_layer:
+            # Shield layer works inside the network, so network already outputs shielded probabilities
             action, _, _, raw_probs, shielded_probs = self.q_network.select_action(
                 state_tensor, context=context, constraint_monitor=self.constraint_monitor, deterministic=True
             )
+            return action, context
 
         else:
-            if np.random.rand() < self.epsilon:
-                action = np.random.choice(self.action_dim)
-                if self.verbose:
-                    print(f"[Random] Action selected: {action}")
-                return action, context, False
-
             with torch.no_grad():
                 q_values = self.q_network(state_tensor)
-                raw_probs = torch.softmax(q_values, dim=1)
 
                 if do_apply_shield and self.use_shield_post:
+                    # Convert Q-values to probs, apply shield post hoc, pick action from shielded probs
+                    raw_probs = torch.softmax(q_values, dim=1)
                     shielded_probs = self.shield_controller.apply(raw_probs, context)
-
-                    # Log if using post hoc
-                    self.constraint_monitor.log_step(
-                        raw_probs=raw_probs,
-                        corrected_probs=shielded_probs,
-                        selected_action=shielded_probs.argmax().item(),
-                        shield_controller=self.shield_controller,
-                        context=context
-                    )
+                    action = shielded_probs.argmax(dim=1).item()
                 else:
-                    shielded_probs = raw_probs
-
-                action = shielded_probs.argmax(dim=1).item()
+                    # Unshielded: pick action as argmax over raw Q-values
+                    action = q_values.argmax(dim=1).item()
 
                 if self.verbose:
                     print(f"[Policy] Q-values: {q_values.cpu().numpy().flatten()}")
-                    print(f"[Policy] Raw probs: {raw_probs.cpu().numpy().flatten()}")
-                    print(f"[Policy] Shielded probs: {shielded_probs.cpu().numpy().flatten()}")
+                    if do_apply_shield and self.use_shield_post:
+                        print(f"[Policy] Raw probs: {raw_probs.cpu().numpy().flatten()}")
+                        print(f"[Policy] Shielded probs: {shielded_probs.cpu().numpy().flatten()}")
                     print(f"[Policy] Action selected: {action}")
 
-        return action, context
+            return action, context
 
 
     def store_transition(self, state, action, reward, next_state, context, done):
@@ -132,7 +120,7 @@ class DQNAgent:
         self.replay_buffer.append((state, action, reward, next_state, context, done))
 
     def update(self, batch_size=None):
-        batch_size = batch_size or self.batch_size
+        batch_size = self.batch_size
         if len(self.replay_buffer) < batch_size:
             return
 

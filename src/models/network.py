@@ -106,35 +106,32 @@ class ModularNetwork(nn.Module):
             logits = self.actor(x)
             value = self.critic(x)
         else:
-            logits = self.q_net(x)
+            logits = self.q_net(x)  # raw Q-values, NO softmax here
             value = None
 
+        # Apply softmax only for probabilities, do not overwrite logits
         probs = torch.softmax(logits, dim=-1)
         pre_shield_probs = probs.clone()
 
         if self.use_shield_layer and self.shield_controller and context is not None:
-            # print('using shield layer and controller')
             if not isinstance(context, list):
-                context = [context] * probs.shape[0]  # 🚨 use batch length
-            # print("[DEBUG] Using shield layer")
-            # print(f"[DEBUG] Pre-shield probs: {probs}")
+                context = [context] * probs.shape[0]  # batchify context
             probs = self.shield_controller.forward_differentiable(probs, context)
 
         if return_pre_post_probs:
             return logits, value, pre_shield_probs, probs
-        return (logits, value) if self.actor_critic else probs
+        return (logits, value) if self.actor_critic else logits
 
     def select_action(self, state_tensor, context=None, constraint_monitor=None, deterministic=False):
         if self.actor_critic:
             logits, value = self.forward(state_tensor, context=context)
         else:
-            probs = self.forward(state_tensor, context=context)
-            logits = torch.log(probs + 1e-8)
+            logits = self.forward(state_tensor, context=context)  # raw Q-values
+            probs = torch.softmax(logits, dim=-1)
             value = None
 
         pre_probs = torch.softmax(logits, dim=-1)
 
-        # Apply shield if needed
         if self.use_shield_layer and self.shield_controller and context is not None:
             if not isinstance(context, list):
                 context = [context] * pre_probs.shape[0]
@@ -142,7 +139,6 @@ class ModularNetwork(nn.Module):
         else:
             post_probs = pre_probs.clone()
 
-        # Choose action: deterministic for DQN, sample for PPO/A2C
         if deterministic:
             action = post_probs.argmax(dim=-1)
             log_prob = torch.log(post_probs.gather(1, action.unsqueeze(1))).squeeze(1)
@@ -151,7 +147,6 @@ class ModularNetwork(nn.Module):
             action = dist.sample()
             log_prob = dist.log_prob(action)
 
-        # Log to constraint monitor if available
         if constraint_monitor and self.shield_controller:
             constraint_monitor.log_step(
                 raw_probs=pre_probs.detach().squeeze(0),

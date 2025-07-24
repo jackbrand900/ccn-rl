@@ -1,172 +1,205 @@
-from collections import deque
-import numpy as np
-from torch import optim
 import torch
+import torch.nn as nn
+import torch.optim as optim
 import random
+import numpy as np
+from collections import deque
 
+from src.utils.preprocessing import prepare_input, prepare_batch
 from src.models.network import ModularNetwork
-from src.utils import context_provider
 from src.utils.shield_controller import ShieldController
 from src.utils.constraint_monitor import ConstraintMonitor
-from src.utils.preprocessing import prepare_input, prepare_batch
+import src.utils.context_provider as context_provider
 
 
 class DQNAgent:
     def __init__(self,
                  input_shape,
                  action_dim,
-                 hidden_dim=72,
+                 hidden_dim=128,
                  use_cnn=False,
-                 lr=1e-4,
                  gamma=0.99,
-                 epsilon=1.0,
-                 epsilon_decay=0.999,
-                 epsilon_min=0.01,
-                 target_update_freq=1000,
-                 use_shield_post=True,
+                 lr=1e-3,
+                 batch_size=64,
+                 buffer_size=100_000,
+                 target_update_freq=500,
+                 epsilon_start=1.0,
+                 epsilon_end=0.01,
+                 epsilon_decay=10000,
+                 use_shield_post=False,
                  use_shield_layer=False,
-                 verbose=False,
                  requirements_path=None,
                  env=None,
+                 verbose=False,
                  mode='hard'):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"[DQNAgent] Using device: {self.device}")
-
-        self.action_dim = action_dim
+        print(f"[ShieldedDQNAgent] Using device: {self.device}")
+        self.env = env
         self.gamma = gamma
-        self.epsilon = epsilon
+        self.batch_size = batch_size
+        self.epsilon_start = epsilon_start
+        self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
-        self.epsilon_min = epsilon_min
+        self.epsilon = epsilon_start
+        self.steps_done = 0
+        self.target_update_freq = target_update_freq
+        self.action_dim = action_dim
+        self.use_cnn = use_cnn
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
-        self.verbose = verbose
-        self.env = env
-        self.learn_step_counter = 0
-        self.batch_size = 64
 
-        # Init monitor + shield controller
-        self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
-        self.shield_controller = ShieldController(requirements_path, action_dim, mode)
+        # Shield setup
+        self.constraint_monitor = ConstraintMonitor(verbose=verbose)
+        self.shield_controller = ShieldController(
+            requirements_path=requirements_path,
+            num_actions=action_dim,
+            mode=mode,
+            verbose=verbose
+        )
         self.shield_controller.constraint_monitor = self.constraint_monitor
 
-        self.q_network = ModularNetwork(
+        self.q_net = ModularNetwork(
             input_shape=input_shape,
             output_dim=action_dim,
             hidden_dim=hidden_dim,
             use_cnn=use_cnn,
             actor_critic=False,
-            use_shield_layer=self.use_shield_layer,
+            use_shield_layer=use_shield_layer,
             shield_controller=self.shield_controller
         ).to(self.device)
 
-        self.target_network = ModularNetwork(
+        self.target_net = ModularNetwork(
             input_shape=input_shape,
             output_dim=action_dim,
             hidden_dim=hidden_dim,
             use_cnn=use_cnn,
-            actor_critic=False
+            actor_critic=False,
+            use_shield_layer=False,
+            shield_controller=None  # target net doesn’t need shield
         ).to(self.device)
-        self.target_network.load_state_dict(self.q_network.state_dict())
-        self.target_network.eval()
 
-        self.optimizer = optim.Adam(self.q_network.parameters(), lr=lr)
-        self.replay_buffer = deque(maxlen=10000)
-        self.target_update_freq = target_update_freq
+        self.target_net.load_state_dict(self.q_net.state_dict())
+        self.target_net.eval()
+
+        self.optimizer = optim.Adam(self.q_net.parameters(), lr=lr)
+        self.replay_buffer = deque(maxlen=buffer_size)
 
         self.training_logs = {
-            "td_loss": [], "req_loss": [], "consistency_loss": [], "prob_shift": []
+            "loss": [],
+            "epsilon": [],
+            "prob_shift": [],
+            "mod_rate": []
         }
 
-    def select_action(self, state, env=None, do_apply_shield=True):
+    def select_action(self, state, deterministic=False, do_apply_shield=True):
+        # print(f"[DEBUG] Constraint monitor attached? {self.constraint_monitor is not None}")
+        # print(f"[DEBUG] shield_layer={self.use_shield_layer}, do_apply_shield={do_apply_shield}")
         self.last_obs = state
-        context = context_provider.build_context(env or self.env, self)
-        state_tensor = prepare_input(state, use_cnn=self.q_network.use_cnn).to(self.device)
+        context = context_provider.build_context(self.env, self)
+        state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
-        if self.use_shield_layer:
-            # Shield layer works inside the network, so network already outputs shielded probabilities
-            action, _, _, raw_probs, shielded_probs = self.q_network.select_action(
-                state_tensor, context=context, constraint_monitor=self.constraint_monitor, deterministic=True
-            )
-            return action, context
+        self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
+                       np.exp(-1.0 * self.steps_done / self.epsilon_decay)
+        self.steps_done += 1
+
+        log_action = None
+        raw_probs = None
+        corrected_probs = None
+
+        if deterministic or random.random() > self.epsilon:
+            # === Greedy action ===
+            logits = self.q_net(state_tensor, context=context)
+            raw_probs = torch.softmax(logits, dim=-1)
+            shielded_probs = raw_probs.clone()
+
+            if self.use_shield_layer and do_apply_shield:
+                shielded_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
+                corrected_probs = shielded_probs
+            elif self.use_shield_post and do_apply_shield:
+                shielded_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
+                shielded_probs /= shielded_probs.sum()
+                corrected_probs = shielded_probs
+            else:
+                corrected_probs = raw_probs
+
+            dist = torch.distributions.Categorical(probs=corrected_probs)
+            action = dist.sample().item()
+            log_action = action
 
         else:
-            with torch.no_grad():
-                q_values = self.q_network(state_tensor)
+            # === Random epsilon-greedy action ===
+            action = random.randrange(self.action_dim)
+            log_action = action
+            raw_probs = torch.full((self.action_dim,), 1.0 / self.action_dim, device=self.device)
+            corrected_probs = raw_probs  # No shield, so no correction
 
-                if do_apply_shield and self.use_shield_post:
-                    # Convert Q-values to probs, apply shield post hoc, pick action from shielded probs
-                    raw_probs = torch.softmax(q_values, dim=1)
-                    shielded_probs = self.shield_controller.apply(raw_probs, context)
-                    action = shielded_probs.argmax(dim=1).item()
-                else:
-                    # Unshielded: pick action as argmax over raw Q-values
-                    action = q_values.argmax(dim=1).item()
+        # === Log if no shield is used ===
+        if self.constraint_monitor and not self.use_shield_layer and not self.use_shield_post:
+            self.constraint_monitor.log_step(
+                raw_probs=raw_probs.detach(),
+                corrected_probs=corrected_probs.detach(),
+                selected_action=log_action,
+                shield_controller=self.shield_controller,
+                context=context
+            )
 
-                if self.verbose:
-                    print(f"[Policy] Q-values: {q_values.cpu().numpy().flatten()}")
-                    if do_apply_shield and self.use_shield_post:
-                        print(f"[Policy] Raw probs: {raw_probs.cpu().numpy().flatten()}")
-                        print(f"[Policy] Shielded probs: {shielded_probs.cpu().numpy().flatten()}")
-                    print(f"[Policy] Action selected: {action}")
-
-            return action, context
-
+        return action, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
-        if self.q_network.use_cnn and state.ndim == 1:
-            state = state.reshape(96, 96, 3)
-            next_state = next_state.reshape(96, 96, 3)
-        self.replay_buffer.append((state, action, reward, next_state, context, done))
+        self.replay_buffer.append((state, action, reward, next_state, done))
 
-    def update(self, batch_size=None):
-        batch_size = self.batch_size
-        if len(self.replay_buffer) < batch_size:
+    def update(self):
+        if len(self.replay_buffer) < self.batch_size:
             return
 
-        batch = random.sample(self.replay_buffer, batch_size)
-        states, actions, rewards, next_states, contexts, dones = zip(*batch)
+        transitions = random.sample(self.replay_buffer, self.batch_size)
+        states, actions, rewards, next_states, dones = zip(*transitions)
 
-        states = prepare_batch(states, use_cnn=self.q_network.use_cnn).to(self.device)
-        next_states = prepare_batch(next_states, use_cnn=self.q_network.use_cnn).to(self.device)
+        contexts = [context_provider.build_context(self.env, self) for _ in range(len(states))]
 
+        states = prepare_batch(states, use_cnn=self.use_cnn).to(self.device)
+        next_states = prepare_batch(next_states, use_cnn=self.use_cnn).to(self.device)
         actions = torch.LongTensor(actions).unsqueeze(1).to(self.device)
         rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
         dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
 
-        with torch.no_grad():
-            raw_probs = torch.softmax(self.q_network(states), dim=1)
-            if self.use_shield_post and self.shield_controller:
-                shielded_probs = self.shield_controller.apply_batch(raw_probs, list(contexts))
-            else:
-                shielded_probs = raw_probs
+        logits = self.q_net(states, context=contexts)
+        q_values = logits.gather(1, actions)
 
-        total_loss, logs = self.q_network.compute_q_loss(
-            states, actions, rewards, dones, next_states, self.target_network,
-            gamma=self.gamma, shielded_probs=shielded_probs
-        )
+        with torch.no_grad():
+            next_logits = self.target_net(next_states)
+            next_q = next_logits.max(1, keepdim=True)[0]
+            target_q_values = rewards + self.gamma * next_q * (1 - dones)
+
+        loss = nn.MSELoss()(q_values, target_q_values)
 
         self.optimizer.zero_grad()
-        total_loss.backward()
+        loss.backward()
         self.optimizer.step()
 
-        if self.verbose:
-            print({k: f"{v:.4f}" for k, v in logs.items()})
+        # Sync target network
+        if self.steps_done % self.target_update_freq == 0:
+            self.target_net.load_state_dict(self.q_net.state_dict())
 
-        for k in self.training_logs:
-            self.training_logs[k].append(logs.get(k, 0.0))
+        # Logging
+        raw_probs = torch.softmax(logits, dim=-1).detach()
+        shielded_probs = raw_probs.clone()
 
-        self.learn_step_counter += 1
-        if self.learn_step_counter % self.target_update_freq == 0:
-            self.target_network.load_state_dict(self.q_network.state_dict())
+        if self.use_shield_layer:
+            shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts).detach()
 
-        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
+        prob_shift = torch.abs(raw_probs - shielded_probs).mean().item()
+        mod_rate = (shielded_probs.argmax(dim=1) != raw_probs.argmax(dim=1)).float().mean().item()
 
-    def enable_shield(self, enable: bool):
-        self.use_shield_post = enable
+        self.training_logs["loss"].append(loss.item())
+        self.training_logs["epsilon"].append(self.epsilon)
+        self.training_logs["prob_shift"].append(prob_shift)
+        self.training_logs["mod_rate"].append(mod_rate)
 
     def get_weights(self):
-        return self.q_network.state_dict()
+        return self.q_net.state_dict()
 
     def load_weights(self, weights):
-        self.q_network.load_state_dict(weights)
+        self.q_net.load_state_dict(weights)
+        self.target_net.load_state_dict(weights)

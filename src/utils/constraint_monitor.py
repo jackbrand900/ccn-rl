@@ -20,6 +20,8 @@ class ConstraintMonitor:
         self.episode_flagged_steps = 0
 
     def log_step(self, raw_probs, corrected_probs, selected_action, shield_controller, context):
+        # print("[MONITOR] log_step called")
+
         self.episode_steps += 1
         self.total_steps += 1
 

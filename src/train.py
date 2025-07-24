@@ -146,7 +146,6 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
 
         done = False
         total_reward = 0
-        batch_size = 128
         while not done:
             action, context = agent.select_action(state, env)
 
@@ -177,34 +176,34 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            # constraint_monitor = agent.constraint_monitor if agent.use_shield_post else agent.shield_controller.constraint_monitor
-            # if hasattr(agent, "constraint_monitor"):
-                # stats = constraint_monitor.summary()
-                # print("\n[ConstraintMonitor Summary]")
-                # print(f"  Episode Stats:")
-                # print(f"    Steps:              {stats['episode_steps']}")
-                # print(f"    Flagged Steps:      {stats['episode_flagged_steps']}")
-                # print(f"    Modifications:      {stats['episode_modifications']} "
-                #       f"({stats['episode_mod_rate']:.3f} per step)")
-                # print(f"    Violations:         {stats['episode_violations']} "
-                #       f"({stats['episode_viol_rate']:.3f} per step)")
-                #
-                # print(f"  Total Stats:")
-                # print(f"    Total Steps:        {stats['total_steps']}")
-                # print(f"    Total Flagged:      {stats['total_flagged_steps']}")
-                # print(f"    Total Modifications:{stats['total_modifications']} "
-                #       f"({stats['total_mod_rate']:.3f} per step)")
-                # print(f"    Total Violations:   {stats['total_violations']} "
-                #       f"({stats['total_viol_rate']:.3f} per step)")
-            # stats = constraint_monitor.summary()
-            # total_mods = stats['total_modifications']
-            # total_violations = stats['total_violations']
-            # mod_rate = stats['total_mod_rate']
+            constraint_monitor = agent.constraint_monitor if agent.use_shield_post else agent.shield_controller.constraint_monitor
+            if hasattr(agent, "constraint_monitor"):
+                stats = constraint_monitor.summary()
+                print("\n[ConstraintMonitor Summary]")
+                print(f"  Episode Stats:")
+                print(f"    Steps:              {stats['episode_steps']}")
+                print(f"    Flagged Steps:      {stats['episode_flagged_steps']}")
+                print(f"    Modifications:      {stats['episode_modifications']} "
+                      f"({stats['episode_mod_rate']:.3f} per step)")
+                print(f"    Violations:         {stats['episode_violations']} "
+                      f"({stats['episode_viol_rate']:.3f} per step)")
+
+                print(f"  Total Stats:")
+                print(f"    Total Steps:        {stats['total_steps']}")
+                print(f"    Total Flagged:      {stats['total_flagged_steps']}")
+                print(f"    Total Modifications:{stats['total_modifications']} "
+                      f"({stats['total_mod_rate']:.3f} per step)")
+                print(f"    Total Violations:   {stats['total_violations']} "
+                      f"({stats['total_viol_rate']:.3f} per step)")
+            stats = constraint_monitor.summary()
+            total_mods = stats['total_modifications']
+            total_violations = stats['total_violations']
+            mod_rate = stats['total_mod_rate']
             log_msg = (
                 f"Episode {episode}, "
                 f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
-                # f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, "
-                # f"Total Violations: {total_violations}"
+                f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, "
+                f"Total Violations: {total_violations}"
             )
 
             if hasattr(agent, "epsilon"):
@@ -283,24 +282,15 @@ def train(agent='dqn',
     requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
-        # agent = DQNAgent(input_shape=input_shape,
-        #                  action_dim=action_dim,
-        #                  use_shield_post=use_shield_post,
-        #                  use_shield_layer=use_shield_layer,
-        #                  mode=mode,
-        #                  verbose=verbose,
-        #                  requirements_path=requirements_path,
-        #                  env=env,
-        #                  use_cnn=use_cnn)
-        agent = VanillaDQNAgent(input_shape=input_shape,
-                                action_dim=action_dim,
-                                use_cnn=use_cnn,
-                                use_shield_post=args.use_shield_post,
-                                use_shield_layer=args.use_shield_layer,
-                                requirements_path=requirements_path,
-                                env=env,
-                                verbose=args.verbose,
-                                mode=args.mode)
+        agent = DQNAgent(input_shape=input_shape,
+                         action_dim=action_dim,
+                         use_shield_post=use_shield_post,
+                         use_shield_layer=use_shield_layer,
+                         mode=mode,
+                         verbose=verbose,
+                         requirements_path=requirements_path,
+                         env=env,
+                         use_cnn=use_cnn)
     elif agent == 'ppo':
         agent = PPOAgent(input_shape=input_shape,
                          action_dim=action_dim,

@@ -92,7 +92,8 @@ class VanillaDQNAgent:
             "mod_rate": []
         }
 
-    def select_action(self, state, deterministic=False):
+    def select_action(self, state, deterministic=False, do_apply_shield=True):
+        self.last_obs = state
         context = context_provider.build_context(self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
@@ -105,10 +106,17 @@ class VanillaDQNAgent:
             raw_probs = torch.softmax(logits, dim=-1)
             shielded_probs = raw_probs.clone()
 
-            if self.use_shield_layer:
+            if self.use_shield_layer and do_apply_shield:
                 shielded_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
+                self.constraint_monitor.log_step(
+                    raw_probs=raw_probs.detach(),
+                    corrected_probs=shielded_probs.detach(),
+                    selected_action=shielded_probs.argmax().item(),
+                    shield_controller=self.shield_controller,
+                    context=context
+                )
 
-            elif self.use_shield_post:
+            elif self.use_shield_post and do_apply_shield:
                 shielded_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
                 shielded_probs /= shielded_probs.sum()
 

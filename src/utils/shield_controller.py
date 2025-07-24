@@ -10,7 +10,7 @@ from src.utils.env_helpers import is_in_front_of_key
 from src.utils.req_file_to_logic_fn import get_flag_logic_fn
 
 class ShieldController:
-    def __init__(self, requirements_path, num_actions, mode="hard"):
+    def __init__(self, requirements_path, num_actions, mode="hard", verbose=False, default_flag_logic=None):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
         self.flag_logic_fn = get_flag_logic_fn(self.requirements_path) or self.default_flag_logic
@@ -27,9 +27,12 @@ class ShieldController:
         self.action_names = self.var_names[:num_actions]
         self.flag_names = self.var_names[num_actions:]
         self.num_flags = len(self.flag_names)
+        self.verbose = verbose
+        self.constraint_monitor = None
 
         self.ordering_names = [str(i) for i in range(self.num_vars)]
         self.shield_layer = self.build_shield_layer()
+        self.shield_activations = 0
 
     def _batchify(self, single_fn):
         def batch_fn(contexts):
@@ -66,6 +69,7 @@ class ShieldController:
         file_ext = os.path.splitext(self.requirements_path)[-1].lower()
         print(f"requirements file: {self.requirements_path}")
         print(f"num vars: {self.num_vars}, num flags: {self.num_flags}")
+        print(f'Shield ordering: {ordering}')
         if file_ext == ".cnf":
             return PropositionalShieldLayer(
                 num_classes=self.num_vars,
@@ -86,7 +90,7 @@ class ShieldController:
         """Fallback flag logic — always 0 for all flags"""
         return {flag: 0 for flag in self.flag_names}
 
-    def apply(self, action_probs, context, verbose=False):
+    def apply(self, action_probs, context):
         flags = self.flag_logic_fn(context)
         flag_values = [flags.get(name, 0) for name in self.flag_names]
 
@@ -103,9 +107,7 @@ class ShieldController:
 
         flag_active = any(flag_values)
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
-        if verbose:
-            position = context.get("position", "N/A")
-            # print(f"Position: {position}")
+        if self.verbose:
             print(f"[DEBUG] Raw flags: {flags}, Flag values: {flag_values}")
             if flag_active:
                 print(f"[SHIELD ACTIVE] Flags: {flags}")
@@ -134,11 +136,43 @@ class ShieldController:
 
         return corrected
 
+    def forward_differentiable(self, action_probs, contexts):
+        assert isinstance(contexts, list), "Contexts must be a list of dicts (batch)."
+        flag_dicts = self.flag_logic_batch(contexts)
 
-    def count_violations(self, action_probs, context):
-        corrected = self.apply(action_probs, context, verbose=False)
-        was_modified = not torch.allclose(action_probs, corrected, atol=1e-5)
-        return int(was_modified)
+        flag_values = [
+            [flags.get(name, 0.0) for name in self.flag_names]
+            for flags in flag_dicts
+        ]
+        flag_tensor = torch.tensor(
+            flag_values, dtype=action_probs.dtype, device=action_probs.device
+        )  # shape: [B, num_flags]
+
+        full_input = torch.cat([action_probs, flag_tensor], dim=1)
+        shielded_output = self.shield_layer(full_input)
+        corrected = shielded_output[:, :self.num_actions]
+
+        if self.mode == "soft":
+            corrected = corrected / corrected.sum(dim=1, keepdim=True)
+
+        # Count activations
+        modified = ~torch.isclose(action_probs, corrected, atol=1e-5)
+        activated = modified.any(dim=1)  # shape [B]
+        self.shield_activations += activated.sum().item()
+
+        if self.verbose:
+            for i, (flags, raw, corr, act) in enumerate(zip(flag_dicts, action_probs, corrected, activated)):
+                print(f"[DEBUG] Raw flags: {flags}")
+                if any(flags.values()):
+                    print(f"[SHIELD ACTIVE] Flags: {flags}")
+                    if act:
+                        raw_np = raw.detach().cpu().numpy().flatten()
+                        corr_np = corr.detach().cpu().numpy().flatten()
+                        print(f"[SHIELD MODIFIED OUTPUT] Before: {raw_np} → After: {corr_np}")
+                    else:
+                        print(f"[SHIELD ACTIVE BUT NO CHANGE] Action output remained the same.")
+
+        return corrected
 
     def would_violate(self, selected_action, context):
         """

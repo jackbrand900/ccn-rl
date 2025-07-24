@@ -9,33 +9,42 @@ from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
 
 class A2CAgent:
-    def __init__(self, input_shape, action_dim, hidden_dim=128, lr=1e-3, gamma=0.99, use_cnn=False,
-                 use_shield=True, verbose=False, requirements_path=None, env=None, mode='hard'):
+    def __init__(self,
+                 input_shape,
+                 action_dim,
+                 hidden_dim=128,
+                 lr=1e-3,
+                 gamma=0.99,
+                 use_cnn=False,
+                 use_shield_post=True,
+                 use_shield_layer=False,
+                 verbose=False,
+                 requirements_path=None,
+                 env=None,
+                 mode='hard'):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[A2CAgent] Using device: {self.device}")
 
         self.gamma = gamma
-        self.use_shield = use_shield
+        self.use_shield_post = use_shield_post
+        self.use_shield_layer = use_shield_layer
         self.verbose = verbose
         self.env = env
         self.learn_step_counter = 0
 
         self.model = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
-                                    hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=True).to(self.device)
+                                    hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=True, use_shield_layer=self.use_shield_layer).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
         self.memory = []
         self.training_logs = {"policy_loss": [], "value_loss": [], "entropy": [], "prob_shift": []}
 
-        if use_shield:
-            self.shield_controller = ShieldController(
-                requirements_path=requirements_path,
-                num_actions=action_dim,
-                mode=mode,
-            )
-        else:
-            self.shield_controller = None
+        self.shield_controller = ShieldController(
+            requirements_path=requirements_path,
+            num_actions=action_dim,
+            mode=mode,
+        )
 
     def select_action(self, state, env=None, do_apply_shield=True):
         context = context_provider.build_context(env or self.env, self)
@@ -44,8 +53,8 @@ class A2CAgent:
         logits, value = self.model(state_tensor)
         raw_probs = torch.softmax(logits, dim=-1)
 
-        if do_apply_shield and self.shield_controller:
-            shielded_probs = self.shield_controller.apply(raw_probs, context, self.verbose)
+        if do_apply_shield and self.use_shield_post:
+            shielded_probs = self.shield_controller.apply(raw_probs, context)
         else:
             shielded_probs = raw_probs
 

@@ -19,11 +19,19 @@ class QNetwork(nn.Module):
 
 
 class ModularNetwork(nn.Module):
-    def __init__(self, input_shape, output_dim, hidden_dim=128, use_cnn=False, actor_critic=False):
+    def __init__(self,
+                 input_shape,
+                 output_dim,
+                 hidden_dim=128,
+                 use_cnn=False,
+                 actor_critic=False,
+                 shield_controller=None,
+                 use_shield_layer=False):
         super().__init__()
         self.use_cnn = use_cnn
         self.actor_critic = actor_critic
-
+        self.shield_controller = shield_controller
+        self.use_shield_layer = use_shield_layer
         if use_cnn:
             # Accept both 3D (H, W, C) or (C, H, W) and 4D (stack, H, W, C) or (stack, C, H, W)
             if len(input_shape) == 3:
@@ -82,36 +90,77 @@ class ModularNetwork(nn.Module):
                 nn.Linear(hidden_dim, output_dim)
             )
 
-    def forward(self, x):
+    def forward(self, x, context=None, return_pre_post_probs=False):
         if self.use_cnn:
             # Handle input shape for stacked frames
             if x.ndim == 5:
-                # (batch, stack, H, W, C) -> (batch, stack * C, H, W)
                 b, stack, h, w, c = x.shape
                 x = x.permute(0, 1, 4, 2, 3).reshape(b, stack * c, h, w)
             elif x.ndim == 4 and x.shape[-1] == 3:
-                # (batch, H, W, C) -> (batch, C, H, W)
                 x = x.permute(0, 3, 1, 2)
             x = x.float() / 255.0
         x = self.encoder(x)
         x = x.reshape(x.size(0), -1)
 
         if self.actor_critic:
-            return self.actor(x), self.critic(x)
+            logits = self.actor(x)
+            value = self.critic(x)
         else:
-            return self.q_net(x)
+            logits = self.q_net(x)
+            value = None
 
-    def select_action(self, state_tensor):
-        logits, value = self.forward(state_tensor)
         probs = torch.softmax(logits, dim=-1)
-        dist = Categorical(probs=probs)
+        pre_shield_probs = probs.clone()
+
+        if self.use_shield_layer and self.shield_controller and context is not None:
+            # print('using shield layer and controller')
+            if not isinstance(context, list):
+                context = [context] * probs.shape[0]  # 🚨 use batch length
+            # print("[DEBUG] Using shield layer")
+            # print(f"[DEBUG] Pre-shield probs: {probs}")
+            probs = self.shield_controller.forward_differentiable(probs, context)
+
+        if return_pre_post_probs:
+            return logits, value, pre_shield_probs, probs
+        return (logits, value) if self.actor_critic else probs
+
+    def select_action(self, state_tensor, context=None, constraint_monitor=None):
+        if self.actor_critic:
+            logits, value = self.forward(state_tensor, context=context)
+        else:
+            probs = self.forward(state_tensor, context=context)
+            logits = torch.log(probs + 1e-8)
+            value = None
+
+        pre_probs = torch.softmax(logits, dim=-1)
+
+        # Apply shield if needed
+        if self.use_shield_layer and self.shield_controller and context is not None:
+            if not isinstance(context, list):
+                context = [context] * pre_probs.shape[0]
+            post_probs = self.shield_controller.forward_differentiable(pre_probs, context)
+        else:
+            post_probs = pre_probs.clone()
+
+        dist = Categorical(probs=post_probs)
         action = dist.sample()
         log_prob = dist.log_prob(action)
-        return action.item(), log_prob, value.squeeze(), probs.squeeze(0)
+
+        # 🔍 Log to ConstraintMonitor if provided
+        if constraint_monitor and self.shield_controller:
+            constraint_monitor.log_step(
+                raw_probs=pre_probs.detach().squeeze(0),
+                corrected_probs=post_probs.detach().squeeze(0),
+                selected_action=action.item(),
+                shield_controller=self.shield_controller,
+                context=context[0] if isinstance(context, list) else context,
+            )
+
+        return action.item(), log_prob, value.squeeze() if value is not None else None, pre_probs.squeeze(0), post_probs.squeeze(0)
 
     def compute_losses(self, states, actions, old_log_probs, advantages, returns, shielded_probs,
-                       clip_eps=0.2, ent_coef=0.01, lambda_req=0.0, lambda_consistency=0.0):
-        logits, new_values = self.forward(states)
+                       clip_eps=0.2, ent_coef=0.01, lambda_req=0.0, lambda_consistency=0.0, contexts=None):
+        logits, new_values = self.forward(states, context=contexts)
         dist = Categorical(logits=logits)
         new_log_probs = dist.log_prob(actions)
         entropy = dist.entropy().mean()

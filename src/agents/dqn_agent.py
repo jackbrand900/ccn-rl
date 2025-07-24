@@ -11,9 +11,23 @@ from src.utils.preprocessing import prepare_input, prepare_batch
 
 
 class DQNAgent:
-    def __init__(self, input_shape, action_dim, hidden_dim=64, use_cnn=False, lr=1e-3, gamma=0.99,
-                 epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01, target_update_freq=1000,
-                 use_shield=True, verbose=False, requirements_path=None, env=None, mode='hard'):
+    def __init__(self,
+                 input_shape,
+                 action_dim,
+                 hidden_dim=64,
+                 use_cnn=False,
+                 lr=1e-3,
+                 gamma=0.99,
+                 epsilon=1.0,
+                 epsilon_decay=0.995,
+                 epsilon_min=0.01,
+                 target_update_freq=1000,
+                 use_shield_post=True,
+                 use_shield_layer=False,
+                 verbose=False,
+                 requirements_path=None,
+                 env=None,
+                 mode='hard'):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[DQNAgent] Using device: {self.device}")
@@ -23,14 +37,15 @@ class DQNAgent:
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
-        self.use_shield = use_shield
+        self.use_shield_post = use_shield_post
+        self.use_shield_layer = use_shield_layer
         self.verbose = verbose
         self.env = env
         self.learn_step_counter = 0
         self.batch_size = 64
 
         self.q_network = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
-                                        hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False).to(self.device)
+                                        hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False, use_shield_layer=self.use_shield_layer).to(self.device)
         self.target_network = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
                                              hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False).to(self.device)
         self.target_network.load_state_dict(self.q_network.state_dict())
@@ -40,7 +55,7 @@ class DQNAgent:
         self.replay_buffer = deque(maxlen=10000)
         self.target_update_freq = target_update_freq
 
-        self.shield_controller = ShieldController(requirements_path, action_dim, mode) if use_shield else None
+        self.shield_controller = ShieldController(requirements_path, action_dim, mode)
 
         self.training_logs = {
             "td_loss": [], "req_loss": [], "consistency_loss": [], "prob_shift": []
@@ -60,8 +75,8 @@ class DQNAgent:
             q_values = self.q_network(state_tensor)
             raw_probs = torch.softmax(q_values, dim=1)
 
-            if do_apply_shield and self.shield_controller:
-                corrected_probs = self.shield_controller.apply(raw_probs, context, self.verbose)
+            if do_apply_shield and self.shield_controller and self.use_shield_post:
+                corrected_probs = self.shield_controller.apply(raw_probs, context)
                 was_modified = not torch.allclose(raw_probs, corrected_probs, atol=1e-6)
             else:
                 corrected_probs = raw_probs

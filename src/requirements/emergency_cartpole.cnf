@@ -1,2 +1,4 @@
 not y_2 or y_0
+not y_2 or not y_1
 not y_3 or y_1
+not y_3 or not y_0

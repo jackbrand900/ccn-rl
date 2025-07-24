@@ -176,7 +176,27 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            log_msg = f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}, Num Modifications: {modifications}"
+            constraint_monitor = agent.constraint_monitor if agent.use_shield_post else agent.shield_controller.constraint_monitor
+            if hasattr(agent, "constraint_monitor"):
+                stats = constraint_monitor.summary()
+                print("\n[ConstraintMonitor Summary]")
+                print(f"  Episode Stats:")
+                print(f"    Steps:              {stats['episode_steps']}")
+                print(f"    Flagged Steps:      {stats['episode_flagged_steps']}")
+                print(f"    Modifications:      {stats['episode_modifications']} "
+                      f"({stats['episode_mod_rate']:.3f} per step)")
+                print(f"    Violations:         {stats['episode_violations']} "
+                      f"({stats['episode_viol_rate']:.3f} per step)")
+
+                print(f"  Total Stats:")
+                print(f"    Total Steps:        {stats['total_steps']}")
+                print(f"    Total Flagged:      {stats['total_flagged_steps']}")
+                print(f"    Total Modifications:{stats['total_modifications']} "
+                      f"({stats['total_mod_rate']:.3f} per step)")
+                print(f"    Total Violations:   {stats['total_violations']} "
+                      f"({stats['total_viol_rate']:.3f} per step)")
+                agent.constraint_monitor.reset()
+            log_msg = f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}"
             if hasattr(agent, "epsilon"):
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
             print(log_msg)

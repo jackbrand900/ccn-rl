@@ -1,4 +1,6 @@
 import torch
+
+from src.utils.constraint_monitor import ConstraintMonitor
 from src.utils.preprocessing import prepare_input, prepare_batch
 import torch.optim as optim
 import numpy as np
@@ -56,6 +58,8 @@ class PPOAgent:
         self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose)
         self.policy = ModularNetwork(input_shape, action_dim, hidden_dim, use_shield_layer=self.use_shield_layer,
                                      use_cnn=use_cnn, actor_critic=True, shield_controller=self.shield_controller).to(self.device)
+        self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
+        self.shield_controller.constraint_monitor = self.constraint_monitor
         print(f"[PPOAgent] Using device: {self.device}")
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.995)
@@ -75,7 +79,8 @@ class PPOAgent:
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
         # Always get raw_probs from the policy
-        action, log_prob, value, raw_probs, _ = self.policy.select_action(state_tensor, context)
+        action, log_prob, value, raw_probs, _ = self.policy.select_action(state_tensor, context,
+                                                                          constraint_monitor=self.constraint_monitor if self.use_shield_layer else None)
 
         # If using post hoc shielding, apply it manually
         if self.use_shield_post and do_apply_shield:
@@ -105,6 +110,15 @@ class PPOAgent:
         self.last_value = value.item()
         self.last_raw_probs = raw_probs.detach()
         self.last_shielded_probs = shielded_probs.detach()
+
+        if self.constraint_monitor and not self.use_shield_layer:
+            self.constraint_monitor.log_step(
+                raw_probs=raw_probs.detach(),
+                corrected_probs=shielded_probs.detach(),
+                selected_action=action,
+                shield_controller=self.shield_controller,
+                context=context
+            )
 
         return action, context, was_modified
 

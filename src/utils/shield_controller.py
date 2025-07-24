@@ -28,6 +28,7 @@ class ShieldController:
         self.flag_names = self.var_names[num_actions:]
         self.num_flags = len(self.flag_names)
         self.verbose = verbose
+        self.constraint_monitor = None
 
         self.ordering_names = [str(i) for i in range(self.num_vars)]
         self.shield_layer = self.build_shield_layer()

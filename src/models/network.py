@@ -124,7 +124,7 @@ class ModularNetwork(nn.Module):
             return logits, value, pre_shield_probs, probs
         return (logits, value) if self.actor_critic else probs
 
-    def select_action(self, state_tensor, context=None):
+    def select_action(self, state_tensor, context=None, constraint_monitor=None):
         if self.actor_critic:
             logits, value = self.forward(state_tensor, context=context)
         else:
@@ -145,6 +145,16 @@ class ModularNetwork(nn.Module):
         dist = Categorical(probs=post_probs)
         action = dist.sample()
         log_prob = dist.log_prob(action)
+
+        # 🔍 Log to ConstraintMonitor if provided
+        if constraint_monitor and self.shield_controller:
+            constraint_monitor.log_step(
+                raw_probs=pre_probs.detach().squeeze(0),
+                corrected_probs=post_probs.detach().squeeze(0),
+                selected_action=action.item(),
+                shield_controller=self.shield_controller,
+                context=context[0] if isinstance(context, list) else context,
+            )
 
         return action.item(), log_prob, value.squeeze() if value is not None else None, pre_probs.squeeze(0), post_probs.squeeze(0)
 

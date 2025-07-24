@@ -103,15 +103,10 @@ class DQNAgent:
                        np.exp(-1.0 * self.steps_done / self.epsilon_decay)
         self.steps_done += 1
 
-        log_action = None
-        raw_probs = None
-        corrected_probs = None
-
         if deterministic or random.random() > self.epsilon:
             # === Greedy action ===
             logits = self.q_net(state_tensor, context=context)
             raw_probs = torch.softmax(logits, dim=-1)
-            shielded_probs = raw_probs.clone()
 
             if self.use_shield_layer and do_apply_shield:
                 shielded_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
@@ -134,15 +129,13 @@ class DQNAgent:
             raw_probs = torch.full((self.action_dim,), 1.0 / self.action_dim, device=self.device)
             corrected_probs = raw_probs  # No shield, so no correction
 
-        # === Log if no shield is used ===
-        if self.constraint_monitor and not self.use_shield_layer and not self.use_shield_post:
-            self.constraint_monitor.log_step(
-                raw_probs=raw_probs.detach(),
-                corrected_probs=corrected_probs.detach(),
-                selected_action=log_action,
-                shield_controller=self.shield_controller,
-                context=context
-            )
+        self.constraint_monitor.log_step(
+            raw_probs=raw_probs.detach(),
+            corrected_probs=corrected_probs.detach(),
+            selected_action=log_action,
+            shield_controller=self.shield_controller,
+            context=context
+        )
 
         return action, context
 

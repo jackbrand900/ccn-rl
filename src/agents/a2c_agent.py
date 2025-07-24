@@ -9,6 +9,7 @@ from src.models.network import ModularNetwork
 from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
 
+
 class A2CAgent:
     def __init__(self,
                  input_shape,
@@ -17,8 +18,11 @@ class A2CAgent:
                  lr=1e-3,
                  gamma=0.99,
                  use_cnn=False,
-                 use_shield_post=True,
-                 use_shield_layer=False,
+                 use_shield_post=False,
+                 use_shield_layer=True,
+                 lambda_req=0.05,
+                 lambda_consistency=0.05,
+                 ent_coef=0.01,
                  verbose=False,
                  requirements_path=None,
                  env=None,
@@ -29,12 +33,13 @@ class A2CAgent:
         self.gamma = gamma
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
+        self.lambda_req = lambda_req
+        self.lambda_consistency = lambda_consistency
+        self.ent_coef = ent_coef
         self.verbose = verbose
-
         self.env = env
         self.learn_step_counter = 0
 
-        # === Shield and Monitor Setup ===
         self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
         self.shield_controller = ShieldController(
             requirements_path=requirements_path,
@@ -57,39 +62,44 @@ class A2CAgent:
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
         self.memory = []
-        self.training_logs = {"policy_loss": [], "value_loss": [], "entropy": [], "prob_shift": []}
-
+        self.training_logs = {
+            "policy_loss": [],
+            "value_loss": [],
+            "entropy": [],
+            "req_loss": [],
+            "consistency_loss": [],
+            "total_loss": [],
+            "prob_shift": []
+        }
 
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.model.use_cnn).to(self.device)
 
-        # === Use ModularNetwork for shield layer logic ===
         action, log_prob, value, raw_probs, shielded_probs = self.model.select_action(
             state_tensor,
             context=context,
             constraint_monitor=self.constraint_monitor if self.use_shield_layer else None
         )
 
-        # === Apply post hoc shielding manually if enabled ===
-        if self.use_shield_post and do_apply_shield:
+        # Post-hoc shielding (if enabled and no shield layer)
+        if self.use_shield_post and not self.use_shield_layer and do_apply_shield:
             shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
             shielded_probs /= shielded_probs.sum()
-
-            if self.constraint_monitor and not self.use_shield_layer:
-                self.constraint_monitor.log_step(
-                    raw_probs=raw_probs,
-                    corrected_probs=shielded_probs,
-                    selected_action=shielded_probs.argmax().item(),
-                    shield_controller=self.shield_controller,
-                    context=context
-                )
-
             dist = Categorical(probs=shielded_probs)
             action = dist.sample()
             log_prob = dist.log_prob(action)
             action = action.item()
+
+            if self.constraint_monitor:
+                self.constraint_monitor.log_step(
+                    raw_probs=raw_probs,
+                    corrected_probs=shielded_probs,
+                    selected_action=action,
+                    shield_controller=self.shield_controller,
+                    context=context
+                )
 
         self.last_log_prob = log_prob
         self.last_value = value
@@ -99,12 +109,26 @@ class A2CAgent:
         return action, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
-        state = prepare_input(state, use_cnn=self.model.use_cnn).squeeze(0).to(self.device)
-        next_state = prepare_input(next_state, use_cnn=self.model.use_cnn).squeeze(0).to(self.device)
+        self.memory.append((
+            prepare_input(state, use_cnn=self.model.use_cnn).squeeze(0).to(self.device),
+            action,
+            reward,
+            prepare_input(next_state, use_cnn=self.model.use_cnn).squeeze(0).to(self.device),
+            context,
+            done,
+            self.last_log_prob,
+            self.last_value,
+            self.last_raw_probs,
+            self.last_shielded_probs
+        ))
 
-        self.memory.append((state, action, reward, next_state, context, done,
-                            self.last_log_prob, self.last_value,
-                            self.last_raw_probs, self.last_shielded_probs))
+    def ensure_dict_contexts(self, contexts):
+        return [
+            c if isinstance(c, dict)
+            else {"obs": c[0], "direction": c[1]} if isinstance(c, tuple)
+            else ValueError(f"Unsupported context: {c}")
+            for c in contexts
+        ]
 
     def update(self, batch_size=None):
         if not self.memory:
@@ -113,6 +137,7 @@ class A2CAgent:
         self.learn_step_counter += 1
 
         states, actions, rewards, next_states, contexts, dones, log_probs, values, raw_probs, shielded_probs = zip(*self.memory)
+        contexts = self.ensure_dict_contexts(contexts)
 
         states = prepare_batch(states, use_cnn=self.model.use_cnn).to(self.device)
         next_states = prepare_batch(next_states, use_cnn=self.model.use_cnn).to(self.device)
@@ -124,32 +149,27 @@ class A2CAgent:
         shielded_probs = torch.stack(shielded_probs).to(self.device)
 
         with torch.no_grad():
-            _, next_values = self.model(next_states)
+            _, next_values = self.model(next_states, context=contexts)
             targets = rewards + self.gamma * next_values.squeeze() * (1 - dones)
             advantages = targets - values.squeeze()
 
-        logits, predicted_values = self.model(states)
-        dist = Categorical(logits=logits)
-        new_log_probs = dist.log_prob(actions)
-        entropy = dist.entropy().mean()
-
-        policy_loss = -(advantages.detach() * new_log_probs).mean()
-        value_loss = nn.MSELoss()(predicted_values.view(-1), targets.view(-1))
-
-        goal = torch.zeros_like(shielded_probs)
-        goal.scatter_(1, actions.unsqueeze(1), 1.0)
-        req_loss = nn.BCELoss()(shielded_probs, goal)
-        consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
-
-        loss = policy_loss + value_loss + 0.00 * req_loss + 0.00 * consistency_loss - 0.01 * entropy
+        loss, logs = self.model.compute_a2c_losses(
+            states=states,
+            actions=actions,
+            targets=targets,
+            advantages=advantages,
+            shielded_probs=shielded_probs if self.use_shield_layer else None,
+            ent_coef=self.ent_coef,
+            lambda_req=self.lambda_req,
+            lambda_consistency=self.lambda_consistency
+        )
 
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        self.training_logs["policy_loss"].append(policy_loss.item())
-        self.training_logs["value_loss"].append(value_loss.item())
-        self.training_logs["entropy"].append(entropy.item())
+        for k in self.training_logs:
+            self.training_logs[k].append(logs.get(k, 0.0))
         self.training_logs["prob_shift"].append((shielded_probs - raw_probs).abs().mean().item())
 
         self.memory.clear()

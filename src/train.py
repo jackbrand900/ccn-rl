@@ -11,6 +11,7 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
+from src.agents.vanilla_dqn import VanillaDQNAgent
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 import sys
@@ -168,7 +169,7 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
             #     print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
 
             agent.store_transition(state, action, reward, next_state, context, done)
-            agent.update(batch_size=batch_size)
+            agent.update()
             state = next_state
             total_reward += reward
 
@@ -176,9 +177,9 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            constraint_monitor = agent.constraint_monitor if agent.use_shield_post else agent.shield_controller.constraint_monitor
-            if hasattr(agent, "constraint_monitor"):
-                stats = constraint_monitor.summary()
+            # constraint_monitor = agent.constraint_monitor if agent.use_shield_post else agent.shield_controller.constraint_monitor
+            # if hasattr(agent, "constraint_monitor"):
+                # stats = constraint_monitor.summary()
                 # print("\n[ConstraintMonitor Summary]")
                 # print(f"  Episode Stats:")
                 # print(f"    Steps:              {stats['episode_steps']}")
@@ -195,15 +196,15 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
                 #       f"({stats['total_mod_rate']:.3f} per step)")
                 # print(f"    Total Violations:   {stats['total_violations']} "
                 #       f"({stats['total_viol_rate']:.3f} per step)")
-            stats = constraint_monitor.summary()
-            total_mods = stats['total_modifications']
-            total_violations = stats['total_violations']
-            mod_rate = stats['total_mod_rate']
+            # stats = constraint_monitor.summary()
+            # total_mods = stats['total_modifications']
+            # total_violations = stats['total_violations']
+            # mod_rate = stats['total_mod_rate']
             log_msg = (
                 f"Episode {episode}, "
                 f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
-                f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, "
-                f"Total Violations: {total_violations}"
+                # f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, "
+                # f"Total Violations: {total_violations}"
             )
 
             if hasattr(agent, "epsilon"):
@@ -213,7 +214,7 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
                 best_avg_reward = avg_reward
                 best_weights = copy.deepcopy(agent.get_weights())
                 print(f"[Checkpoint] New best avg reward: {best_avg_reward:.2f} at episode {episode}")
-            agent.constraint_monitor.reset()
+            # agent.constraint_monitor.reset()
 
     env.close()
     if visualize:
@@ -282,15 +283,24 @@ def train(agent='dqn',
     requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
-        agent = DQNAgent(input_shape=input_shape,
-                         action_dim=action_dim,
-                         use_shield_post=use_shield_post,
-                         use_shield_layer=use_shield_layer,
-                         mode=mode,
-                         verbose=verbose,
-                         requirements_path=requirements_path,
-                         env=env,
-                         use_cnn=use_cnn)
+        # agent = DQNAgent(input_shape=input_shape,
+        #                  action_dim=action_dim,
+        #                  use_shield_post=use_shield_post,
+        #                  use_shield_layer=use_shield_layer,
+        #                  mode=mode,
+        #                  verbose=verbose,
+        #                  requirements_path=requirements_path,
+        #                  env=env,
+        #                  use_cnn=use_cnn)
+        agent = VanillaDQNAgent(input_shape=input_shape,
+                                action_dim=action_dim,
+                                use_cnn=use_cnn,
+                                use_shield_post=args.use_shield_post,
+                                use_shield_layer=args.use_shield_layer,
+                                requirements_path=requirements_path,
+                                env=env,
+                                verbose=args.verbose,
+                                mode=args.mode)
     elif agent == 'ppo':
         agent = PPOAgent(input_shape=input_shape,
                          action_dim=action_dim,

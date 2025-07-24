@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
 
+from src.utils.constraint_monitor import ConstraintMonitor
 from src.utils.preprocessing import prepare_input, prepare_batch
 from src.models.network import ModularNetwork
 from src.utils.shield_controller import ShieldController
@@ -25,51 +26,77 @@ class A2CAgent:
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[A2CAgent] Using device: {self.device}")
-
         self.gamma = gamma
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
         self.verbose = verbose
+
         self.env = env
         self.learn_step_counter = 0
 
-        self.model = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
-                                    hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=True, use_shield_layer=self.use_shield_layer).to(self.device)
+        # === Shield and Monitor Setup ===
+        self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
+        self.shield_controller = ShieldController(
+            requirements_path=requirements_path,
+            num_actions=action_dim,
+            mode=mode,
+            verbose=verbose
+        )
+        self.shield_controller.constraint_monitor = self.constraint_monitor
+
+        self.model = ModularNetwork(
+            input_shape=input_shape,
+            output_dim=action_dim,
+            hidden_dim=hidden_dim,
+            use_cnn=use_cnn,
+            actor_critic=True,
+            use_shield_layer=self.use_shield_layer,
+            shield_controller=self.shield_controller
+        ).to(self.device)
+
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
         self.memory = []
         self.training_logs = {"policy_loss": [], "value_loss": [], "entropy": [], "prob_shift": []}
 
-        self.shield_controller = ShieldController(
-            requirements_path=requirements_path,
-            num_actions=action_dim,
-            mode=mode,
-        )
 
     def select_action(self, state, env=None, do_apply_shield=True):
+        self.last_obs = state
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.model.use_cnn).to(self.device)
 
-        logits, value = self.model(state_tensor)
-        raw_probs = torch.softmax(logits, dim=-1)
+        # === Use ModularNetwork for shield layer logic ===
+        action, log_prob, value, raw_probs, shielded_probs = self.model.select_action(
+            state_tensor,
+            context=context,
+            constraint_monitor=self.constraint_monitor if self.use_shield_layer else None
+        )
 
-        if do_apply_shield and self.use_shield_post:
-            shielded_probs = self.shield_controller.apply(raw_probs, context)
-        else:
-            shielded_probs = raw_probs
+        # === Apply post hoc shielding manually if enabled ===
+        if self.use_shield_post and do_apply_shield:
+            shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
+            shielded_probs /= shielded_probs.sum()
 
-        was_modified = not torch.allclose(raw_probs, shielded_probs, atol=1e-6)
+            if self.constraint_monitor and not self.use_shield_layer:
+                self.constraint_monitor.log_step(
+                    raw_probs=raw_probs,
+                    corrected_probs=shielded_probs,
+                    selected_action=shielded_probs.argmax().item(),
+                    shield_controller=self.shield_controller,
+                    context=context
+                )
 
-        dist = Categorical(probs=shielded_probs)
-        action = dist.sample()
-        log_prob = dist.log_prob(action)
+            dist = Categorical(probs=shielded_probs)
+            action = dist.sample()
+            log_prob = dist.log_prob(action)
+            action = action.item()
 
         self.last_log_prob = log_prob
-        self.last_value = value.squeeze(0)
-        self.last_raw_probs = raw_probs.squeeze(0).detach()
-        self.last_shielded_probs = shielded_probs.squeeze(0).detach()
+        self.last_value = value
+        self.last_raw_probs = raw_probs.detach()
+        self.last_shielded_probs = shielded_probs.detach()
 
-        return action.item(), context, was_modified
+        return action, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         state = prepare_input(state, use_cnn=self.model.use_cnn).squeeze(0).to(self.device)

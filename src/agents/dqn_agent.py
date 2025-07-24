@@ -7,6 +7,7 @@ import random
 from src.models.network import ModularNetwork
 from src.utils import context_provider
 from src.utils.shield_controller import ShieldController
+from src.utils.constraint_monitor import ConstraintMonitor
 from src.utils.preprocessing import prepare_input, prepare_batch
 
 
@@ -44,10 +45,28 @@ class DQNAgent:
         self.learn_step_counter = 0
         self.batch_size = 64
 
-        self.q_network = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
-                                        hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False, use_shield_layer=self.use_shield_layer).to(self.device)
-        self.target_network = ModularNetwork(input_shape=input_shape, output_dim=action_dim,
-                                             hidden_dim=hidden_dim, use_cnn=use_cnn, actor_critic=False).to(self.device)
+        # Init monitor + shield controller
+        self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
+        self.shield_controller = ShieldController(requirements_path, action_dim, mode)
+        self.shield_controller.constraint_monitor = self.constraint_monitor
+
+        self.q_network = ModularNetwork(
+            input_shape=input_shape,
+            output_dim=action_dim,
+            hidden_dim=hidden_dim,
+            use_cnn=use_cnn,
+            actor_critic=False,
+            use_shield_layer=self.use_shield_layer,
+            shield_controller=self.shield_controller
+        ).to(self.device)
+
+        self.target_network = ModularNetwork(
+            input_shape=input_shape,
+            output_dim=action_dim,
+            hidden_dim=hidden_dim,
+            use_cnn=use_cnn,
+            actor_critic=False
+        ).to(self.device)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()
 
@@ -55,43 +74,56 @@ class DQNAgent:
         self.replay_buffer = deque(maxlen=10000)
         self.target_update_freq = target_update_freq
 
-        self.shield_controller = ShieldController(requirements_path, action_dim, mode)
-
         self.training_logs = {
             "td_loss": [], "req_loss": [], "consistency_loss": [], "prob_shift": []
         }
 
     def select_action(self, state, env=None, do_apply_shield=True):
-        context = context_provider.build_context(env, self)
-        if np.random.rand() < self.epsilon:
-            action = np.random.choice(self.action_dim)
-            if self.verbose:
-                print(f"[Random] Action selected: {action}")
-            return action, context, False
-
+        self.last_obs = state
+        context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.q_network.use_cnn).to(self.device)
 
-        with torch.no_grad():
-            q_values = self.q_network(state_tensor)
-            raw_probs = torch.softmax(q_values, dim=1)
+        # Use ModularNetwork's action selection if using the shield layer
+        if self.use_shield_layer:
+            action, _, _, raw_probs, shielded_probs = self.q_network.select_action(
+                state_tensor, context=context, constraint_monitor=self.constraint_monitor, deterministic=True
+            )
 
-            if do_apply_shield and self.shield_controller and self.use_shield_post:
-                corrected_probs = self.shield_controller.apply(raw_probs, context)
-                was_modified = not torch.allclose(raw_probs, corrected_probs, atol=1e-6)
-            else:
-                corrected_probs = raw_probs
-                was_modified = False
+        else:
+            if np.random.rand() < self.epsilon:
+                action = np.random.choice(self.action_dim)
+                if self.verbose:
+                    print(f"[Random] Action selected: {action}")
+                return action, context, False
 
-            action = corrected_probs.argmax(dim=1).item()
+            with torch.no_grad():
+                q_values = self.q_network(state_tensor)
+                raw_probs = torch.softmax(q_values, dim=1)
 
-            if self.verbose:
-                print(f"[Policy] Q-values: {q_values.cpu().numpy().flatten()}")
-                print(f"[Policy] Raw probs: {raw_probs.cpu().numpy().flatten()}")
-                print(f"[Policy] Shielded probs: {corrected_probs.cpu().numpy().flatten()}")
-                print(f"[Policy] Action selected: {action}")
-                print(f"[Policy] Shield modified: {was_modified}")
+                if do_apply_shield and self.use_shield_post:
+                    shielded_probs = self.shield_controller.apply(raw_probs, context)
 
-        return action, context, was_modified
+                    # Log if using post hoc
+                    self.constraint_monitor.log_step(
+                        raw_probs=raw_probs,
+                        corrected_probs=shielded_probs,
+                        selected_action=shielded_probs.argmax().item(),
+                        shield_controller=self.shield_controller,
+                        context=context
+                    )
+                else:
+                    shielded_probs = raw_probs
+
+                action = shielded_probs.argmax(dim=1).item()
+
+                if self.verbose:
+                    print(f"[Policy] Q-values: {q_values.cpu().numpy().flatten()}")
+                    print(f"[Policy] Raw probs: {raw_probs.cpu().numpy().flatten()}")
+                    print(f"[Policy] Shielded probs: {shielded_probs.cpu().numpy().flatten()}")
+                    print(f"[Policy] Action selected: {action}")
+
+        return action, context
+
 
     def store_transition(self, state, action, reward, next_state, context, done):
         if self.q_network.use_cnn and state.ndim == 1:
@@ -100,6 +132,7 @@ class DQNAgent:
         self.replay_buffer.append((state, action, reward, next_state, context, done))
 
     def update(self, batch_size=None):
+        batch_size = batch_size or self.batch_size
         if len(self.replay_buffer) < batch_size:
             return
 
@@ -115,7 +148,7 @@ class DQNAgent:
 
         with torch.no_grad():
             raw_probs = torch.softmax(self.q_network(states), dim=1)
-            if self.use_shield and self.shield_controller:
+            if self.use_shield_post and self.shield_controller:
                 shielded_probs = self.shield_controller.apply_batch(raw_probs, list(contexts))
             else:
                 shielded_probs = raw_probs
@@ -142,7 +175,7 @@ class DQNAgent:
         self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
 
     def enable_shield(self, enable: bool):
-        self.use_shield = enable
+        self.use_shield_post = enable
 
     def get_weights(self):
         return self.q_network.state_dict()

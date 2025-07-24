@@ -129,6 +129,8 @@ def cartpole_flag_logic_advanced(context,
 
 
 def cartpole_emergency_flag_logic(context, flag_active_val=1.0):
+    # print("[DEBUG] cartpole_emergency_flag_logic called with context:", context)
+
     obs = context.get("obs")
     if obs is None:
         return {}

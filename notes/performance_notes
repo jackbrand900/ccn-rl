@@ -1,0 +1,14 @@
+ppo
+- good on shield post
+- good on shield layer
+- good on unshielded
+
+a2c
+- bad on shield post
+- bad on shield layer
+- good on unshielded
+
+dqn
+- good on shield post
+- bad on shield layer
+- good on unshielded

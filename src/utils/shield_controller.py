@@ -18,6 +18,7 @@ class ShieldController:
         flag_active_val = 0.8 if mode == "soft" else 1.0
         self.flag_logic_fn = partial(self.flag_logic_fn, flag_active_val=flag_active_val)
         self.flag_logic_batch = self._batchify(self.flag_logic_fn)
+        print(f"[DEBUG] Got flag logic function: {get_flag_logic_fn(self.requirements_path)}")
 
         # Parse var names from file
         self.var_names = self._extract_vars_from_requirements()
@@ -107,6 +108,9 @@ class ShieldController:
 
         flag_active = any(flag_values)
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
+        # print(f"[DEBUG] Flag logic function used: {self.flag_logic_fn}")
+        flags = self.flag_logic_fn(context)
+        # print(f"[DEBUG] Flags from logic: {flags}")
         if self.verbose:
             print(f"[DEBUG] Raw flags: {flags}, Flag values: {flag_values}")
             if flag_active:
@@ -139,7 +143,6 @@ class ShieldController:
     def forward_differentiable(self, action_probs, contexts):
         assert isinstance(contexts, list), "Contexts must be a list of dicts (batch)."
         flag_dicts = self.flag_logic_batch(contexts)
-
         flag_values = [
             [flags.get(name, 0.0) for name in self.flag_names]
             for flags in flag_dicts

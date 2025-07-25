@@ -106,35 +106,32 @@ class ModularNetwork(nn.Module):
             logits = self.actor(x)
             value = self.critic(x)
         else:
-            logits = self.q_net(x)
+            logits = self.q_net(x)  # raw Q-values, NO softmax here
             value = None
 
+        # Apply softmax only for probabilities, do not overwrite logits
         probs = torch.softmax(logits, dim=-1)
         pre_shield_probs = probs.clone()
 
         if self.use_shield_layer and self.shield_controller and context is not None:
-            # print('using shield layer and controller')
             if not isinstance(context, list):
-                context = [context] * probs.shape[0]  # 🚨 use batch length
-            # print("[DEBUG] Using shield layer")
-            # print(f"[DEBUG] Pre-shield probs: {probs}")
+                context = [context] * probs.shape[0]  # batchify context
             probs = self.shield_controller.forward_differentiable(probs, context)
 
         if return_pre_post_probs:
             return logits, value, pre_shield_probs, probs
-        return (logits, value) if self.actor_critic else probs
+        return (logits, value) if self.actor_critic else logits
 
-    def select_action(self, state_tensor, context=None, constraint_monitor=None):
+    def select_action(self, state_tensor, context=None, constraint_monitor=None, deterministic=False):
         if self.actor_critic:
             logits, value = self.forward(state_tensor, context=context)
         else:
-            probs = self.forward(state_tensor, context=context)
-            logits = torch.log(probs + 1e-8)
+            logits = self.forward(state_tensor, context=context)  # raw Q-values
+            probs = torch.softmax(logits, dim=-1)
             value = None
 
         pre_probs = torch.softmax(logits, dim=-1)
 
-        # Apply shield if needed
         if self.use_shield_layer and self.shield_controller and context is not None:
             if not isinstance(context, list):
                 context = [context] * pre_probs.shape[0]
@@ -142,11 +139,14 @@ class ModularNetwork(nn.Module):
         else:
             post_probs = pre_probs.clone()
 
-        dist = Categorical(probs=post_probs)
-        action = dist.sample()
-        log_prob = dist.log_prob(action)
+        if deterministic:
+            action = post_probs.argmax(dim=-1)
+            log_prob = torch.log(post_probs.gather(1, action.unsqueeze(1))).squeeze(1)
+        else:
+            dist = Categorical(probs=post_probs)
+            action = dist.sample()
+            log_prob = dist.log_prob(action)
 
-        # 🔍 Log to ConstraintMonitor if provided
         if constraint_monitor and self.shield_controller:
             constraint_monitor.log_step(
                 raw_probs=pre_probs.detach().squeeze(0),
@@ -193,20 +193,26 @@ class ModularNetwork(nn.Module):
 
         return total_loss, logs
 
-    def compute_a2c_losses(self, states, actions, targets, advantages, shielded_probs,
+    def compute_a2c_losses(self, states, actions, targets, advantages, shielded_probs=None,
                            ent_coef=0.01, lambda_req=0.00, lambda_consistency=0.00):
         logits, predicted_values = self.forward(states)
+
         dist = Categorical(logits=logits)
         new_log_probs = dist.log_prob(actions)
         entropy = dist.entropy().mean()
 
         policy_loss = -(advantages.detach() * new_log_probs).mean()
-        value_loss = nn.MSELoss()(predicted_values.squeeze(), targets)
+        value_loss = nn.MSELoss()(predicted_values.view(-1), targets.view(-1))
 
-        goal = torch.zeros_like(shielded_probs)
-        goal.scatter_(1, actions.unsqueeze(1), 1.0)
-        req_loss = nn.BCELoss()(shielded_probs, goal)
-        consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
+        # Default to zero req/consistency loss if shielded_probs is None
+        req_loss = torch.tensor(0.0, device=states.device)
+        consistency_loss = torch.tensor(0.0, device=states.device)
+
+        if shielded_probs is not None:
+            goal = torch.zeros_like(shielded_probs)
+            goal.scatter_(1, actions.unsqueeze(1), 1.0)
+            req_loss = nn.BCELoss()(shielded_probs, goal)
+            consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
 
         loss = policy_loss + value_loss + lambda_req * req_loss + lambda_consistency * consistency_loss - ent_coef * entropy
 
@@ -214,12 +220,13 @@ class ModularNetwork(nn.Module):
             "policy_loss": policy_loss.item(),
             "value_loss": value_loss.item(),
             "entropy": entropy.item(),
-            "req_loss": req_loss.item(),
-            "consistency_loss": consistency_loss.item(),
+            "req_loss": req_loss.item() if shielded_probs is not None else 0.0,
+            "consistency_loss": consistency_loss.item() if shielded_probs is not None else 0.0,
             "total_loss": loss.item()
         }
 
         return loss, logs
+
 
     def compute_q_loss(self, states, actions, rewards, dones, next_states, target_network,
                        gamma=0.99, shielded_probs=None, lambda_req=0.00, lambda_consistency=0.00):

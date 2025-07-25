@@ -10,7 +10,7 @@ from src.utils.constraint_monitor import ConstraintMonitor
 import src.utils.context_provider as context_provider
 
 
-class A2CAgent:
+class VanillaA2CAgent:
     def __init__(self,
                  input_shape,
                  action_dim,

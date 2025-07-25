@@ -19,14 +19,14 @@ class PPOAgent:
                  lr=3e-4,
                  gamma=0.99,
                  clip_eps=0.2,
-                 ent_coef=0.01,
+                 ent_coef=0.0,
                  lambda_req=0.0,
                  lambda_consistency=0.0,
                  verbose=False,
                  requirements_path=None,
                  env=None,
-                 batch_size=4096,
-                 epochs=8,
+                 batch_size=64,
+                 epochs=10,
                  use_shield_post=True,
                  use_shield_layer=True,
                  mode='hard'):
@@ -79,48 +79,49 @@ class PPOAgent:
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
         # Always get raw_probs from the policy
-        action, log_prob, value, raw_probs, _ = self.policy.select_action(state_tensor, context,
-                                                                          constraint_monitor=self.constraint_monitor if self.use_shield_layer else None)
+        action, log_prob, value, raw_probs, _ = self.policy.select_action(
+            state_tensor, context,
+            constraint_monitor=self.constraint_monitor if self.use_shield_layer else None
+        )
 
-        # If using post hoc shielding, apply it manually
-        if self.use_shield_post and do_apply_shield:
+        # === Shield layer: use action directly ===
+        if self.use_shield_layer:
+            shielded_probs = raw_probs.clone()
+            selected_action = action
+            log_prob_tensor = log_prob
+
+        # === Post hoc shield: override raw_probs ===
+        elif self.use_shield_post and do_apply_shield:
             shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
             shielded_probs /= shielded_probs.sum()
+            dist = Categorical(probs=shielded_probs)
+            selected_action = dist.sample().item()
+            log_prob_tensor = dist.log_prob(torch.tensor(selected_action).to(self.device))
+
+        # === No shield: use raw_probs ===
         else:
             shielded_probs = raw_probs.clone()
+            dist = Categorical(probs=raw_probs)
+            selected_action = dist.sample().item()
+            log_prob_tensor = dist.log_prob(torch.tensor(selected_action).to(self.device))
 
-        # Always sample both to track modifications
-        dist_pre = Categorical(probs=raw_probs)
-        pre_action = dist_pre.sample().item()
-
-        dist_post = Categorical(probs=shielded_probs)
-        post_action = dist_post.sample().item()
-
-        was_modified = (pre_action != post_action)
-        shield_used = self.use_shield_post or self.use_shield_layer
-
-        if shield_used and do_apply_shield:
-            action = post_action
-            log_prob = dist_post.log_prob(torch.tensor(action).to(self.device))
-        else:
-            action = pre_action
-            log_prob = dist_pre.log_prob(torch.tensor(action).to(self.device))
-
-        self.last_log_prob = log_prob.item()
+        # Save for training
+        self.last_log_prob = log_prob_tensor.item()
         self.last_value = value.item()
         self.last_raw_probs = raw_probs.detach()
         self.last_shielded_probs = shielded_probs.detach()
 
+        # Log to monitor only for post hoc shield
         if self.constraint_monitor and not self.use_shield_layer:
             self.constraint_monitor.log_step(
                 raw_probs=raw_probs.detach(),
                 corrected_probs=shielded_probs.detach(),
-                selected_action=action,
+                selected_action=selected_action,
                 shield_controller=self.shield_controller,
                 context=context
             )
 
-        return action, context, was_modified
+        return selected_action, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.memory.append((

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import gymnasium as gym
 import numpy as np
 from gymnasium.wrappers import TimeLimit, FrameStack, AtariPreprocessing
@@ -9,6 +11,8 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
+from src.agents.vanilla_a2c import VanillaA2CAgent
+from src.agents.vanilla_dqn import VanillaDQNAgent
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 import sys
@@ -143,11 +147,17 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
 
         done = False
         total_reward = 0
-        batch_size = 128
         while not done:
-            action, context, modified = agent.select_action(state, env)
-            if modified:
-                modifications += 1
+            result = agent.select_action(state)
+
+            # A2C-style: (action, log_prob, value)
+            if isinstance(result, tuple) and len(result) == 3:
+                action, log_prob, value = result
+                context = {}
+            else:
+                action, context = result
+                log_prob = None
+                value = None
 
             # TODO: make this environment agnostic
             pos = context.get("position", None)
@@ -168,7 +178,7 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
             #     print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
 
             agent.store_transition(state, action, reward, next_state, context, done)
-            agent.update(batch_size=batch_size)
+            agent.update()
             state = next_state
             total_reward += reward
 
@@ -176,27 +186,36 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            constraint_monitor = agent.constraint_monitor if agent.use_shield_post else agent.shield_controller.constraint_monitor
-            if hasattr(agent, "constraint_monitor"):
-                stats = constraint_monitor.summary()
-                print("\n[ConstraintMonitor Summary]")
-                print(f"  Episode Stats:")
-                print(f"    Steps:              {stats['episode_steps']}")
-                print(f"    Flagged Steps:      {stats['episode_flagged_steps']}")
-                print(f"    Modifications:      {stats['episode_modifications']} "
-                      f"({stats['episode_mod_rate']:.3f} per step)")
-                print(f"    Violations:         {stats['episode_violations']} "
-                      f"({stats['episode_viol_rate']:.3f} per step)")
+            # constraint_monitor = agent.constraint_monitor if agent.use_shield_post else agent.shield_controller.constraint_monitor
+            # if hasattr(agent, "constraint_monitor"):
+            #     stats = constraint_monitor.summary()
+            #     print("\n[ConstraintMonitor Summary]")
+            #     print(f"  Episode Stats:")
+            #     print(f"    Steps:              {stats['episode_steps']}")
+            #     print(f"    Flagged Steps:      {stats['episode_flagged_steps']}")
+            #     print(f"    Modifications:      {stats['episode_modifications']} "
+            #           f"({stats['episode_mod_rate']:.3f} per step)")
+            #     print(f"    Violations:         {stats['episode_violations']} "
+            #           f"({stats['episode_viol_rate']:.3f} per step)")
+            #
+            #     print(f"  Total Stats:")
+            #     print(f"    Total Steps:        {stats['total_steps']}")
+            #     print(f"    Total Flagged:      {stats['total_flagged_steps']}")
+            #     print(f"    Total Modifications:{stats['total_modifications']} "
+            #           f"({stats['total_mod_rate']:.3f} per step)")
+            #     print(f"    Total Violations:   {stats['total_violations']} "
+            #           f"({stats['total_viol_rate']:.3f} per step)")
+            # stats = constraint_monitor.summary()
+            # total_mods = stats['total_modifications']
+            # total_violations = stats['total_violations']
+            # mod_rate = stats['total_mod_rate']
+            log_msg = (
+                f"Episode {episode}, "
+                f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
+                # f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, "
+                # f"Total Violations: {total_violations}"
+            )
 
-                print(f"  Total Stats:")
-                print(f"    Total Steps:        {stats['total_steps']}")
-                print(f"    Total Flagged:      {stats['total_flagged_steps']}")
-                print(f"    Total Modifications:{stats['total_modifications']} "
-                      f"({stats['total_mod_rate']:.3f} per step)")
-                print(f"    Total Violations:   {stats['total_violations']} "
-                      f"({stats['total_viol_rate']:.3f} per step)")
-                agent.constraint_monitor.reset()
-            log_msg = f"Episode {episode}, Avg Reward (last {print_interval}): {avg_reward:.2f}"
             if hasattr(agent, "epsilon"):
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
             print(log_msg)
@@ -204,18 +223,34 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
                 best_avg_reward = avg_reward
                 best_weights = copy.deepcopy(agent.get_weights())
                 print(f"[Checkpoint] New best avg reward: {best_avg_reward:.2f} at episode {episode}")
+            # agent.constraint_monitor.reset()
 
     env.close()
     if visualize:
-        graphing.plot_losses(agent.training_logs)
-        graphing.plot_prob_shift(agent.training_logs)
-        graphing.plot_rewards(
-            rewards=episode_rewards,
-            title="Training Performance",
-            rolling_window=20,
-            save_path="plots/training_rewards.png",
-            show=True
-        )
+        # graphing.plot_losses(agent.training_logs)
+        # graphing.plot_prob_shift(agent.training_logs)
+        if visualize:
+            agent_name = agent.__class__.__name__
+            env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
+            if getattr(agent, 'use_shield_layer', False):
+                shield_mode = "ShieldLayer"
+            elif getattr(agent, 'use_shield_post', False):
+                shield_mode = "PostShield"
+            else:
+                shield_mode = "Unshielded"
+
+            title_prefix = f"{agent_name} on {env_name} [{shield_mode}]"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            graphing.plot_rewards(
+                rewards=episode_rewards,
+                title=f"{title_prefix} – Training Reward Curve",
+                xlabel="Episode",
+                ylabel="Reward",
+                rolling_window=20,
+                save_path=f"plots/{agent_name}_{env_name}_{shield_mode}_{timestamp}_training_rewards.png",
+                show=True
+            )
 
     return agent, episode_rewards, best_weights, best_avg_reward
 
@@ -308,12 +343,20 @@ def train(agent='dqn',
     return agent, env
 
 
-def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visualize=False, render=False):
-    print(f"\n[Evaluation] Starting evaluation on agent: {agent.__class__.__name__} | "
-          f"Episodes: {num_episodes} | Shield: {getattr(agent, 'use_shield', False)} | "
-          f"Render: {render} | Visualize: {visualize}")
+def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False, force_disable_shield=False):
+    use_layer = getattr(agent, 'use_shield_layer', False)
+    use_post = getattr(agent, 'use_shield_post', False)
 
-    # Switch agent model to evaluation mode if applicable
+    # Optionally disable shielding entirely
+    if force_disable_shield:
+        print("[Evaluation] ⚠️ Forcing shield OFF for evaluation")
+        use_layer = False
+        use_post = False
+
+    print(f"\n[Evaluation] Evaluating {agent.__class__.__name__} for {num_episodes} episodes "
+          f"(Shield Layer: {use_layer}, Shield Post: {use_post})")
+
+    # Set policy to eval mode
     if hasattr(agent, 'q_network') and hasattr(agent.q_network, 'eval'):
         agent.q_network.eval()
     elif hasattr(agent, 'policy') and hasattr(agent.policy, 'eval'):
@@ -321,93 +364,126 @@ def evaluate_policy(agent, env, num_episodes=100, eval_with_shield=False, visual
     elif hasattr(agent, 'model') and hasattr(agent.model, 'eval'):
         agent.model.eval()
 
-    # Store original exploration parameter if it exists
+    # Disable exploration
     original_epsilon = getattr(agent, 'epsilon', None)
     if original_epsilon is not None:
-        agent.epsilon = 0.0  # Force deterministic policy if epsilon-greedy
+        agent.epsilon = 0.0
 
-    violations_per_episode = []
     total_rewards = []
-    total_shield_modifications = 0
     total_steps = 0
-    total_violations = 0
+    violations_per_episode = []
+
+    # Reset global counters if desired
+    if hasattr(agent, 'constraint_monitor') and agent.constraint_monitor:
+        agent.constraint_monitor.reset()
 
     for episode in range(num_episodes):
         state = reset_env(env)
         done = False
         episode_reward = 0
-        episode_modifications = 0
-        episode_violations = 0
+
+        if hasattr(agent, 'constraint_monitor') and agent.constraint_monitor:
+            agent.constraint_monitor.reset()
 
         while not done:
-            # Attempt to get (action, context, was_modified), fall back if needed
             try:
-                result = agent.select_action(state, env, do_apply_shield=eval_with_shield)
-                if isinstance(result, tuple) and len(result) == 3:
-                    action, context, was_modified = result
-                else:
-                    action = result
-                    was_modified = False
-
-                if not eval_with_shield and agent.shield_controller:
-                    violation = agent.shield_controller.would_violate(action, context)
-                    total_violations += violation
-                    episode_violations += violation
-
+                action, context = agent.select_action(
+                    state, env, do_apply_shield=not force_disable_shield
+                )
             except TypeError:
-                action = agent.select_action(state, env, do_apply_shield=eval_with_shield)
-                was_modified = False
+                action = agent.select_action(state, env, do_apply_shield=not force_disable_shield)
+                context = {}
 
-            next_state, reward, done, _ = step_env(env, action)
+            # === Log to ConstraintMonitor ===
+            if hasattr(agent, 'constraint_monitor') and agent.constraint_monitor:
+                raw_probs = getattr(agent, 'last_raw_probs', None)
+                shielded_probs = getattr(agent, 'last_shielded_probs', None)
+                if raw_probs is not None and shielded_probs is not None:
+                    agent.constraint_monitor.log_step(
+                        raw_probs=raw_probs,
+                        corrected_probs=shielded_probs,
+                        selected_action=action,
+                        shield_controller=agent.shield_controller,
+                        context=context
+                    )
 
+            state, reward, done, _ = step_env(env, action)
             episode_reward += reward
             total_steps += 1
-            state = next_state
-
-            if was_modified:
-                episode_modifications += 1
 
             if render:
                 env.render()
 
         total_rewards.append(episode_reward)
-        total_shield_modifications += episode_modifications
-        violations_per_episode.append(episode_violations)
-        print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Shield Activations = {episode_modifications}")
 
-    # Restore original exploration setting
+        # === Episode stats ===
+        if hasattr(agent, 'constraint_monitor'):
+            stats = agent.constraint_monitor.summary()
+            episode_modifications = stats['episode_modifications']
+            episode_violations = stats['episode_violations']
+            violations_per_episode.append(episode_violations)
+
+            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, "
+                  f"Modifications = {episode_modifications}, "
+                  f"Violations = {episode_violations}")
+
     if original_epsilon is not None:
         agent.epsilon = original_epsilon
 
-    avg_reward = np.mean(total_rewards)
-    avg_shield_rate = total_shield_modifications / total_steps if total_steps > 0 else 0
-    avg_violation_rate = total_violations / total_steps if total_steps > 0 else 0
+    # === Final Summary ===
+    if hasattr(agent, 'constraint_monitor'):
+        stats = agent.constraint_monitor.summary()
+        avg_reward = np.mean(total_rewards)
+        avg_mod_rate = stats['total_modifications'] / max(stats['total_steps'], 1)
+        avg_viol_rate = stats['total_violations'] / max(stats['total_steps'], 1)
 
-    print(f"\nEvaluation Summary:")
-    print(f"Average Reward: {avg_reward:.2f}")
-    print(f"Avg Shield Modifications per Step: {avg_shield_rate:.4f}")
-    print(f"Total Constraint Violations: {total_violations}")
-    print(f"Avg Constraint Violations per Step: {avg_violation_rate:.4f}")
-    graphing.plot_rewards(
-        rewards=total_rewards,
-        title=f"Evaluation Rewards Using Shield: {eval_with_shield}",
-        xlabel="Episode",
-        ylabel="Reward",
-        rolling_window=5,
-        save_path="plots/evaluation_rewards.png",
-        show=True
-    )
-    graphing.plot_violations(
-        violations=violations_per_episode,
-        total_steps=total_steps,
-        title=f"Constraint Violations per Episode",
-        save_path=f"plots/evaluation_violations_{'with' if eval_with_shield else 'without'}_shield.png",
-        show=True
-    )
+        print("\nEvaluation Summary:")
+        print(f"Average Reward: {avg_reward:.2f}")
+        print(f"Avg Shield Modifications per Step: {avg_mod_rate:.4f}")
+        print(f"Total Constraint Violations: {stats['total_violations']}")
+        print(f"Avg Constraint Violations per Step: {avg_viol_rate:.4f}")
+    else:
+        avg_reward = np.mean(total_rewards)
+        avg_mod_rate = 0.0
+        print("\nEvaluation Summary (No ConstraintMonitor):")
+        print(f"Average Reward: {avg_reward:.2f}")
+
+    if visualize:
+        agent_name = agent.__class__.__name__
+        env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
+        if force_disable_shield:
+            shield_mode = "Unshielded (forced)"
+        elif use_layer:
+            shield_mode = "ShieldLayer"
+        elif use_post:
+            shield_mode = "PostShield"
+        else:
+            shield_mode = "Unshielded"
+
+        title_prefix = f"{agent_name} on {env_name} [{shield_mode}]"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        graphing.plot_rewards(
+            rewards=total_rewards,
+            title=f"{title_prefix} – Reward Curve",
+            xlabel="Episode",
+            ylabel="Reward",
+            rolling_window=5,
+            save_path=f"plots/{agent_name}_{env_name}_{shield_mode}_{timestamp}_rewards.png",
+            show=True
+        )
+
+        graphing.plot_violations(
+            violations=violations_per_episode,
+            total_steps=total_steps,
+            title=f"{title_prefix} – Violations per Episode",
+            save_path=f"plots/{agent_name}_{env_name}_{shield_mode}_{timestamp}_violations.png",
+            show=True
+        )
 
     return {
         "avg_reward": avg_reward,
-        "avg_shield_mod_rate": avg_shield_rate,
+        "avg_shield_mod_rate": avg_mod_rate,
         "rewards": total_rewards,
     }
 
@@ -423,7 +499,7 @@ if __name__ == "__main__":
     parser.add_argument('--visualize', action='store_true', help='Visualize training plots')
     parser.add_argument('--render', action='store_true', help='Render environment (RGB image)')
     parser.add_argument('--env', type=str, default='MiniGrid-Empty-5x5-v0', help='Gym environment to train on')
-    parser.add_argument('--eval_with_shield', action='store_true', help='Enable shield during evaluation')
+    parser.add_argument('--force_disable_shield', action='store_true', help='Force shield off during evaluation')
     parser.add_argument('--num_episodes', type=int, default=500, help='Number of training episodes')
     args = parser.parse_args()
 
@@ -439,5 +515,11 @@ if __name__ == "__main__":
 
     # results = evaluate_policy(trained_agent, env, eval_with_shield=args.eval_with_shield, num_episodes=20,
     # visualize=args.visualize, render=args.render)
-    results1 = evaluate_policy(trained_agent, env, eval_with_shield=False, num_episodes=100, visualize=args.visualize)
-    results2 = evaluate_policy(trained_agent, env, eval_with_shield=True, num_episodes=100, visualize=args.visualize)
+    results = evaluate_policy(
+        trained_agent,
+        env,
+        num_episodes=100,
+        visualize=args.visualize,
+        render=args.render,
+        force_disable_shield=args.force_disable_shield
+    )

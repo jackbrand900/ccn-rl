@@ -312,22 +312,15 @@ def train(agent='dqn',
                          env=env,
                          use_cnn=use_cnn)
     elif agent == 'a2c':
-        # agent = A2CAgent(input_shape=input_shape,
-        #                  action_dim=action_dim,
-        #                  use_shield_post=use_shield_post,
-        #                  use_shield_layer=use_shield_layer,
-        #                  mode=mode,
-        #                  verbose=verbose,
-        #                  requirements_path=requirements_path,
-        #                  env=env,
-        #                  use_cnn=use_cnn)
-        agent = VanillaA2CAgent(input_shape=input_shape,
-                                action_dim=action_dim,
-                                use_shield_post=use_shield_post,
-                                use_shield_layer=use_shield_layer,
-                                requirements_path=requirements_path,
-                                env=env,
-                                use_cnn=use_cnn)
+        agent = A2CAgent(input_shape=input_shape,
+                         action_dim=action_dim,
+                         use_shield_post=use_shield_post,
+                         use_shield_layer=use_shield_layer,
+                         mode=mode,
+                         verbose=verbose,
+                         requirements_path=requirements_path,
+                         env=env,
+                         use_cnn=use_cnn)
     else:
         raise ValueError("Unsupported agent type.")
 

@@ -19,36 +19,43 @@ class ConstraintMonitor:
         self.episode_violations = 0
         self.episode_flagged_steps = 0
 
-    def log_step(self, raw_probs, corrected_probs, selected_action, shield_controller, context, shield_applied=True):
+    def log_step_from_probs_and_actions(
+            self,
+            raw_probs,
+            corrected_probs,
+            a_unshielded,
+            a_shielded,
+            context=None,
+            shield_controller=None,
+            epsilon=1e-6,
+    ):
         self.episode_steps += 1
         self.total_steps += 1
 
-        # Get flags
-        flags = shield_controller.flag_logic_fn(context)
-        flag_values = [flags.get(name, 0) for name in shield_controller.flag_names]
-        flag_active = any(flag_values)
+        probs_modified = not torch.allclose(raw_probs, corrected_probs, atol=epsilon)
+        action_modified = a_unshielded != a_shielded
+        violation = probs_modified and action_modified  # Heuristic violation definition
+
+        # Check if any flags are active
+        flag_active = True  # default to True if we don't require flags
+        if self.only_if_flags_active and context is not None and shield_controller is not None:
+            flags = shield_controller.flag_logic_fn(context)
+            flag_values = [flags.get(name, 0) for name in shield_controller.flag_names]
+            flag_active = any(flag_values)
+            if flag_active:
+                self.episode_flagged_steps += 1
+                self.total_flagged_steps += 1
 
         if flag_active:
-            self.episode_flagged_steps += 1
-            self.total_flagged_steps += 1
+            self.episode_violations += int(violation)
+            self.total_violations += int(violation)
 
-        # Compute unshielded action
-        unshielded_action = raw_probs.argmax().item()
-        modified = (unshielded_action != selected_action) if shield_applied else False
-        would_violate = shield_controller.would_violate(unshielded_action, context)
+            if shield_controller.is_shield_active:
+                self.episode_modifications += int(action_modified)
+                self.total_modifications += int(action_modified)
 
-        # === Only count violation if shield did not modify it ===
-        count_violation = would_violate and not modified
-
-        if not self.only_if_flags_active or flag_active:
-            self.episode_modifications += modified
-            self.total_modifications += modified
-
-            self.episode_violations += count_violation
-            self.total_violations += count_violation
-
-        if self.verbose and flag_active:
-            print(f"[ConstraintMonitor] Flags active. Mod: {modified}, Viol: {count_violation} (raw viol: {would_violate})")
+        if self.verbose and (not self.only_if_flags_active or flag_active):
+            print(f"[ConstraintMonitor] Flags active: {flag_active}, Mod: {action_modified}, Viol: {violation}, Probs Modified: {probs_modified}")
 
     def summary(self):
         return {

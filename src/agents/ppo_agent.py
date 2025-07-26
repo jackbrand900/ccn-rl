@@ -56,8 +56,8 @@ class PPOAgent:
         self.last_raw_probs = None
         self.last_shielded_probs = None
         self.last_obs = None
-
-        self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose)
+        is_shield_active = self.use_shield_layer or self.use_shield_post
+        self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose, is_shield_active=is_shield_active)
         self.policy = ModularNetwork(input_shape, action_dim, hidden_dim, use_shield_layer=self.use_shield_layer,
                                      use_cnn=use_cnn, actor_critic=True, shield_controller=self.shield_controller).to(self.device)
         self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
@@ -77,7 +77,6 @@ class PPOAgent:
 
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
-        was_shield_applied = False
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
@@ -87,28 +86,39 @@ class PPOAgent:
             constraint_monitor=self.constraint_monitor if self.use_shield_layer else None
         )
 
-        # === Shield layer: use action directly ===
         if self.use_shield_layer:
+            # Shielded already integrated into the network
             shielded_probs = raw_probs.clone()
+            a_unshielded = a_shielded = action
             selected_action = action
             log_prob_tensor = log_prob
-            was_shield_applied = True
 
-        # === Post hoc shield: override raw_probs ===
         elif self.use_shield_post and do_apply_shield:
+            # Sample unshielded action from raw_probs
+            dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
+            a_unshielded = dist_unshielded.sample().item()
+
+            # Apply post hoc shield and sample again
             shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
             shielded_probs /= shielded_probs.sum()
-            dist = Categorical(probs=shielded_probs)
-            selected_action = dist.sample().item()
-            log_prob_tensor = dist.log_prob(torch.tensor(selected_action).to(self.device))
-            was_shield_applied = True
+            dist_shielded = torch.distributions.Categorical(probs=shielded_probs)
+            a_shielded = dist_shielded.sample().item()
 
-        # === No shield: use raw_probs ===
+            selected_action = a_shielded
+            log_prob_tensor = dist_shielded.log_prob(torch.tensor(a_shielded).to(self.device))
+
         else:
-            shielded_probs = raw_probs.clone()
-            dist = Categorical(probs=raw_probs)
-            selected_action = dist.sample().item()
-            log_prob_tensor = dist.log_prob(torch.tensor(selected_action).to(self.device))
+            # === Unshielded path: sample raw and get hypothetical shielded action
+            dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
+            a_unshielded = dist_unshielded.sample().item()
+            log_prob_tensor = dist_unshielded.log_prob(torch.tensor(a_unshielded).to(self.device))
+
+            shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
+            shielded_probs /= shielded_probs.sum()
+            dist_shielded = torch.distributions.Categorical(probs=shielded_probs)
+            a_shielded = dist_shielded.sample().item()
+
+            selected_action = a_unshielded
 
         # Save for training
         self.last_log_prob = log_prob_tensor.item()
@@ -116,14 +126,15 @@ class PPOAgent:
         self.last_raw_probs = raw_probs.detach()
         self.last_shielded_probs = shielded_probs.detach()
 
+        # === Constraint monitoring ===
         if self.monitor_constraints:
-            self.constraint_monitor.log_step(
+            self.constraint_monitor.log_step_from_probs_and_actions(
                 raw_probs=raw_probs.detach(),
                 corrected_probs=shielded_probs.detach(),
-                selected_action=selected_action,
-                shield_controller=self.shield_controller,
+                a_unshielded=a_unshielded,
+                a_shielded=a_shielded,
                 context=context,
-                shield_applied=was_shield_applied
+                shield_controller=self.shield_controller,
             )
 
         return selected_action, context

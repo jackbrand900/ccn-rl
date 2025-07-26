@@ -221,7 +221,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                 total_mods = stats['total_modifications']
                 total_violations = stats['total_violations']
                 mod_rate = stats['total_mod_rate']
-                monitor_logs = f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, Total Violations: {total_violations}"
+                viol_rate = stats['total_viol_rate']
+                monitor_logs = f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, Total Violations: {total_violations}, Viol Rate: {viol_rate: .3f}"
                 log_msg += monitor_logs
 
             if hasattr(agent, "epsilon"):

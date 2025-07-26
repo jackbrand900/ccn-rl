@@ -147,15 +147,6 @@ class ModularNetwork(nn.Module):
             action = dist.sample()
             log_prob = dist.log_prob(action)
 
-        if constraint_monitor and self.shield_controller:
-            constraint_monitor.log_step(
-                raw_probs=pre_probs.detach().squeeze(0),
-                corrected_probs=post_probs.detach().squeeze(0),
-                selected_action=action.item(),
-                shield_controller=self.shield_controller,
-                context=context[0] if isinstance(context, list) else context,
-            )
-
         return action.item(), log_prob, value.squeeze() if value is not None else None, pre_probs.squeeze(0), post_probs.squeeze(0)
 
     def compute_losses(self, states, actions, old_log_probs, advantages, returns, shielded_probs,

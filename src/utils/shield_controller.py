@@ -10,7 +10,7 @@ from src.utils.env_helpers import is_in_front_of_key
 from src.utils.req_file_to_logic_fn import get_flag_logic_fn
 
 class ShieldController:
-    def __init__(self, requirements_path, num_actions, mode="hard", verbose=False, default_flag_logic=None):
+    def __init__(self, requirements_path, num_actions, mode="hard", verbose=False, default_flag_logic=None, is_shield_active=False):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
         self.flag_logic_fn = get_flag_logic_fn(self.requirements_path) or self.default_flag_logic
@@ -29,7 +29,7 @@ class ShieldController:
         self.flag_names = self.var_names[num_actions:]
         self.num_flags = len(self.flag_names)
         self.verbose = verbose
-        self.constraint_monitor = None
+        self.is_shield_active = is_shield_active
 
         self.ordering_names = [str(i) for i in range(self.num_vars)]
         self.shield_layer = self.build_shield_layer()
@@ -184,22 +184,3 @@ class ShieldController:
                         print(f"[SHIELD ACTIVE BUT NO CHANGE] Action output remained the same.")
 
         return corrected
-
-    def would_violate(self, selected_action, context):
-        """
-        Checks whether the selected action violates the constraints.
-        Returns 1 if it does, 0 if not.
-        """
-        one_hot = torch.zeros(1, self.num_actions, dtype=torch.float32)
-        one_hot[0, selected_action] = 1.0
-
-        # Generate flags
-        flags = self.flag_logic_fn(context)
-        flag_values = [flags.get(name, 0) for name in self.flag_names]
-        flag_tensor = torch.tensor(flag_values, dtype=one_hot.dtype).unsqueeze(0)
-
-        # Concatenate and check what shield outputs
-        input_tensor = torch.cat([one_hot, flag_tensor], dim=1)
-        corrected = self.shield_layer(input_tensor)
-        corrected_action = corrected[0, :self.num_actions].argmax().item()
-        return int(corrected_action != selected_action)

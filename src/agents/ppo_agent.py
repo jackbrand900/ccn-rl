@@ -16,7 +16,7 @@ class PPOAgent:
                  action_dim,
                  hidden_dim=256,
                  use_cnn=False,
-                 lr=3e-4,
+                 lr=3e-3,
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.0,

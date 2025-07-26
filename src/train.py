@@ -8,6 +8,8 @@ import src.utils.graphing as graphing
 import argparse
 from gymnasium.envs.registration import register
 from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
+
+from src.agents.discrete_sac_agent import DiscreteSACAgent
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
@@ -67,7 +69,7 @@ def create_environment(env_name, render=False):
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
             env = FrameStack(env, 4)
-            env = TimeLimit(env, max_episode_steps=100)  # ✅ Set timestep limit
+            env = TimeLimit(env, max_episode_steps=300)  # ✅ Set timestep limit
             return env
 
         if env_name == "ALE/Freeway-v5":
@@ -127,13 +129,12 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=False, use_cnn=False, visualize=False, verbose=False,
-                 render=False):
+def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constraints=True, visualize=False,
+                 verbose=False, log_rewards=False, use_cnn=False, render=False):
     episode_rewards = []
     best_avg_reward = float('-inf')
     best_weights = None
     actions_taken = []
-    modifications = 0
     for episode in range(1, num_episodes + 1):
         use_cnn = getattr(agent, "use_cnn", False)
 
@@ -212,9 +213,16 @@ def run_training(agent, env, num_episodes=1000, print_interval=10, log_rewards=F
             log_msg = (
                 f"Episode {episode}, "
                 f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
-                # f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, "
-                # f"Total Violations: {total_violations}"
+
             )
+            if monitor_constraints:
+                constraint_monitor = agent.constraint_monitor
+                stats = constraint_monitor.summary()
+                total_mods = stats['total_modifications']
+                total_violations = stats['total_violations']
+                mod_rate = stats['total_mod_rate']
+                monitor_logs = f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, Total Violations: {total_violations}"
+                log_msg += monitor_logs
 
             if hasattr(agent, "epsilon"):
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
@@ -259,7 +267,8 @@ def train(agent='dqn',
           use_shield_post=False,
           use_shield_layer=False,
           mode='hard',
-          num_episodes=500,
+          monitor_constraints=True,
+          num_episodes=100,
           verbose=False,
           visualize=False,
           env_name='MiniGrid-Empty-5x5-v0',
@@ -296,6 +305,7 @@ def train(agent='dqn',
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
                          use_shield_layer=use_shield_layer,
+                         monitor_constraints=monitor_constraints,
                          mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
@@ -306,6 +316,7 @@ def train(agent='dqn',
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
                          use_shield_layer=use_shield_layer,
+                         monitor_constraints=monitor_constraints,
                          mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
@@ -316,11 +327,23 @@ def train(agent='dqn',
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
                          use_shield_layer=use_shield_layer,
+                         monitor_constraints=monitor_constraints,
                          mode=mode,
                          verbose=verbose,
                          requirements_path=requirements_path,
                          env=env,
                          use_cnn=use_cnn)
+    elif agent == 'sac':
+        agent = DiscreteSACAgent(input_shape=input_shape,
+                                 action_dim=action_dim,
+                                 use_shield_post=use_shield_post,
+                                 use_shield_layer=use_shield_layer,
+                                 monitor_constraints=monitor_constraints,
+                                 mode=mode,
+                                 verbose=verbose,
+                                 requirements_path=requirements_path,
+                                 env=env,
+                                 use_cnn=use_cnn)
     else:
         raise ValueError("Unsupported agent type.")
 
@@ -392,20 +415,6 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
                 )
             except TypeError:
                 action = agent.select_action(state, env, do_apply_shield=not force_disable_shield)
-                context = {}
-
-            # === Log to ConstraintMonitor ===
-            if hasattr(agent, 'constraint_monitor') and agent.constraint_monitor:
-                raw_probs = getattr(agent, 'last_raw_probs', None)
-                shielded_probs = getattr(agent, 'last_shielded_probs', None)
-                if raw_probs is not None and shielded_probs is not None:
-                    agent.constraint_monitor.log_step(
-                        raw_probs=raw_probs,
-                        corrected_probs=shielded_probs,
-                        selected_action=action,
-                        shield_controller=agent.shield_controller,
-                        context=context
-                    )
 
             state, reward, done, _ = step_env(env, action)
             episode_reward += reward
@@ -490,8 +499,8 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN, A2C, PPO) with optional shield and environment.")
-    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='dqn',
-                        help='Which agent to use: dqn, ppo, or a2c')
+    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c', 'sac'], default='dqn',
+                        help='Which agent to use: dqn, ppo, a2c, or sac')
     parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')
     parser.add_argument('--mode', choices=['soft', 'hard'], default='hard', help='Constraint mode')
@@ -501,6 +510,8 @@ if __name__ == "__main__":
     parser.add_argument('--env', type=str, default='MiniGrid-Empty-5x5-v0', help='Gym environment to train on')
     parser.add_argument('--force_disable_shield', action='store_true', help='Force shield off during evaluation')
     parser.add_argument('--num_episodes', type=int, default=500, help='Number of training episodes')
+    parser.add_argument('--monitor_constraints', action='store_true', help='Enable constraint monitor')
+    parser.add_argument('--no_eval', action='store_true', help='Do not run eval')
     args = parser.parse_args()
 
     trained_agent, env = train(agent=args.agent,
@@ -508,6 +519,7 @@ if __name__ == "__main__":
                                use_shield_layer=args.use_shield_layer,
                                mode=args.mode,
                                num_episodes=args.num_episodes,
+                               monitor_constraints=args.monitor_constraints,
                                verbose=args.verbose,
                                visualize=args.visualize,
                                env_name=args.env,
@@ -515,11 +527,12 @@ if __name__ == "__main__":
 
     # results = evaluate_policy(trained_agent, env, eval_with_shield=args.eval_with_shield, num_episodes=20,
     # visualize=args.visualize, render=args.render)
-    results = evaluate_policy(
-        trained_agent,
-        env,
-        num_episodes=100,
-        visualize=args.visualize,
-        render=args.render,
-        force_disable_shield=args.force_disable_shield
-    )
+    if not args.no_eval:
+        results = evaluate_policy(
+            trained_agent,
+            env,
+            num_episodes=100,
+            visualize=args.visualize,
+            render=args.render,
+            force_disable_shield=args.force_disable_shield
+        )

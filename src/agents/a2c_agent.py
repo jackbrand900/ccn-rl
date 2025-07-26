@@ -22,6 +22,7 @@ class A2CAgent:
                  use_cnn=False,
                  use_shield_post=False,
                  use_shield_layer=False,
+                 monitor_constraints=False,
                  requirements_path=None,
                  mode='hard',
                  verbose=False):
@@ -34,6 +35,7 @@ class A2CAgent:
         self.use_cnn = use_cnn
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
+        self.monitor_constraints = monitor_constraints
         self.verbose = verbose
         self.env = env
 
@@ -61,6 +63,8 @@ class A2CAgent:
         self.memory = []
 
     def select_action(self, state, env=None, do_apply_shield=True):
+        self.last_obs = state
+
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 

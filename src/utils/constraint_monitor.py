@@ -19,9 +19,7 @@ class ConstraintMonitor:
         self.episode_violations = 0
         self.episode_flagged_steps = 0
 
-    def log_step(self, raw_probs, corrected_probs, selected_action, shield_controller, context):
-        # print("[MONITOR] log_step called")
-
+    def log_step(self, raw_probs, corrected_probs, selected_action, shield_controller, context, shield_applied=True):
         self.episode_steps += 1
         self.total_steps += 1
 
@@ -34,20 +32,23 @@ class ConstraintMonitor:
             self.episode_flagged_steps += 1
             self.total_flagged_steps += 1
 
-        # === Violation check ===
-        violates = shield_controller.would_violate(selected_action, context)
-        if not self.only_if_flags_active or flag_active:
-            self.episode_violations += violates
-            self.total_violations += violates
+        # Compute unshielded action
+        unshielded_action = raw_probs.argmax().item()
+        modified = (unshielded_action != selected_action) if shield_applied else False
+        would_violate = shield_controller.would_violate(unshielded_action, context)
 
-        # === Modification check ===
-        modified = not torch.allclose(raw_probs, corrected_probs, atol=1e-5)
+        # === Only count violation if shield did not modify it ===
+        count_violation = would_violate and not modified
+
         if not self.only_if_flags_active or flag_active:
             self.episode_modifications += modified
             self.total_modifications += modified
 
+            self.episode_violations += count_violation
+            self.total_violations += count_violation
+
         if self.verbose and flag_active:
-            print(f"[ConstraintMonitor] Flags active. Mod: {modified}, Viol: {violates}")
+            print(f"[ConstraintMonitor] Flags active. Mod: {modified}, Viol: {count_violation} (raw viol: {would_violate})")
 
     def summary(self):
         return {

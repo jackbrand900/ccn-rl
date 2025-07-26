@@ -29,6 +29,7 @@ class PPOAgent:
                  epochs=10,
                  use_shield_post=True,
                  use_shield_layer=True,
+                 monitor_constraints=True,
                  mode='hard'):
 
         self.gamma = gamma
@@ -38,6 +39,7 @@ class PPOAgent:
         self.lambda_consistency = lambda_consistency
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
+        self.monitor_constraints = monitor_constraints
         self.verbose = verbose
         self.env = env
         self.action_dim = action_dim
@@ -75,6 +77,7 @@ class PPOAgent:
 
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
+        was_shield_applied = False
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
@@ -89,6 +92,7 @@ class PPOAgent:
             shielded_probs = raw_probs.clone()
             selected_action = action
             log_prob_tensor = log_prob
+            was_shield_applied = True
 
         # === Post hoc shield: override raw_probs ===
         elif self.use_shield_post and do_apply_shield:
@@ -97,6 +101,7 @@ class PPOAgent:
             dist = Categorical(probs=shielded_probs)
             selected_action = dist.sample().item()
             log_prob_tensor = dist.log_prob(torch.tensor(selected_action).to(self.device))
+            was_shield_applied = True
 
         # === No shield: use raw_probs ===
         else:
@@ -111,14 +116,14 @@ class PPOAgent:
         self.last_raw_probs = raw_probs.detach()
         self.last_shielded_probs = shielded_probs.detach()
 
-        # Log to monitor only for post hoc shield
-        if self.constraint_monitor and not self.use_shield_layer:
+        if self.monitor_constraints:
             self.constraint_monitor.log_step(
                 raw_probs=raw_probs.detach(),
                 corrected_probs=shielded_probs.detach(),
                 selected_action=selected_action,
                 shield_controller=self.shield_controller,
-                context=context
+                context=context,
+                shield_applied=was_shield_applied
             )
 
         return selected_action, context

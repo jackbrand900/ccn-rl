@@ -193,39 +193,52 @@ class ModularNetwork(nn.Module):
 
         return total_loss, logs
 
-    def compute_a2c_losses(self, states, actions, targets, advantages, shielded_probs=None,
+    def compute_a2c_losses(self, states, actions, targets, advantages, contexts=None,
                            ent_coef=0.01, lambda_req=0.00, lambda_consistency=0.00):
-        logits, predicted_values = self.forward(states)
+        logits, predicted_values = self.forward(states, context=contexts)
 
-        dist = Categorical(logits=logits)
+        # Compute raw probabilities
+        raw_probs = torch.softmax(logits, dim=-1)
+
+        # Apply differentiable shield if enabled
+        if self.use_shield_layer and self.shield_controller and contexts is not None:
+            if not isinstance(contexts, list):
+                contexts = [contexts] * raw_probs.shape[0]
+            shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts)
+        else:
+            shielded_probs = raw_probs
+
+        # Build Categorical distribution with shielded probabilities
+        dist = Categorical(probs=shielded_probs)
         new_log_probs = dist.log_prob(actions)
         entropy = dist.entropy().mean()
 
+        # Policy and value losses
         policy_loss = -(advantages.detach() * new_log_probs).mean()
         value_loss = nn.MSELoss()(predicted_values.view(-1), targets.view(-1))
 
-        # Default to zero req/consistency loss if shielded_probs is None
-        req_loss = torch.tensor(0.0, device=states.device)
-        consistency_loss = torch.tensor(0.0, device=states.device)
+        # === Requirement Loss (CCN+ style) ===
+        goal = torch.zeros_like(shielded_probs)
+        goal.scatter_(1, actions.unsqueeze(1), 1.0)
+        req_loss = nn.BCELoss()(shielded_probs, goal)
 
-        if shielded_probs is not None:
-            goal = torch.zeros_like(shielded_probs)
-            goal.scatter_(1, actions.unsqueeze(1), 1.0)
-            req_loss = nn.BCELoss()(shielded_probs, goal)
-            consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
+        # === Consistency Loss ===
+        consistency_loss = nn.MSELoss()(raw_probs, shielded_probs)
 
+        # === Total Loss ===
         loss = policy_loss + value_loss + lambda_req * req_loss + lambda_consistency * consistency_loss - ent_coef * entropy
 
         logs = {
             "policy_loss": policy_loss.item(),
             "value_loss": value_loss.item(),
             "entropy": entropy.item(),
-            "req_loss": req_loss.item() if shielded_probs is not None else 0.0,
-            "consistency_loss": consistency_loss.item() if shielded_probs is not None else 0.0,
+            "req_loss": req_loss.item(),
+            "consistency_loss": consistency_loss.item(),
             "total_loss": loss.item()
         }
 
         return loss, logs
+
 
 
     def compute_q_loss(self, states, actions, rewards, dones, next_states, target_network,

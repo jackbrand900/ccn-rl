@@ -28,6 +28,7 @@ class DQNAgent:
                  epsilon_decay=10000,
                  use_shield_post=False,
                  use_shield_layer=False,
+                 monitor_constraints=True,
                  requirements_path=None,
                  env=None,
                  verbose=False,
@@ -48,6 +49,7 @@ class DQNAgent:
         self.use_cnn = use_cnn
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
+        self.monitor_constraints = monitor_constraints
 
         # Shield setup
         self.constraint_monitor = ConstraintMonitor(verbose=verbose)
@@ -93,9 +95,8 @@ class DQNAgent:
         }
 
     def select_action(self, state, deterministic=False, do_apply_shield=True):
-        # print(f"[DEBUG] Constraint monitor attached? {self.constraint_monitor is not None}")
-        # print(f"[DEBUG] shield_layer={self.use_shield_layer}, do_apply_shield={do_apply_shield}")
         self.last_obs = state
+        was_shield_applied = False
         context = context_provider.build_context(self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
@@ -108,34 +109,36 @@ class DQNAgent:
             logits = self.q_net(state_tensor, context=context)
             raw_probs = torch.softmax(logits, dim=-1)
 
+            # === Apply shielding if enabled ===
             if self.use_shield_layer and do_apply_shield:
-                shielded_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
-                corrected_probs = shielded_probs
+                corrected_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
+                was_shield_applied = True
             elif self.use_shield_post and do_apply_shield:
-                shielded_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
-                shielded_probs /= shielded_probs.sum()
-                corrected_probs = shielded_probs
+                corrected_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
+                corrected_probs /= corrected_probs.sum()
+                was_shield_applied = True
             else:
                 corrected_probs = raw_probs
 
             dist = torch.distributions.Categorical(probs=corrected_probs)
             action = dist.sample().item()
-            log_action = action
 
         else:
             # === Random epsilon-greedy action ===
             action = random.randrange(self.action_dim)
-            log_action = action
             raw_probs = torch.full((self.action_dim,), 1.0 / self.action_dim, device=self.device)
-            corrected_probs = raw_probs  # No shield, so no correction
+            corrected_probs = raw_probs  # No shielding applied
 
-        self.constraint_monitor.log_step(
-            raw_probs=raw_probs.detach(),
-            corrected_probs=corrected_probs.detach(),
-            selected_action=log_action,
-            shield_controller=self.shield_controller,
-            context=context
-        )
+        # === Log constraint info using correct selected_action ===
+        if self.monitor_constraints:
+            self.constraint_monitor.log_step(
+                raw_probs=raw_probs.detach(),
+                corrected_probs=corrected_probs.detach(),
+                selected_action=action,
+                shield_controller=self.shield_controller,
+                context=context,
+                shield_applied=was_shield_applied
+            )
 
         return action, context
 

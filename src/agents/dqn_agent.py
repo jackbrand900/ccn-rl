@@ -23,7 +23,7 @@ class DQNAgent:
                  batch_size=64,
                  buffer_size=100_000,
                  target_update_freq=500,
-                 epsilon_start=1.0,
+                 epsilon_start=0.10,
                  epsilon_end=0.01,
                  epsilon_decay=10000,
                  use_shield_post=False,
@@ -57,7 +57,8 @@ class DQNAgent:
             requirements_path=requirements_path,
             num_actions=action_dim,
             mode=mode,
-            verbose=verbose
+            verbose=verbose,
+            is_shield_active=(self.use_shield_layer or self.use_shield_post)
         )
         self.shield_controller.constraint_monitor = self.constraint_monitor
 
@@ -96,51 +97,59 @@ class DQNAgent:
 
     def select_action(self, state, deterministic=False, do_apply_shield=True):
         self.last_obs = state
-        was_shield_applied = False
         context = context_provider.build_context(self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
+        # === Epsilon-greedy logic ===
         self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
                        np.exp(-1.0 * self.steps_done / self.epsilon_decay)
         self.steps_done += 1
 
-        if deterministic or random.random() > self.epsilon:
-            # === Greedy action ===
+        is_greedy = deterministic or random.random() > self.epsilon
+
+        if is_greedy:
+            # === Compute raw probabilities ===
             logits = self.q_net(state_tensor, context=context)
             raw_probs = torch.softmax(logits, dim=-1)
 
-            # === Apply shielding if enabled ===
+            # === Get unshielded action ===
+            dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
+            a_unshielded = dist_unshielded.sample().item()
+
+            # === Apply shield (if enabled) ===
             if self.use_shield_layer and do_apply_shield:
                 corrected_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
-                was_shield_applied = True
             elif self.use_shield_post and do_apply_shield:
                 corrected_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
                 corrected_probs /= corrected_probs.sum()
-                was_shield_applied = True
             else:
-                corrected_probs = raw_probs
+                corrected_probs = raw_probs.clone()
 
-            dist = torch.distributions.Categorical(probs=corrected_probs)
-            action = dist.sample().item()
+            dist_shielded = torch.distributions.Categorical(probs=corrected_probs)
+            a_shielded = dist_shielded.sample().item()
+
+            selected_action = a_shielded if self.shield_controller.is_shield_active else a_unshielded
 
         else:
-            # === Random epsilon-greedy action ===
-            action = random.randrange(self.action_dim)
+            # === Random action (epsilon) ===
+            selected_action = random.randrange(self.action_dim)
             raw_probs = torch.full((self.action_dim,), 1.0 / self.action_dim, device=self.device)
-            corrected_probs = raw_probs  # No shielding applied
+            corrected_probs = raw_probs.clone()
+            a_unshielded = selected_action
+            a_shielded = selected_action  # treated same for logging
 
-        # === Log constraint info using correct selected_action ===
+        # === Log constraints ===
         if self.monitor_constraints:
-            self.constraint_monitor.log_step(
+            self.constraint_monitor.log_step_from_probs_and_actions(
                 raw_probs=raw_probs.detach(),
                 corrected_probs=corrected_probs.detach(),
-                selected_action=action,
-                shield_controller=self.shield_controller,
+                a_unshielded=a_unshielded,
+                a_shielded=a_shielded,
                 context=context,
-                shield_applied=was_shield_applied
+                shield_controller=self.shield_controller
             )
 
-        return action, context
+        return selected_action, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.replay_buffer.append((state, action, reward, next_state, done))

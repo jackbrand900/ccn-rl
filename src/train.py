@@ -222,7 +222,9 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                 total_violations = stats['total_violations']
                 mod_rate = stats['total_mod_rate']
                 viol_rate = stats['total_viol_rate']
-                monitor_logs = f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, Total Violations: {total_violations}, Viol Rate: {viol_rate: .3f}"
+                flagged_states = stats['total_flagged_steps']
+                monitor_logs = (f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, "
+                                f"Total Violations: {total_violations}, Viol Rate: {viol_rate: .3f}, Total Flagged Steps: {flagged_states}")
                 log_msg += monitor_logs
 
             if hasattr(agent, "epsilon"):

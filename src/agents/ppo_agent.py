@@ -81,16 +81,18 @@ class PPOAgent:
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
         # Always get raw_probs from the policy
-        action, log_prob, value, raw_probs, _ = self.policy.select_action(
+        action, log_prob, value, raw_probs, shielded_probs = self.policy.select_action(
             state_tensor, context,
             constraint_monitor=self.constraint_monitor if self.use_shield_layer else None
         )
 
         if self.use_shield_layer:
-            # Shielded already integrated into the network
-            shielded_probs = raw_probs.clone()
-            a_unshielded = a_shielded = action
-            selected_action = action
+            # Action was selected from shielded_probs inside the model
+            a_shielded = action
+            # Sample a_unshielded from raw_probs for monitoring
+            dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
+            a_unshielded = dist_unshielded.sample().item()
+            selected_action = a_shielded
             log_prob_tensor = log_prob
 
         elif self.use_shield_post and do_apply_shield:

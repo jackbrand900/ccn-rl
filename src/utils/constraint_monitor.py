@@ -33,19 +33,6 @@ class ConstraintMonitor:
         self.episode_steps += 1
         self.total_steps += 1
 
-        # === Check if probabilities changed ===
-        probs_modified = not torch.allclose(raw_probs, corrected_probs, atol=epsilon)
-        modification = int(a_unshielded != a_shielded)
-
-        # === Check true violation: would the selected action have been changed? ===
-        violation = False
-        if shield_controller is not None:
-            violation = self.would_violate(
-                action=a_shielded if shield_controller.is_shield_active else a_unshielded,
-                context=context,
-                shield_controller=shield_controller
-            )
-
         # === Flag check ===
         flag_active = True
         if self.only_if_flags_active and context is not None and shield_controller is not None:
@@ -56,38 +43,64 @@ class ConstraintMonitor:
                 self.episode_flagged_steps += 1
                 self.total_flagged_steps += 1
 
-        if flag_active:
-            self.episode_violations += int(violation)
-            self.total_violations += int(violation)
+        if not flag_active:
+            return  # no updates for unflagged steps
 
-            if shield_controller is not None and shield_controller.is_shield_active:
-                self.episode_modifications += modification
-                self.total_modifications += modification
+        # === Would the unshielded action have violated? ===
+        violation = (
+                shield_controller is not None and
+                self.would_violate(a_unshielded, context, shield_controller)
+        )
 
-        if self.verbose and (not self.only_if_flags_active or flag_active):
+        # === Did the shield modify the action? ===
+        modification = (a_unshielded != a_shielded) if shield_controller and shield_controller.is_shield_active else False
+
+        # === Count violation if the action would have violated ===
+        if violation:
+            self.episode_violations += 1
+            self.total_violations += 1
+
+        # === Count modification only if shield was active, changed the action, and prevented a violation ===
+        if shield_controller and shield_controller.is_shield_active and violation and modification:
+            self.episode_modifications += 1
+            self.total_modifications += 1
+
+        if self.verbose:
             print(f"[ConstraintMonitor] Flags active: {flag_active}, "
-                  f"Mod: {modification}, Viol: {violation}, "
-                  f"Probs Modified: {probs_modified}")
+                  f"Would Violate: {violation}, Modified: {modification}, "
+                  f"Probs Modified: {not torch.allclose(raw_probs, corrected_probs, atol=epsilon)}")
 
-    def would_violate(self, action, context, shield_controller):
+
+    def would_violate(self, action, context, shield_controller, epsilon=1e-5):
         """
-        Returns True if the given action would be changed by the shield layer.
+        Returns True if the given action would have been significantly modified by the shield layer.
+        In soft mode, considers if the probability mass on the selected action was reduced.
         """
-        device = next(shield_controller.shield_layer.parameters()).device  # get device from shield layer
+        device = next(shield_controller.shield_layer.parameters()).device
 
         one_hot = torch.zeros(1, shield_controller.num_actions, dtype=torch.float32, device=device)
         one_hot[0, action] = 1.0
 
-        # Get current flags
+        # Get flags
         flags = shield_controller.flag_logic_fn(context)
         flag_values = [flags.get(name, 0) for name in shield_controller.flag_names]
         flag_tensor = torch.tensor(flag_values, dtype=one_hot.dtype, device=device).unsqueeze(0)
 
         input_tensor = torch.cat([one_hot, flag_tensor], dim=1)
         corrected = shield_controller.shield_layer(input_tensor)
-        corrected_action = corrected[0, :shield_controller.num_actions].argmax().item()
+        corrected_probs = corrected[0, :shield_controller.num_actions]
 
-        return int(corrected_action != action)
+        if shield_controller.mode == "soft":
+            corrected_probs = corrected_probs / corrected_probs.sum()
+
+            # If shield *lowered* the selected action's probability significantly, count as violation
+            changed = corrected_probs[action] < (1.0 - epsilon)
+            return bool(changed)
+        else:
+            # Hard mode: just check if action changed
+            corrected_action = corrected_probs.argmax().item()
+            return int(corrected_action != action)
+
 
     def summary(self):
         return {

@@ -14,21 +14,22 @@ class PPOAgent:
     def __init__(self,
                  input_shape,
                  action_dim,
-                 hidden_dim=256,
+                 hidden_dim=64,
                  use_cnn=False,
-                 lr=3e-4,
+                 lr=3e-3,
                  gamma=0.99,
                  clip_eps=0.2,
-                 ent_coef=0.0,
+                 ent_coef=0.01,
                  lambda_req=0.0,
                  lambda_consistency=0.0,
                  verbose=False,
                  requirements_path=None,
                  env=None,
-                 batch_size=64,
-                 epochs=10,
+                 batch_size=32,
+                 epochs=4,
                  use_shield_post=True,
                  use_shield_layer=True,
+                 monitor_constraints=True,
                  mode='hard'):
 
         self.gamma = gamma
@@ -38,6 +39,7 @@ class PPOAgent:
         self.lambda_consistency = lambda_consistency
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
+        self.monitor_constraints = monitor_constraints
         self.verbose = verbose
         self.env = env
         self.action_dim = action_dim
@@ -54,8 +56,8 @@ class PPOAgent:
         self.last_raw_probs = None
         self.last_shielded_probs = None
         self.last_obs = None
-
-        self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose)
+        is_shield_active = self.use_shield_layer or self.use_shield_post
+        self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose, is_shield_active=is_shield_active)
         self.policy = ModularNetwork(input_shape, action_dim, hidden_dim, use_shield_layer=self.use_shield_layer,
                                      use_cnn=use_cnn, actor_critic=True, shield_controller=self.shield_controller).to(self.device)
         self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
@@ -75,35 +77,52 @@ class PPOAgent:
 
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
+        # print(state)
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
         # Always get raw_probs from the policy
-        action, log_prob, value, raw_probs, _ = self.policy.select_action(
+        action, log_prob, value, raw_probs, shielded_probs = self.policy.select_action(
             state_tensor, context,
             constraint_monitor=self.constraint_monitor if self.use_shield_layer else None
         )
 
-        # === Shield layer: use action directly ===
         if self.use_shield_layer:
-            shielded_probs = raw_probs.clone()
-            selected_action = action
+            # Action was selected from shielded_probs inside the model
+            a_shielded = action
+            # Sample a_unshielded from raw_probs for monitoring
+            dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
+            a_unshielded = dist_unshielded.sample().item()
+            selected_action = a_shielded
             log_prob_tensor = log_prob
 
-        # === Post hoc shield: override raw_probs ===
         elif self.use_shield_post and do_apply_shield:
+            # Sample unshielded action from raw_probs
+            dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
+            a_unshielded = dist_unshielded.sample().item()
+
+            # Apply post hoc shield and sample again
             shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
             shielded_probs /= shielded_probs.sum()
-            dist = Categorical(probs=shielded_probs)
-            selected_action = dist.sample().item()
-            log_prob_tensor = dist.log_prob(torch.tensor(selected_action).to(self.device))
+            dist_shielded = torch.distributions.Categorical(probs=shielded_probs)
+            a_shielded = dist_shielded.sample().item()
 
-        # === No shield: use raw_probs ===
+            selected_action = a_shielded
+            log_prob_tensor = dist_shielded.log_prob(torch.tensor(a_shielded).to(self.device))
+
         else:
-            shielded_probs = raw_probs.clone()
-            dist = Categorical(probs=raw_probs)
-            selected_action = dist.sample().item()
-            log_prob_tensor = dist.log_prob(torch.tensor(selected_action).to(self.device))
+            # === Unshielded path: sample raw and get hypothetical shielded action
+            dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
+            a_unshielded = dist_unshielded.sample().item()
+            log_prob_tensor = dist_unshielded.log_prob(torch.tensor(a_unshielded).to(self.device))
+
+            if self.monitor_constraints:
+                shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
+                shielded_probs /= shielded_probs.sum()
+                dist_shielded = torch.distributions.Categorical(probs=shielded_probs)
+                a_shielded = dist_shielded.sample().item()
+
+            selected_action = a_unshielded
 
         # Save for training
         self.last_log_prob = log_prob_tensor.item()
@@ -111,14 +130,15 @@ class PPOAgent:
         self.last_raw_probs = raw_probs.detach()
         self.last_shielded_probs = shielded_probs.detach()
 
-        # Log to monitor only for post hoc shield
-        if self.constraint_monitor and not self.use_shield_layer:
-            self.constraint_monitor.log_step(
+        # === Constraint monitoring ===
+        if self.monitor_constraints:
+            self.constraint_monitor.log_step_from_probs_and_actions(
                 raw_probs=raw_probs.detach(),
                 corrected_probs=shielded_probs.detach(),
-                selected_action=selected_action,
+                a_unshielded=a_unshielded,
+                a_shielded=a_shielded,
+                context=context,
                 shield_controller=self.shield_controller,
-                context=context
             )
 
         return selected_action, context

@@ -37,6 +37,7 @@ def build_context(env, agent):
                 context[f"wheel_{i}_on_grass"] = on_grass
     else:
         obs = agent.last_obs if hasattr(agent, "last_obs") else None
+        # print(f'obs: {obs}')
         context["obs"] = obs
 
     return context

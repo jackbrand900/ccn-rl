@@ -1,4 +1,5 @@
 import torch
+
 class ConstraintMonitor:
     def __init__(self, only_if_flags_active=True, verbose=False):
         self.only_if_flags_active = only_if_flags_active
@@ -19,35 +20,87 @@ class ConstraintMonitor:
         self.episode_violations = 0
         self.episode_flagged_steps = 0
 
-    def log_step(self, raw_probs, corrected_probs, selected_action, shield_controller, context):
-        # print("[MONITOR] log_step called")
-
+    def log_step_from_probs_and_actions(
+            self,
+            raw_probs,
+            corrected_probs,
+            a_unshielded,
+            a_shielded,
+            context=None,
+            shield_controller=None,
+            epsilon=1e-6,
+    ):
         self.episode_steps += 1
         self.total_steps += 1
+
+        # === Flag check ===
+        flag_active = True
+        if self.only_if_flags_active and context is not None and shield_controller is not None:
+            flags = shield_controller.flag_logic_fn(context)
+            flag_values = [flags.get(name, 0) for name in shield_controller.flag_names]
+            flag_active = any(flag_values)
+            if flag_active:
+                self.episode_flagged_steps += 1
+                self.total_flagged_steps += 1
+
+        if not flag_active:
+            return  # no updates for unflagged steps
+
+        # === Would the unshielded action have violated? ===
+        violation = (
+                shield_controller is not None and
+                self.would_violate(a_unshielded, context, shield_controller)
+        )
+
+        # === Did the shield modify the action? ===
+        modification = (a_unshielded != a_shielded) if shield_controller and shield_controller.is_shield_active else False
+
+        # === Count violation if the action would have violated ===
+        if violation:
+            self.episode_violations += 1
+            self.total_violations += 1
+
+        # === Count modification only if shield was active, changed the action, and prevented a violation ===
+        if shield_controller and shield_controller.is_shield_active and violation and modification:
+            self.episode_modifications += 1
+            self.total_modifications += 1
+
+        if self.verbose:
+            print(f"[ConstraintMonitor] Flags active: {flag_active}, "
+                  f"Would Violate: {violation}, Modified: {modification}, "
+                  f"Probs Modified: {not torch.allclose(raw_probs, corrected_probs, atol=epsilon)}")
+
+
+    def would_violate(self, action, context, shield_controller, epsilon=1e-5):
+        """
+        Returns True if the given action would have been significantly modified by the shield layer.
+        In soft mode, considers if the probability mass on the selected action was reduced.
+        """
+        device = next(shield_controller.shield_layer.parameters()).device
+
+        one_hot = torch.zeros(1, shield_controller.num_actions, dtype=torch.float32, device=device)
+        one_hot[0, action] = 1.0
 
         # Get flags
         flags = shield_controller.flag_logic_fn(context)
         flag_values = [flags.get(name, 0) for name in shield_controller.flag_names]
-        flag_active = any(flag_values)
+        flag_tensor = torch.tensor(flag_values, dtype=one_hot.dtype, device=device).unsqueeze(0)
 
-        if flag_active:
-            self.episode_flagged_steps += 1
-            self.total_flagged_steps += 1
+        input_tensor = torch.cat([one_hot, flag_tensor], dim=1)
+        corrected = shield_controller.shield_layer(input_tensor)
+        corrected_probs = corrected[0, :shield_controller.num_actions]
 
-        # === Violation check ===
-        violates = shield_controller.would_violate(selected_action, context)
-        if not self.only_if_flags_active or flag_active:
-            self.episode_violations += violates
-            self.total_violations += violates
+        if shield_controller.mode == "soft":
+            corrected_probs = corrected_probs / corrected_probs.sum()
 
-        # === Modification check ===
-        modified = not torch.allclose(raw_probs, corrected_probs, atol=1e-5)
-        if not self.only_if_flags_active or flag_active:
-            self.episode_modifications += modified
-            self.total_modifications += modified
+            # If shield *lowered* the selected action's probability significantly, count as violation
+            changed = corrected_probs[action] < (1.0 - epsilon)
+            return bool(changed)
+        else:
+            # Hard mode: just check if action changed
+            corrected_action = corrected_probs.argmax().item()
+            return int(corrected_action != action)
 
-        if self.verbose and flag_active:
-            print(f"[ConstraintMonitor] Flags active. Mod: {modified}, Viol: {violates}")
 
     def summary(self):
         return {

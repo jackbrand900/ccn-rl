@@ -20,13 +20,15 @@ def prepare_input(state, use_cnn=False):
                 stack, c, h, w = state_tensor.shape
                 state_tensor = state_tensor.reshape(stack * c, h, w)
         else:
-            raise ValueError(f"Expected single state with shape (C, H, W), (H, W, C), (stack, H, W, C), or (stack, C, H, W), got {state_tensor.shape}")
+            raise ValueError(f"Expected image with shape (C, H, W), (H, W, C), (stack, H, W, C), or (stack, C, H, W), got {state_tensor.shape}")
 
-        state_tensor = state_tensor.unsqueeze(0) / 255.0  # Add batch and normalize
+        state_tensor = state_tensor.unsqueeze(0) / 255.0  # Normalize image data
     else:
-        state_tensor = state_tensor.flatten().unsqueeze(0)
+        # 🛠️ Normalize RAM data to [0, 1]
+        state_tensor = state_tensor.flatten().unsqueeze(0) / 255.0
 
     return state_tensor
+
 
 def prepare_batch(states, use_cnn=False):
     if isinstance(states[0], torch.Tensor):
@@ -54,6 +56,7 @@ def prepare_batch(states, use_cnn=False):
         else:
             raise ValueError(f"Unexpected image shape: {states.shape}")
     else:
-        states_tensor = torch.FloatTensor(states).view(len(states), -1)
+        # 🛠️ Normalize RAM batch to [0, 1]
+        states_tensor = torch.FloatTensor(states).view(len(states), -1) / 255.0
 
     return states_tensor

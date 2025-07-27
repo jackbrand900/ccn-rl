@@ -6,6 +6,26 @@ def config_by_env(env_name):
             "frame_stack": 1,
             "max_steps": 25,
         }
+    elif env_name == "FreewayNoFrameskip-v4":
+        return {
+            "use_cnn": False,
+            "input_shape": 128,
+            "frame_stack": 1,
+            "max_steps": 1000,
+        }
+    elif env_name == "ALE/Freeway-v5":
+        return {
+            "use_cnn": False,
+            "input_shape": 26,
+            "frame_stack": 1,
+            "max_steps": 1000,
+        }
+        # return {
+        #     "use_cnn": True,
+        #     "input_shape": (1, 84, 84),
+        #     "frame_stack": 1,
+        #     "max_steps": 25,
+        # }
     elif "Freeway" in env_name:
         return {
             "use_cnn": True,

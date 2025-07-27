@@ -2,7 +2,7 @@ from datetime import datetime
 
 import gymnasium as gym
 import numpy as np
-from gymnasium.wrappers import TimeLimit, FrameStack, AtariPreprocessing
+from gymnasium.wrappers import TimeLimit, AtariPreprocessing
 import torch
 import src.utils.graphing as graphing
 import argparse
@@ -13,12 +13,14 @@ from src.agents.discrete_sac_agent import DiscreteSACAgent
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
-from src.agents.vanilla_a2c import VanillaA2CAgent
-from src.agents.vanilla_dqn import VanillaDQNAgent
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 import sys
 import os
+import ale_py
+
+from src.utils.wrappers import RAMObservationWrapper, FreewayFeatureWrapper
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
 # import cv2
@@ -47,7 +49,8 @@ custom_envs = {
     "CarRacing-v3": (None, None),
     "CarRacingWithTrafficLights-v0": (None, None),
     "ALE/Freeway-v5": (None, None),
-    "ALE/Seaquest-v5": (None, None)
+    "FreewayNoFrameskip-v4": (None, None),
+    "ALE/Seaquest-v5": (None, None),
 }
 
 def create_environment(env_name, render=False):
@@ -68,16 +71,14 @@ def create_environment(env_name, render=False):
 
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = FrameStack(env, 4)
             env = TimeLimit(env, max_episode_steps=300)  # ✅ Set timestep limit
             return env
 
         if env_name == "ALE/Freeway-v5":
-            env = gym.make(env_name, render_mode="human" if render else None)
-
-            env = gym.make(env_name, render_mode="rgb_array" if render else None, frameskip=1)
+            env = gym.make(env_name, render_mode="human" if render else None, frameskip=1)
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True, terminal_on_life_loss=True)
-            env = FrameStack(env, 4)
+            env = RAMObservationWrapper(env)
+            env = FreewayFeatureWrapper(env)
             env = TimeLimit(env, max_episode_steps=1000)  # ✅ Set timestep limit
             return env
 
@@ -97,16 +98,33 @@ def create_environment(env_name, render=False):
                 env = FlatObsWrapper(env)
         return env
 
+def log_ram(obs, prev_obs, step):
+    print(f"\n[RAM] Step {step}: {obs.astype(int)}")
+    if prev_obs is not None:
+        delta = obs.astype(int) - prev_obs.astype(int)
+        changed = np.nonzero(delta)[0]
+        print(f"[RAM] Changed indices: {changed}, deltas: {delta[changed]}")
+
 
 def preprocess_state(state, use_cnn=False):
     if isinstance(state, dict):
         state = state['image']
     if isinstance(state, np.ndarray):
         if use_cnn:
-            if state.ndim == 3:  # (H, W, C)
-                state = state.astype(np.float32)
-            elif state.ndim == 4:  # (stack, H, W, C)
-                state = state.astype(np.float32)
+            if state.ndim == 2:
+                # Grayscale image (H, W) → (1, H, W)
+                state = np.expand_dims(state.astype(np.float32), axis=0)
+            elif state.ndim == 3:
+                if state.shape[-1] == 3:
+                    # RGB image (H, W, C) → (C, H, W)
+                    state = state.astype(np.float32).transpose(2, 0, 1)
+                else:
+                    # Already (C, H, W)
+                    state = state.astype(np.float32)
+            elif state.ndim == 4:
+                # (stack, H, W, C) → (stack * C, H, W)
+                stack, h, w, c = state.shape
+                state = state.astype(np.float32).transpose(0, 3, 1, 2).reshape(stack * c, h, w)
             else:
                 raise ValueError(f"Unexpected CNN state shape: {state.shape}")
         else:
@@ -145,7 +163,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             env.key_pos = key_pos
         except AttributeError:
             key_pos = None  # Not a MiniGrid environment
-
+        prev_ram = None
         done = False
         total_reward = 0
         step_count = 0
@@ -163,13 +181,20 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                 log_prob = None
                 value = None
 
+            # ram_obs = context.get("obs") if context.get("obs") is not None else None
+            # if ram_obs is None and isinstance(state, np.ndarray) and state.shape == (128,):
+            #     ram_obs = state.astype(np.uint8)
+            # log_ram(ram_obs, prev_ram, step_count)
+            # prev_ram = ram_obs.copy() if ram_obs is not None else None
+
             # TODO: make this environment agnostic
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
             # print(f"Action taken: {action}")
             actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, info = env.step(action)
-            # if context['at_red_light'] and verbose:
+            # ram = env.unwrapped.ale.getRAM()
+            # print(f"[RAM] Step {step_count}: {ram}")            # if context['at_red_light'] and verbose:
             #     print(f"[Episode {episode}] 🚦 At red light!")
             if render:
                 env.render()
@@ -190,34 +215,15 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            # constraint_monitor = agent.constraint_monitor if agent.use_shield_post else agent.shield_controller.constraint_monitor
-            # if hasattr(agent, "constraint_monitor"):
-            #     stats = constraint_monitor.summary()
-            #     print("\n[ConstraintMonitor Summary]")
-            #     print(f"  Episode Stats:")
-            #     print(f"    Steps:              {stats['episode_steps']}")
-            #     print(f"    Flagged Steps:      {stats['episode_flagged_steps']}")
-            #     print(f"    Modifications:      {stats['episode_modifications']} "
-            #           f"({stats['episode_mod_rate']:.3f} per step)")
-            #     print(f"    Violations:         {stats['episode_violations']} "
-            #           f"({stats['episode_viol_rate']:.3f} per step)")
-            #
-            #     print(f"  Total Stats:")
-            #     print(f"    Total Steps:        {stats['total_steps']}")
-            #     print(f"    Total Flagged:      {stats['total_flagged_steps']}")
-            #     print(f"    Total Modifications:{stats['total_modifications']} "
-            #           f"({stats['total_mod_rate']:.3f} per step)")
-            #     print(f"    Total Violations:   {stats['total_violations']} "
-            #           f"({stats['total_viol_rate']:.3f} per step)")
-            # stats = constraint_monitor.summary()
-            # total_mods = stats['total_modifications']
-            # total_violations = stats['total_violations']
-            # mod_rate = stats['total_mod_rate']
             log_msg = (
                 f"Episode {episode}, "
                 f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
 
             )
+            recent_value_losses = agent.training_logs.get("value_loss", [])[-print_interval:]
+            if recent_value_losses:
+                avg_value_loss = np.mean(recent_value_losses)
+                log_msg += f"Avg Value Loss: {avg_value_loss:.4f}, "
             if monitor_constraints:
                 constraint_monitor = agent.constraint_monitor
                 stats = constraint_monitor.summary()
@@ -284,7 +290,11 @@ def train(agent='dqn',
     obs_space = env.observation_space
 
     env_config = config_by_env(env_name)
-    input_shape = obs_space.shape
+    if env_config['use_cnn'] and len(obs_space.shape) == 2:
+        # Expand grayscale (H, W) → (C, H, W)
+        input_shape = (1, *obs_space.shape)
+    else:
+        input_shape = obs_space.shape
     use_cnn = env_config['use_cnn']
     print(f"[DEBUG] use_cnn: {use_cnn}")
     print(f"[DEBUG] Gym observation shape: {obs_space.shape}")
@@ -304,7 +314,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/emergency_cartpole.cnf'
+    requirements_path = 'src/requirements/wheel_on_grass.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,

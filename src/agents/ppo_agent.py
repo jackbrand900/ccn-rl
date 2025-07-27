@@ -14,19 +14,19 @@ class PPOAgent:
     def __init__(self,
                  input_shape,
                  action_dim,
-                 hidden_dim=256,
+                 hidden_dim=64,
                  use_cnn=False,
-                 lr=3e-4,
+                 lr=3e-3,
                  gamma=0.99,
                  clip_eps=0.2,
-                 ent_coef=0.0,
+                 ent_coef=0.01,
                  lambda_req=0.0,
                  lambda_consistency=0.0,
                  verbose=False,
                  requirements_path=None,
                  env=None,
-                 batch_size=64,
-                 epochs=10,
+                 batch_size=32,
+                 epochs=4,
                  use_shield_post=True,
                  use_shield_layer=True,
                  monitor_constraints=True,
@@ -77,6 +77,7 @@ class PPOAgent:
 
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
+        # print(state)
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 

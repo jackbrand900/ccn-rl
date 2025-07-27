@@ -35,6 +35,45 @@ def build_context(env, agent):
             # Store each wheel's grass status as flags y_6–y_9
             for i, on_grass in enumerate(env_unwrapped.wheel_on_grass):
                 context[f"wheel_{i}_on_grass"] = on_grass
+    elif "Freeway" in env_id:
+        # === Use symbolic features extracted via FreewayFeatureWrapper ===
+        obs = agent.last_obs if hasattr(agent, "last_obs") else None
+        context["obs"] = obs
+
+        if obs is not None and len(obs) == 26:
+            player_y = obs[0]
+            crossings = obs[1]
+            car_positions = obs[2:18]  # 2 cars per lane × 8 lanes
+            car_speeds = obs[18:]      # 8 lanes
+
+            # Detect current lane (coarse): 0 = bottom, 7 = top
+            player_lane = min(max(int(player_y * 8), 0), 7)
+
+            # Get cars in current lane (optional use)
+            car_xs = car_positions[player_lane * 2 : player_lane * 2 + 2]
+            car_near = any(abs(x - 0.5) < 0.15 for x in car_xs)
+
+            # === Check cars in the lane above ===
+            if player_lane < 7:
+                lane_ahead = player_lane + 1
+                car_xs_ahead = car_positions[lane_ahead * 2 : lane_ahead * 2 + 2]
+                car_ahead_near = any(abs(x - 0.5) < 0.15 for x in car_xs_ahead)
+            else:
+                car_ahead_near = False
+
+            safe_to_go_up = not car_ahead_near
+            context.update({
+                "player_y": player_y,
+                "crossings": crossings,
+                "player_lane": player_lane,
+                "car_near": car_near,
+                "car_ahead_near": car_ahead_near,
+                "safe_to_go_up": safe_to_go_up,
+                "car_speeds": car_speeds,
+            })
+        else:
+            # fallback
+            context["safe_to_go_up"] = True  # assume safe
     else:
         obs = agent.last_obs if hasattr(agent, "last_obs") else None
         # print(f'obs: {obs}')
@@ -158,4 +197,12 @@ def wheel_on_grass_flag_logic(context, flag_active_val=1.0):
         "y_6": flag_active_val if context.get("wheel_1_on_grass", False) else 0.0,
         "y_7": flag_active_val if context.get("wheel_2_on_grass", False) else 0.0,
         "y_8": flag_active_val if context.get("wheel_3_on_grass", False) else 0.0,
+    }
+
+
+def freeway_flag_logic(context, flag_active_val=1.0):
+    return {
+        "y_3": flag_active_val if context.get("car_ahead_near", False) else 0.0,
+        "y_4": flag_active_val if context.get("safe_to_go_up", False) else 0.0,
+        "y_5": flag_active_val if context.get("car_near", False) else 0.0,
     }

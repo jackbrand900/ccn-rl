@@ -148,8 +148,11 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
         done = False
         total_reward = 0
+        step_count = 0
         while not done:
             result = agent.select_action(state)
+            step_count += 1
+            # print(f'step count: {step_count}')
 
             # A2C-style: (action, log_prob, value)
             if isinstance(result, tuple) and len(result) == 3:

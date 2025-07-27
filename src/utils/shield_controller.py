@@ -32,7 +32,8 @@ class ShieldController:
         self.is_shield_active = is_shield_active
 
         self.ordering_names = [str(i) for i in range(self.num_vars)]
-        self.shield_layer = self.build_shield_layer()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.shield_layer = self.build_shield_layer().to(self.device)
         self.shield_activations = 0
 
     def _batchify(self, single_fn):
@@ -155,6 +156,8 @@ class ShieldController:
             [flags.get(name, 0.0) for name in self.flag_names]
             for flags in flag_dicts
         ]
+
+        # Make sure flag_tensor is on the same device as action_probs
         flag_tensor = torch.tensor(
             flag_values, dtype=action_probs.dtype, device=action_probs.device
         )  # shape: [B, num_flags]

@@ -28,7 +28,7 @@ class A2CAgent:
                  verbose=False):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"[VanillaA2CAgent] Using device: {self.device}")
+        print(f"[BatchedA2CAgent] Using device: {self.device}")
 
         self.gamma = gamma
         self.entropy_coef = entropy_coef
@@ -75,11 +75,10 @@ class A2CAgent:
             shielded_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
         elif self.use_shield_post and do_apply_shield:
             shielded_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
-            shielded_probs /= shielded_probs.sum()
+            shielded_probs = shielded_probs / shielded_probs.sum()
         else:
             shielded_probs = raw_probs.clone()
 
-        # For monitoring
         dist_unshielded = Categorical(probs=raw_probs)
         a_unshielded = dist_unshielded.sample().item()
 
@@ -123,10 +122,8 @@ class A2CAgent:
         if not self.memory:
             return
 
-        # Unpack memory
         states, actions, rewards, next_states, contexts, dones, log_probs, values = zip(*self.memory)
 
-        # Convert to tensors
         states = prepare_batch(states, use_cnn=self.use_cnn).to(self.device)
         next_states = prepare_batch(next_states, use_cnn=self.use_cnn).to(self.device)
         actions = torch.LongTensor(actions).to(self.device)
@@ -135,21 +132,17 @@ class A2CAgent:
         log_probs = torch.stack(log_probs).to(self.device)
         values = torch.stack(values).squeeze().to(self.device)
 
-        # Ensure contexts are dictionaries
         contexts = [context_provider.build_context(self.env, self) if c is None else c for c in contexts]
 
-        # Compute value targets and advantages
         with torch.no_grad():
             _, next_values = self.model(next_states)
             next_values = next_values.squeeze()
             targets = rewards + self.gamma * next_values * (1 - dones)
             advantages = targets - values
 
-        # Forward pass on current states
-        logits, predicted_values = self.model(states)
+        logits, predicted_values = self.model(states, context=contexts)
         raw_probs = torch.softmax(logits, dim=-1)
 
-        # Apply shield if enabled
         if self.use_shield_layer:
             shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts)
         elif self.use_shield_post:
@@ -161,7 +154,6 @@ class A2CAgent:
         else:
             shielded_probs = raw_probs
 
-        # Build Categorical dist and compute losses
         dist = Categorical(probs=shielded_probs)
         new_log_probs = dist.log_prob(actions)
         entropy = dist.entropy().mean()
@@ -170,7 +162,6 @@ class A2CAgent:
         value_loss = nn.MSELoss()(predicted_values.squeeze(), targets)
         loss = policy_loss + value_loss - self.entropy_coef * entropy
 
-        # Optimize
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()

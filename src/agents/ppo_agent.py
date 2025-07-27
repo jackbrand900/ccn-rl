@@ -16,7 +16,7 @@ class PPOAgent:
                  action_dim,
                  hidden_dim=256,
                  use_cnn=False,
-                 lr=3e-3,
+                 lr=3e-4,
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.0,
@@ -115,10 +115,11 @@ class PPOAgent:
             a_unshielded = dist_unshielded.sample().item()
             log_prob_tensor = dist_unshielded.log_prob(torch.tensor(a_unshielded).to(self.device))
 
-            shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
-            shielded_probs /= shielded_probs.sum()
-            dist_shielded = torch.distributions.Categorical(probs=shielded_probs)
-            a_shielded = dist_shielded.sample().item()
+            if self.monitor_constraints:
+                shielded_probs = self.shield_controller.apply(raw_probs.unsqueeze(0), context).squeeze(0)
+                shielded_probs /= shielded_probs.sum()
+                dist_shielded = torch.distributions.Categorical(probs=shielded_probs)
+                a_shielded = dist_shielded.sample().item()
 
             selected_action = a_unshielded
 

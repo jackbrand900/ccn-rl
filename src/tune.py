@@ -42,15 +42,11 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
         ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
         agent_kwargs["ent_coef"] = ent_coef
 
-    elif agent_type == "sac":
-        alpha = trial.suggest_float("alpha", 0.001, 0.2)
-        agent_kwargs["alpha"] = alpha
-
     else:
         raise ValueError(f"Unsupported agent type: {agent_type}")
 
     # === Train ===
-    agent, _ = train(
+    agent, rewards, _, best_avg_reward = train(
         agent=agent_type,
         env_name=env_name,
         use_shield_post=use_shield_post,
@@ -61,11 +57,7 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
         visualize=False,
     )
 
-    rewards = agent.training_logs.get("episode_rewards", [])
-    if len(rewards) == 0:
-        return -np.inf
-
-    return np.mean(rewards[-10:])  # Use last 10 episodes
+    return best_avg_reward
 
 def run_optuna(agent_type, env_name, n_trials=30, use_shield=False):
     storage = f"sqlite:///optuna_{agent_type}_{env_name.replace('/', '_')}.db"

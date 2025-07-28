@@ -76,15 +76,15 @@ def create_environment(env_name, render=False):
 
         if env_name == "ALE/Freeway-v5":
             env = gym.make(env_name, render_mode="human" if render else None, frameskip=1, repeat_action_probability=0.0)
-            env = AtariPreprocessing(env, frame_skip=1, scale_obs=True, terminal_on_life_loss=True)
-            # env = RAMObservationWrapper(env)
-            # env = FreewayFeatureWrapper(env)
-            env = TimeLimit(env, max_episode_steps=1000)  # ✅ Set timestep limit
+            env = AtariPreprocessing(env, frame_skip=4, scale_obs=True, terminal_on_life_loss=True)
+            env = RAMObservationWrapper(env)
+            env = FreewayFeatureWrapper(env)
+            env = TimeLimit(env, max_episode_steps=2000)  # ✅ Set timestep limit
             return env
 
         if env_name == "ALE/Seaquest-v5":
-            env = gym.make(env_name, render_mode="human" if render else None)
-            env = AtariPreprocessing(env, frame_skip=1, scale_obs=True)
+            env = gym.make(env_name, render_mode="human" if render else None, frameskip=1)
+            env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             # env = RAMObservationWrapper(env)
             # env = FreewayFeatureWrapper(env)
             env = TimeLimit(env, max_episode_steps=10000)
@@ -311,7 +311,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/freeway_go_up_iff_safe.cnf'
+    requirements_path = 'src/requirements/freeway_go_up_when_safe.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -346,23 +346,12 @@ def train(agent='dqn',
                          requirements_path=requirements_path,
                          env=env,
                          use_cnn=use_cnn)
-    elif agent == 'sac':
-        agent = DiscreteSACAgent(input_shape=input_shape,
-                                 action_dim=action_dim,
-                                 use_shield_post=use_shield_post,
-                                 use_shield_layer=use_shield_layer,
-                                 monitor_constraints=monitor_constraints,
-                                 mode=mode,
-                                 verbose=verbose,
-                                 requirements_path=requirements_path,
-                                 env=env,
-                                 use_cnn=use_cnn)
     else:
         raise ValueError("Unsupported agent type.")
 
     print(f"Training {agent.__class__.__name__} agent on {env_name} with shield post: {use_shield_post} "
           f"with shield layer: {use_shield_layer}")
-    agent_trained, _, best_weights, best_avg_reward = run_training(
+    agent_trained, episode_rewards, best_weights, best_avg_reward = run_training(
         agent, env,
         verbose=verbose,
         num_episodes=num_episodes,
@@ -376,7 +365,7 @@ def train(agent='dqn',
         agent_trained.load_weights(best_weights)
 
     agent.load_weights(best_weights)
-    return agent, env
+    return agent, episode_rewards, best_weights, best_avg_reward
 
 
 def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False, force_disable_shield=False):

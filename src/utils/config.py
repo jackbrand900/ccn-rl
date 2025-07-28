@@ -14,19 +14,27 @@ def config_by_env(env_name):
             "max_steps": 1000,
         }
     elif env_name == "ALE/Freeway-v5":
-        # return {
-        #     "use_cnn": False,
-        #     "input_shape": 26,
-        #     "frame_stack": 1,
-        #     "max_steps": 1000,
-        # }
+        print('using RAM')
         return {
-            "use_cnn": True,
-            "input_shape": (1, 84, 84),
+            "use_cnn": False,
+            "input_shape": 26,
+            "frame_stack": 1,
+            "max_steps": 1000,
+        }
+        # return {
+        #     "use_cnn": True,
+        #     "input_shape": (1, 84, 84),
+        #     "frame_stack": 1,
+        #     "max_steps": 25,
+        # }
+    elif "Freeway" in env_name:
+        return {
+            "use_cnn": False,
+            "input_shape": 26,
             "frame_stack": 1,
             "max_steps": 25,
         }
-    elif "Freeway" in env_name:
+    elif "Freeway-ram" in env_name:
         return {
             "use_cnn": True,
             "input_shape": (96, 96, 3),

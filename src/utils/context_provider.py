@@ -36,24 +36,39 @@ def build_context(env, agent):
             for i, on_grass in enumerate(env_unwrapped.wheel_on_grass):
                 context[f"wheel_{i}_on_grass"] = on_grass
     elif "Freeway" in env_id:
-        # === Use symbolic features extracted via FreewayFeatureWrapper ===
-        obs = agent.last_obs if hasattr(agent, "last_obs") else None
-        context["obs"] = obs
+        # Extract symbolic features directly from RAM regardless of observation mode
+        context["obs"] = agent.last_obs if hasattr(agent, "last_obs") else None
 
-        if obs is not None and len(obs) == 26:
-            player_y = obs[0]
-            crossings = obs[1]
-            car_positions = obs[2:18]  # 2 cars per lane × 8 lanes
-            car_speeds = obs[18:]      # 8 lanes
+        try:
+            ram = env.unwrapped.ale.getRAM()
+            player_y = ram[35] / 255.0
+            crossings = ram[83] / 255.0
 
-            # Detect current lane (coarse): 0 = bottom, 7 = top
+            # Car positions (RAM[40–47], and 48–55 as secondary)
+            num_lanes = 8
+            car_positions = []
+            for lane in range(num_lanes):
+                base = 40 + lane
+                x1 = ram[base] / 160.0
+                x2 = ram[(base + 8) % 128] / 160.0
+                car_positions.extend([x1, x2])
+
+            # Estimate car speeds
+            car_speeds = []
+            for lane in range(num_lanes):
+                curr = ram[40 + lane] / 160.0
+                prev = getattr(env, "_prev_car_positions", np.zeros((num_lanes,), dtype=np.float32))[lane]
+                speed = np.clip((curr - prev) * 10, -1.0, 1.0)
+                car_speeds.append(speed)
+
+            # Cache current positions for next frame
+            env._prev_car_positions = np.array([ram[40 + i] / 160.0 for i in range(num_lanes)], dtype=np.float32)
+
+            # Compute lane
             player_lane = min(max(int(player_y * 8), 0), 7)
-
-            # Get cars in current lane (optional use)
             car_xs = car_positions[player_lane * 2 : player_lane * 2 + 2]
             car_near = any(abs(x - 0.5) < 0.15 for x in car_xs)
 
-            # === Check cars in the lane above ===
             if player_lane < 7:
                 lane_ahead = player_lane + 1
                 car_xs_ahead = car_positions[lane_ahead * 2 : lane_ahead * 2 + 2]
@@ -62,6 +77,7 @@ def build_context(env, agent):
                 car_ahead_near = False
 
             safe_to_go_up = not car_ahead_near
+
             context.update({
                 "player_y": player_y,
                 "crossings": crossings,
@@ -71,9 +87,12 @@ def build_context(env, agent):
                 "safe_to_go_up": safe_to_go_up,
                 "car_speeds": car_speeds,
             })
-        else:
+
+        except Exception as e:
             # fallback
-            context["safe_to_go_up"] = True  # assume safe
+            context["safe_to_go_up"] = True
+            if verbose:
+                print(f"[Warning] Failed to extract RAM features: {e}")
     else:
         obs = agent.last_obs if hasattr(agent, "last_obs") else None
         # print(f'obs: {obs}')

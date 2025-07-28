@@ -77,14 +77,14 @@ def create_environment(env_name, render=False):
         if env_name == "ALE/Freeway-v5":
             env = gym.make(env_name, render_mode="human" if render else None, frameskip=1, repeat_action_probability=0.0)
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True, terminal_on_life_loss=True)
-            env = RAMObservationWrapper(env)
-            env = FreewayFeatureWrapper(env)
+            # env = RAMObservationWrapper(env)
+            # env = FreewayFeatureWrapper(env)
             env = TimeLimit(env, max_episode_steps=2000)  # ✅ Set timestep limit
             return env
 
         if env_name == "ALE/Seaquest-v5":
             env = gym.make(env_name, render_mode="human" if render else None, frameskip=1)
-            env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
+            env = AtariPreprocessing(env, frame_skip=1, scale_obs=True)
             # env = RAMObservationWrapper(env)
             # env = FreewayFeatureWrapper(env)
             env = TimeLimit(env, max_episode_steps=10000)
@@ -311,7 +311,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/freeway_go_up_when_safe.cnf'
+    requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -365,7 +365,7 @@ def train(agent='dqn',
         agent_trained.load_weights(best_weights)
 
     agent.load_weights(best_weights)
-    return agent, episode_rewards, best_weights, best_avg_reward
+    return agent, episode_rewards, best_weights, best_avg_reward, env
 
 
 def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False, force_disable_shield=False):
@@ -398,9 +398,9 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
     total_steps = 0
     violations_per_episode = []
 
-    # Reset global counters if desired
+    # Reset global counters
     if hasattr(agent, 'constraint_monitor') and agent.constraint_monitor:
-        agent.constraint_monitor.reset()
+        agent.constraint_monitor.reset_all()
 
     for episode in range(num_episodes):
         state = reset_env(env)
@@ -431,12 +431,23 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
         if hasattr(agent, 'constraint_monitor'):
             stats = agent.constraint_monitor.summary()
             episode_modifications = stats['episode_modifications']
+            modification_rate = stats['total_mod_rate']
             episode_violations = stats['episode_violations']
+            total_modifications = stats['total_modifications']
+            total_violations = stats['total_violations']
+            violation_rate = stats['total_viol_rate']
             violations_per_episode.append(episode_violations)
 
-            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, "
-                  f"Modifications = {episode_modifications}, "
-                  f"Violations = {episode_violations}")
+            print(
+                f"Episode {episode + 1}: "
+                f"Reward = {episode_reward:.2f}, "
+                f"Episode Modifications = {episode_modifications}, "
+                f"Episode Violations = {episode_violations}, "
+                f"Total Modifications = {total_modifications}, "
+                f"Total Violations = {total_violations}, "
+                f"Mod Rate = {modification_rate:.4f}, "
+                f"Viol Rate = {violation_rate:.4f}"
+            )
 
     if original_epsilon is not None:
         agent.epsilon = original_epsilon
@@ -445,11 +456,13 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
     if hasattr(agent, 'constraint_monitor'):
         stats = agent.constraint_monitor.summary()
         avg_reward = np.mean(total_rewards)
+        std_reward = np.std(total_rewards)
         avg_mod_rate = stats['total_modifications'] / max(stats['total_steps'], 1)
         avg_viol_rate = stats['total_violations'] / max(stats['total_steps'], 1)
 
         print("\nEvaluation Summary:")
         print(f"Average Reward: {avg_reward:.2f}")
+        print(f"Standard Deviation: {std_reward:.2f}")
         print(f"Avg Shield Modifications per Step: {avg_mod_rate:.4f}")
         print(f"Total Constraint Violations: {stats['total_violations']}")
         print(f"Avg Constraint Violations per Step: {avg_viol_rate:.4f}")
@@ -516,7 +529,7 @@ if __name__ == "__main__":
     parser.add_argument('--no_eval', action='store_true', help='Do not run eval')
     args = parser.parse_args()
 
-    trained_agent, env = train(agent=args.agent,
+    trained_agent, episode_rewards, best_weights, best_avg_reward, env = train(agent=args.agent,
                                use_shield_post=args.use_shield_post,
                                use_shield_layer=args.use_shield_layer,
                                mode=args.mode,
@@ -533,7 +546,7 @@ if __name__ == "__main__":
         results = evaluate_policy(
             trained_agent,
             env,
-            num_episodes=100,
+            num_episodes=500,
             visualize=args.visualize,
             render=args.render,
             force_disable_shield=args.force_disable_shield

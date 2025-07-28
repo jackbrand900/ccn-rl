@@ -44,7 +44,7 @@ def config_by_env(env_name):
     elif "Seaquest" in env_name:
         return {
             "use_cnn": True,
-            "input_shape": (96, 96, 3),
+            "input_shape": (1, 84, 84),
             "frame_stack": 1,
             "max_steps": 25,
         }

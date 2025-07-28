@@ -20,6 +20,13 @@ class ConstraintMonitor:
         self.episode_violations = 0
         self.episode_flagged_steps = 0
 
+    def reset_all(self):
+        self.reset()
+        self.total_steps = 0
+        self.total_modifications = 0
+        self.total_violations = 0
+        self.total_flagged_steps = 0
+
     def log_step_from_probs_and_actions(
             self,
             raw_probs,

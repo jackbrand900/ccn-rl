@@ -53,12 +53,13 @@ class ModularNetwork(nn.Module):
                 raise ValueError(f"Expected 3D or 4D input shape, got {input_shape}")
 
             self.encoder = nn.Sequential(
-                nn.Conv2d(in_channels, 32, kernel_size=8, stride=4),
+                nn.Conv2d(in_channels, 32, kernel_size=8, stride=4),  # out: (32, 20, 20) if input is (84,84)
                 nn.ReLU(),
-                nn.Conv2d(32, 64, kernel_size=4, stride=2),
+                nn.Conv2d(32, 64, kernel_size=4, stride=2),           # out: (64, 9, 9)
                 nn.ReLU(),
-                nn.Conv2d(64, 64, kernel_size=3, stride=1),
+                nn.Conv2d(64, 128, kernel_size=3, stride=1),          # out: (128, 7, 7)
                 nn.ReLU(),
+                nn.Flatten()
             )
 
             with torch.no_grad():

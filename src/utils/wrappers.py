@@ -62,3 +62,54 @@ class FreewayFeatureWrapper(ObservationWrapper):
 
         features = np.array([player_y, crossings] + car_positions + car_speeds, dtype=np.float32)
         return features
+
+class SeaquestFeatureWrapper(ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(15,), dtype=np.float32)
+
+    def observation(self, obs):
+        ram = self.unwrapped.ale.getRAM()
+
+        # === Core values ===
+        player_x = ram[54] / 255.0           # Horizontal position
+        player_y = ram[29] / 255.0           # Vertical position
+        num_divers = ram[61] / 6.0           # Max 6 divers
+        oxygen = ram[102] / 255.0            # Oxygen bar
+        ammo = ram[106] / 255.0              # Torpedo count
+
+        # === Binary flags ===
+        oxygen_low = 1.0 if ram[102] < 80 else 0.0
+        ammo_empty = 1.0 if ram[106] == 0 else 0.0
+
+        # === Player vertical zone ===
+        is_near_top = 1.0 if ram[29] < 60 else 0.0
+        is_near_bottom = 1.0 if ram[29] > 180 else 0.0
+        is_centered = 1.0 if 100 <= ram[29] <= 140 else 0.0
+
+        # === Time ticking (approx) ===
+        timer_warning = 1.0 if ram[74] < 50 else 0.0
+
+        # === Approx enemy proximity ===
+        enemy_flags = []
+        for i in range(42, 46):  # X positions of nearby enemies (RAM[42–45])
+            enemy_x = ram[i]
+            near = abs(enemy_x - ram[54]) < 20
+            enemy_flags.append(1.0 if near else 0.0)
+
+        features = np.array([
+            player_x,
+            player_y,
+            num_divers,
+            oxygen,
+            ammo,
+            *enemy_flags,
+            is_near_top,
+            is_near_bottom,
+            is_centered,
+            oxygen_low,
+            ammo_empty,
+            timer_warning,
+        ], dtype=np.float32)
+
+        return features

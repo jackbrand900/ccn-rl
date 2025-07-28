@@ -1,57 +1,100 @@
 import optuna
 import numpy as np
 import yaml
-from src.train import create_environment, run_training
-from src.agents.dqn_agent import DQNAgent
+import argparse
 
-def objective(trial):
-    lr = trial.suggest_float('lr', 1e-5, 1e-2, log=True)
-    gamma = trial.suggest_float('gamma', 0.90, 0.99)
-    epsilon_decay = trial.suggest_float('epsilon_decay', 0.95, 0.999)
-    hidden_dim = trial.suggest_categorical('hidden_dim', [32, 64, 128])
-    target_update_freq = trial.suggest_categorical('target_update_freq', [500, 1000, 2000])
+from src.train import train
 
-    env = create_environment()
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.n
+def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_post=False, use_shield_layer=False):
+    # Shared hyperparameters
+    lr = trial.suggest_float("lr", 1e-4, 3e-3, log=True)
+    gamma = trial.suggest_float("gamma", 0.90, 0.999)
+    hidden_dim = trial.suggest_categorical("hidden_dim", [64, 128, 256])
 
-    agent = DQNAgent(
-        state_dim,
-        action_dim,
-        hidden_dim=hidden_dim,
-        lr=lr,
-        gamma=gamma,
-        epsilon_decay=epsilon_decay,
-        target_update_freq=target_update_freq,
-        use_shield=False,
+    # Agent-specific
+    agent_kwargs = {
+        "lr": lr,
+        "gamma": gamma,
+        "hidden_dim": hidden_dim,
+    }
+
+    if agent_type == "ppo":
+        clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
+        ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
+        epochs = trial.suggest_int("epochs", 3, 10)
+        batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
+        agent_kwargs.update({
+            "clip_eps": clip_eps,
+            "ent_coef": ent_coef,
+            "epochs": epochs,
+            "batch_size": batch_size,
+        })
+
+    elif agent_type == "dqn":
+        epsilon_decay = trial.suggest_float("epsilon_decay", 0.95, 0.999)
+        target_update_freq = trial.suggest_categorical("target_update_freq", [250, 500, 1000])
+        agent_kwargs.update({
+            "epsilon_decay": epsilon_decay,
+            "target_update_freq": target_update_freq,
+        })
+
+    elif agent_type == "a2c":
+        ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
+        agent_kwargs["ent_coef"] = ent_coef
+
+    elif agent_type == "sac":
+        alpha = trial.suggest_float("alpha", 0.001, 0.2)
+        agent_kwargs["alpha"] = alpha
+
+    else:
+        raise ValueError(f"Unsupported agent type: {agent_type}")
+
+    # === Train ===
+    agent, _ = train(
+        agent=agent_type,
+        env_name=env_name,
+        use_shield_post=use_shield_post,
+        use_shield_layer=use_shield_layer,
+        monitor_constraints=False,
+        num_episodes=500,
         verbose=False,
-        requirements_path = 'src/requirements/forward_on_flag.cnf',
+        visualize=False,
     )
 
-    rewards = run_training(agent, env, num_episodes=200, print_interval=None, log_rewards=True)
-    avg_reward = np.mean(rewards[-20:])
+    rewards = agent.training_logs.get("episode_rewards", [])
+    if len(rewards) == 0:
+        return -np.inf
 
-    return avg_reward
+    return np.mean(rewards[-10:])  # Use last 10 episodes
 
-if __name__ == "__main__":
-    agent_type = "dqn" # TODO: make this configurable
-    storage = "sqlite:///optuna_study.db"
+def run_optuna(agent_type, env_name, n_trials=30, use_shield=False):
+    storage = f"sqlite:///optuna_{agent_type}_{env_name.replace('/', '_')}.db"
     study = optuna.create_study(
         direction="maximize",
-        study_name=f"{agent_type}_tuning",
+        study_name=f"{agent_type}_{env_name}_tuning",
         storage=storage,
         load_if_exists=True
     )
-    study.optimize(objective, n_trials=30)
+
+    study.optimize(lambda trial: objective(trial, agent_type=agent_type, env_name=env_name),
+                   n_trials=n_trials)
 
     print("Best trial:")
     trial = study.best_trial
     print(f"  Value: {trial.value}")
     print(f"  Params: {trial.params}")
 
-    # Save the best hyperparameters to a YAML file for later use or analysis
-    best_params = study.best_trial.params
-    # with open(f"../config/{agent_type}_hyperparameters.yaml", "w") as file:
-    #     yaml.dump(best_params, file)
+    # Save to YAML
+    filename = f"config/{agent_type}_{env_name.replace('/', '_')}_params.yaml"
+    with open(filename, "w") as f:
+        yaml.dump(trial.params, f)
+    print(f"[✓] Best hyperparameters saved to {filename}")
 
-    print(f"Hyperparameters saved to config/{agent_type}_hyperparameters.yaml")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--agent", choices=["ppo", "dqn", "a2c", "sac"], default="ppo")
+    parser.add_argument("--env", type=str, default="ALE/Freeway-v5")
+    parser.add_argument("--trials", type=int, default=30)
+    args = parser.parse_args()
+
+    run_optuna(agent_type=args.agent, env_name=args.env, n_trials=args.trials)

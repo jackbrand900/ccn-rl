@@ -75,7 +75,7 @@ def create_environment(env_name, render=False):
             return env
 
         if env_name == "ALE/Freeway-v5":
-            env = gym.make(env_name, render_mode="human" if render else None, frameskip=1)
+            env = gym.make(env_name, render_mode="human" if render else None, frameskip=1, repeat_action_probability=0.0)
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True, terminal_on_life_loss=True)
             env = RAMObservationWrapper(env)
             env = FreewayFeatureWrapper(env)
@@ -220,10 +220,6 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                 f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
 
             )
-            recent_value_losses = agent.training_logs.get("value_loss", [])[-print_interval:]
-            if recent_value_losses:
-                avg_value_loss = np.mean(recent_value_losses)
-                log_msg += f"Avg Value Loss: {avg_value_loss:.4f}, "
             if monitor_constraints:
                 constraint_monitor = agent.constraint_monitor
                 stats = constraint_monitor.summary()
@@ -231,9 +227,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                 total_violations = stats['total_violations']
                 mod_rate = stats['total_mod_rate']
                 viol_rate = stats['total_viol_rate']
-                flagged_states = stats['total_flagged_steps']
                 monitor_logs = (f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, "
-                                f"Total Violations: {total_violations}, Viol Rate: {viol_rate: .3f}, Total Flagged Steps: {flagged_states}")
+                                f"Total Violations: {total_violations}, Viol Rate: {viol_rate: .3f}")
                 log_msg += monitor_logs
 
             if hasattr(agent, "epsilon"):
@@ -314,7 +309,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/wheel_on_grass.cnf'
+    requirements_path = 'src/requirements/freeway_go_up_iff_safe.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,

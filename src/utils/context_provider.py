@@ -91,8 +91,45 @@ def build_context(env, agent):
         except Exception as e:
             # fallback
             context["safe_to_go_up"] = True
-            if verbose:
-                print(f"[Warning] Failed to extract RAM features: {e}")
+
+    elif "Seaquest" in env_id:
+        try:
+            ram = env.unwrapped.ale.getRAM()
+
+            # Use a persistent previous RAM state stored on the env
+            if not hasattr(env, "_prev_ram"):
+                env._prev_ram = ram.copy()
+
+            # # Print RAM diffs
+            # changes = [(i, int(ram[i]), int(env._prev_ram[i]))
+            #            for i in range(128) if ram[i] != env._prev_ram[i]]
+            # if changes:
+            #     print(f"[RAM DIFF] (idx, new, old): {changes}")
+
+            # Tentative RAM mappings
+            player_y = ram[55] / 255.0
+            oxygen = ram[1] / 255.0
+            # print(oxygen)
+            being_hit = ram[60] != 0
+            torpedo_active = ram[57] != 0
+
+            diver1 = ram[104]
+            diver2 = ram[105]
+            diver3 = ram[106]
+            num_divers = sum(1 for d in [diver1, diver2, diver3] if d != 0)
+
+            context.update({
+                "player_y": player_y,
+                "oxygen": oxygen,
+                "being_hit": being_hit,
+                "torpedo_active": torpedo_active,
+                "num_divers": num_divers,
+            })
+
+            # Save current RAM for next comparison
+            env._prev_ram = ram.copy()
+        except Exception as e:
+            print(f"[Seaquest RAM error] {e}")
     else:
         obs = agent.last_obs if hasattr(agent, "last_obs") else None
         # print(f'obs: {obs}')
@@ -225,3 +262,15 @@ def freeway_flag_logic(context, flag_active_val=1.0):
         "y_4": flag_active_val if context.get("safe_to_go_up", False) else 0.0,
         "y_5": flag_active_val if context.get("car_near", False) else 0.0,
     }
+
+def seaquest_flag_logic(context, flag_active_val=1.0):
+    # diver = context.get("num_divers", 0) > 0
+    oxygen = context.get("oxygen", 1.0)
+    # being_hit = context.get("being_hit", False)
+    # torpedo = context.get("torpedo_active", False)
+    # player_y = context.get("player_y", 0.0)
+    # print(oxygen)
+    return {
+        "y_18": flag_active_val if oxygen < 0.2 else 0.0,                # low oxygen
+    }
+

@@ -75,18 +75,18 @@ def create_environment(env_name, render=False, use_ram_obs=False):
 
         if env_name == "ALE/Freeway-v5":
             env = gym.make(env_name, render_mode="human" if render else None, frameskip=1, repeat_action_probability=0.0)
-            env = AtariPreprocessing(env, frame_skip=4, scale_obs=True, terminal_on_life_loss=True)
+            env = AtariPreprocessing(env, frame_skip=1, scale_obs=True, terminal_on_life_loss=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=2000)  # ✅ Set timestep limit
+            env = TimeLimit(env, max_episode_steps=2000)
             return env
 
         if env_name == "ALE/Seaquest-v5":
             env = gym.make(env_name, render_mode="human" if render else None, frameskip=1)
-            env = AtariPreprocessing(env, frame_skip=1, scale_obs=True)
+            env = AtariPreprocessing(env, frame_skip=8, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=10000)
+            env = TimeLimit(env, max_episode_steps=100)
             return env
 
         # Handle MiniGrid environments
@@ -314,7 +314,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/emergency_cartpole.cnf'
+    requirements_path = 'src/requirements/seaquest_low_oxygen.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -328,6 +328,7 @@ def train(agent='dqn',
                          env=env,
                          use_cnn=use_cnn)
     elif agent == 'ppo':
+        print(f'INitialize use shield post: {use_shield_post}')
         agent = PPOAgent(input_shape=input_shape,
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
@@ -613,6 +614,7 @@ if __name__ == "__main__":
     parser.add_argument('--no_eval', action='store_true', help='Do not run eval')
     parser.add_argument('--use_ram_obs', action='store_true', help='Use RAM for observation space')
     args = parser.parse_args()
+    print(f'parser use shield post: {args.use_shield_post}')
 
     # if not args.no_eval:
     #     run_multiple_evaluations(

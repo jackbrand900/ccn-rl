@@ -115,6 +115,7 @@ class PPOAgent:
 
         elif self.use_shield_post and do_apply_shield:
             # Sample unshielded action from raw_probs
+            # print('use shield post')
             dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
             a_unshielded = dist_unshielded.sample().item()
 
@@ -128,6 +129,7 @@ class PPOAgent:
             log_prob_tensor = dist_shielded.log_prob(torch.tensor(a_shielded).to(self.device))
 
         else:
+            # print(f'use shield post: {self.use_shield_post}')
             # === Unshielded path: sample raw and get hypothetical shielded action
             dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
             a_unshielded = dist_unshielded.sample().item()

@@ -1,6 +1,6 @@
 from src.utils.context_provider import (key_flag_logic, position_flag_logic, cartpole_emergency_flag_logic,
-                                        red_light_flag_logic, wheel_on_grass_flag_logic, freeway_flag_logic)
-
+                                        red_light_flag_logic, wheel_on_grass_flag_logic, freeway_flag_logic,
+                                        seaquest_flag_logic)
 req_file_to_logic_fn = {
     "emergency_cartpole.cnf": cartpole_emergency_flag_logic,
     "forward_on_flag.cnf": position_flag_logic,
@@ -9,7 +9,8 @@ req_file_to_logic_fn = {
     "wheel_on_grass.cnf": wheel_on_grass_flag_logic,
     "freeway_go_up_when_safe.cnf": freeway_flag_logic,
     "freeway_no_go_when_unsafe.cnf": freeway_flag_logic,
-    "freeway_go_up_iff_safe.cnf": freeway_flag_logic
+    "freeway_go_up_iff_safe.cnf": freeway_flag_logic,
+    "seaquest_low_oxygen.cnf": seaquest_flag_logic
 }
 
 

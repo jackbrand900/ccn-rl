@@ -20,6 +20,13 @@ class ConstraintMonitor:
         self.episode_violations = 0
         self.episode_flagged_steps = 0
 
+    def reset_all(self):
+        self.reset()
+        self.total_steps = 0
+        self.total_modifications = 0
+        self.total_violations = 0
+        self.total_flagged_steps = 0
+
     def log_step_from_probs_and_actions(
             self,
             raw_probs,
@@ -37,11 +44,17 @@ class ConstraintMonitor:
         flag_active = True
         if self.only_if_flags_active and context is not None and shield_controller is not None:
             flags = shield_controller.flag_logic_fn(context)
-            flag_values = [flags.get(name, 0) for name in shield_controller.flag_names]
-            flag_active = any(flag_values)
+            # Get flags that are relevant and currently active
+            active_flags = {name: val for name, val in flags.items()
+                            if name in shield_controller.flag_names and val > 0}
+
+            flag_active = len(active_flags) > 0
             if flag_active:
                 self.episode_flagged_steps += 1
                 self.total_flagged_steps += 1
+
+        if self.verbose:
+            print(f"[Monitor] Active flags: {list(active_flags.keys())}")
 
         if not flag_active:
             return  # no updates for unflagged steps

@@ -16,20 +16,12 @@ class DQNAgent:
     def __init__(self,
                  input_shape,
                  action_dim,
-                 hidden_dim=128,
-                 use_cnn=False,
-                 gamma=0.99,
-                 lr=3e-4,
-                 batch_size=64,
-                 buffer_size=100_000,
-                 target_update_freq=500,
-                 epsilon_start=0.5,
-                 epsilon_end=0.01,
-                 epsilon_decay=10000,
+                 agent_kwargs=None,
                  use_shield_post=False,
                  use_shield_layer=False,
                  monitor_constraints=True,
                  requirements_path=None,
+                 use_cnn=False,
                  env=None,
                  verbose=False,
                  mode='hard'):
@@ -37,21 +29,45 @@ class DQNAgent:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[ShieldedDQNAgent] Using device: {self.device}")
         self.env = env
-        self.gamma = gamma
-        self.batch_size = batch_size
-        self.epsilon_start = epsilon_start
-        self.epsilon_end = epsilon_end
-        self.epsilon_decay = epsilon_decay
-        self.epsilon = epsilon_start
-        self.steps_done = 0
-        self.target_update_freq = target_update_freq
-        self.action_dim = action_dim
+
+        # === Default parameters ===
+        self.gamma = 0.99
+        self.lr = 2e-4
+        self.batch_size = 64
+        self.buffer_size = 100_000
+        self.target_update_freq = 500
+        self.epsilon_start = 0.5
+        self.epsilon_end = 0.01
+        self.epsilon_decay = 10000
+        self.hidden_dim = 128
+        self.num_layers = 2
         self.use_cnn = use_cnn
+        self.use_orthogonal_init = False
+        self.pretrained_cnn = None
+        print(agent_kwargs)
+
+        # === Override from agent_kwargs ===
+        if agent_kwargs is not None:
+            self.gamma = agent_kwargs.get("gamma", self.gamma)
+            self.lr = agent_kwargs.get("lr", self.lr)
+            self.batch_size = agent_kwargs.get("batch_size", self.batch_size)
+            self.buffer_size = agent_kwargs.get("buffer_size", self.buffer_size)
+            self.target_update_freq = agent_kwargs.get("target_update_freq", self.target_update_freq)
+            self.epsilon_start = agent_kwargs.get("epsilon_start", self.epsilon_start)
+            self.epsilon_end = agent_kwargs.get("epsilon_end", self.epsilon_end)
+            self.epsilon_decay = agent_kwargs.get("epsilon_decay", self.epsilon_decay)
+            self.hidden_dim = agent_kwargs.get("hidden_dim", self.hidden_dim)
+            self.num_layers = agent_kwargs.get("num_layers", self.num_layers)
+            self.use_cnn = agent_kwargs.get("use_cnn", self.use_cnn)
+            self.use_orthogonal_init = agent_kwargs.get("use_orthogonal_init", self.use_orthogonal_init)
+            self.pretrained_cnn = agent_kwargs.get("pretrained_cnn", self.pretrained_cnn)
+
+        self.action_dim = action_dim
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
         self.monitor_constraints = monitor_constraints
 
-        # Shield setup
+        # === Shield ===
         self.constraint_monitor = ConstraintMonitor(verbose=verbose)
         self.shield_controller = ShieldController(
             requirements_path=requirements_path,
@@ -62,31 +78,41 @@ class DQNAgent:
         )
         self.shield_controller.constraint_monitor = self.constraint_monitor
 
+        # === Networks ===
         self.q_net = ModularNetwork(
             input_shape=input_shape,
             output_dim=action_dim,
-            hidden_dim=hidden_dim,
-            use_cnn=use_cnn,
+            hidden_dim=self.hidden_dim,
+            num_layers=self.num_layers,
+            use_cnn=self.use_cnn,
             actor_critic=False,
-            use_shield_layer=use_shield_layer,
-            shield_controller=self.shield_controller
+            use_shield_layer=self.use_shield_layer,
+            shield_controller=self.shield_controller,
+            use_orthogonal_init=self.use_orthogonal_init,
+            pretrained_cnn=self.pretrained_cnn
         ).to(self.device)
 
         self.target_net = ModularNetwork(
             input_shape=input_shape,
             output_dim=action_dim,
-            hidden_dim=hidden_dim,
-            use_cnn=use_cnn,
+            hidden_dim=self.hidden_dim,
+            num_layers=self.num_layers,
+            use_cnn=self.use_cnn,
             actor_critic=False,
             use_shield_layer=False,
-            shield_controller=None  # target net doesn’t need shield
+            shield_controller=None,
+            use_orthogonal_init=self.use_orthogonal_init,
+            pretrained_cnn=self.pretrained_cnn
         ).to(self.device)
 
         self.target_net.load_state_dict(self.q_net.state_dict())
         self.target_net.eval()
 
-        self.optimizer = optim.Adam(self.q_net.parameters(), lr=lr)
-        self.replay_buffer = deque(maxlen=buffer_size)
+        self.optimizer = optim.Adam(self.q_net.parameters(), lr=self.lr)
+        self.replay_buffer = deque(maxlen=self.buffer_size)
+
+        self.epsilon = self.epsilon_start
+        self.steps_done = 0
 
         self.training_logs = {
             "loss": [],
@@ -108,15 +134,11 @@ class DQNAgent:
         is_greedy = deterministic or random.random() > self.epsilon
 
         if is_greedy:
-            # === Compute raw probabilities ===
             logits = self.q_net(state_tensor, context=context)
             raw_probs = torch.softmax(logits, dim=-1)
-
-            # === Get unshielded action ===
             dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
             a_unshielded = dist_unshielded.sample().item()
 
-            # === Apply shield (if enabled) ===
             if self.use_shield_layer and do_apply_shield:
                 corrected_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
             elif self.use_shield_post and do_apply_shield:
@@ -127,18 +149,14 @@ class DQNAgent:
 
             dist_shielded = torch.distributions.Categorical(probs=corrected_probs)
             a_shielded = dist_shielded.sample().item()
-
             selected_action = a_shielded if self.shield_controller.is_shield_active else a_unshielded
-
         else:
-            # === Random action (epsilon) ===
             selected_action = random.randrange(self.action_dim)
             raw_probs = torch.full((self.action_dim,), 1.0 / self.action_dim, device=self.device)
             corrected_probs = raw_probs.clone()
             a_unshielded = selected_action
-            a_shielded = selected_action  # treated same for logging
+            a_shielded = selected_action
 
-        # === Log constraints ===
         if self.monitor_constraints:
             self.constraint_monitor.log_step_from_probs_and_actions(
                 raw_probs=raw_probs.detach(),
@@ -183,11 +201,9 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
-        # Sync target network
         if self.steps_done % self.target_update_freq == 0:
             self.target_net.load_state_dict(self.q_net.state_dict())
 
-        # Logging
         raw_probs = torch.softmax(logits, dim=-1).detach()
         shielded_probs = raw_probs.clone()
 

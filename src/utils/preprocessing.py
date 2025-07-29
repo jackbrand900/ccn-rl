@@ -24,8 +24,8 @@ def prepare_input(state, use_cnn=False):
 
         state_tensor = state_tensor.unsqueeze(0) / 255.0  # Normalize image data
     else:
-        # 🛠️ Normalize RAM data to [0, 1]
-        state_tensor = state_tensor.flatten().unsqueeze(0) / 255.0
+        # Do NOT normalize non-CNN inputs like CartPole or RAM (they're not in [0, 255])
+        state_tensor = state_tensor.flatten().unsqueeze(0)
 
     return state_tensor
 
@@ -56,7 +56,7 @@ def prepare_batch(states, use_cnn=False):
         else:
             raise ValueError(f"Unexpected image shape: {states.shape}")
     else:
-        # 🛠️ Normalize RAM batch to [0, 1]
-        states_tensor = torch.FloatTensor(states).view(len(states), -1) / 255.0
+        # Do NOT normalize non-CNN batches
+        states_tensor = torch.FloatTensor(states).view(len(states), -1)
 
     return states_tensor

@@ -1,0 +1,1 @@
+ppo_ram: {'lr': 0.00018751667965293334, 'gamma': 0.9153903287313542, 'hidden_dim': 512, 'use_orthogonal_init': True, 'num_layers': 3, 'clip_eps': 0.10161698238454359, 'ent_coef': 0.009300571355162369, 'epochs': 9, 'batch_size': 64}

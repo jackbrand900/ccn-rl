@@ -18,7 +18,7 @@ import sys
 import os
 import ale_py
 
-from src.utils.wrappers import RAMObservationWrapper, FreewayFeatureWrapper
+from src.utils.wrappers import RAMObservationWrapper
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
@@ -50,6 +50,7 @@ custom_envs = {
     "ALE/Freeway-v5": (None, None),
     "FreewayNoFrameskip-v4": (None, None),
     "ALE/Seaquest-v5": (None, None),
+    "ALE/DemonAttack-v5": (None, None)
 }
 
 def create_environment(env_name, render=False, use_ram_obs=False):
@@ -78,15 +79,23 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=8, scale_obs=True, terminal_on_life_loss=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=2000)
+            env = TimeLimit(env, max_episode_steps=3000)
             return env
 
         if env_name == "ALE/Seaquest-v5":
             env = gym.make(env_name, render_mode="human" if render else None, frameskip=1)
-            env = AtariPreprocessing(env, frame_skip=8, scale_obs=True)
+            env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=200)
+            # env = TimeLimit(env, max_episode_steps=1000)
+            return env
+
+        if env_name == "ALE/DemonAttack-v5":
+            env = gym.make(env_name, render_mode="human" if render else None, frameskip=1)
+            env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
+            if use_ram_obs:
+                env = RAMObservationWrapper(env)
+            # env = TimeLimit(env, max_episode_steps=1000)
             return env
 
         # Handle MiniGrid environments
@@ -154,16 +163,19 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
     best_avg_reward = float('-inf')
     best_weights = None
     actions_taken = []
+    no_improve_counter = 0  # Early stopping counter
+    early_stop_patience = 200  # Stop if no improvement after 200 episodes
+
     for episode in range(1, num_episodes + 1):
         use_cnn = getattr(agent, "use_cnn", False)
 
         state, _ = env.reset()
         state = preprocess_state(state, use_cnn=use_cnn)
-        try:  # TODO: extract this to the context provider
+        try:
             key_pos = find_key(env)
             env.key_pos = key_pos
         except AttributeError:
-            key_pos = None  # Not a MiniGrid environment
+            key_pos = None
         prev_ram = None
         done = False
         total_reward = 0
@@ -171,9 +183,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         while not done:
             result = agent.select_action(state)
             step_count += 1
-            # print(f'step count: {step_count}')
-
-            # A2C-style: (action, log_prob, value)
+            # print(f'Step count: {step_count}')
             if isinstance(result, tuple) and len(result) == 3:
                 action, log_prob, value = result
                 context = {}
@@ -182,30 +192,17 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                 log_prob = None
                 value = None
 
-            # ram_obs = context.get("obs") if context.get("obs") is not None else None
-            # if ram_obs is None and isinstance(state, np.ndarray) and state.shape == (128,):
-            #     ram_obs = state.astype(np.uint8)
-            # log_ram(ram_obs, prev_ram, step_count)
-            # prev_ram = ram_obs.copy() if ram_obs is not None else None
-
-            # TODO: make this environment agnostic
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
-            # print(f"Action taken: {action}")
             actions_taken.append((x, y, action))
             next_state, reward, terminated, truncated, info = env.step(action)
-            # ram = env.unwrapped.ale.getRAM()
-            # print(f"[RAM] Step {step_count}: {ram}")            # if context['at_red_light'] and verbose:
-            #     print(f"[Episode {episode}] 🚦 At red light!")
+
             if render:
                 env.render()
 
             next_state = preprocess_state(next_state, use_cnn=use_cnn)
 
             done = terminated or truncated
-
-            # if verbose:
-            #     print(f"Episode {episode}, State: ({x}, {y}), Action: {action}, Reward: {reward}, Done: {done}")
 
             agent.store_transition(state, action, reward, next_state, context, done)
             agent.update()
@@ -219,7 +216,6 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             log_msg = (
                 f"Episode {episode}, "
                 f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
-
             )
             if monitor_constraints:
                 constraint_monitor = agent.constraint_monitor
@@ -235,38 +231,41 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             if hasattr(agent, "epsilon"):
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
             print(log_msg)
+
             if avg_reward > best_avg_reward:
                 best_avg_reward = avg_reward
                 best_weights = copy.deepcopy(agent.get_weights())
+                no_improve_counter = 0
                 print(f"[Checkpoint] New best avg reward: {best_avg_reward:.2f} at episode {episode}")
-            # agent.constraint_monitor.reset()
+            else:
+                no_improve_counter += print_interval
+                if no_improve_counter >= early_stop_patience:
+                    print(f"[Early Stopping] No improvement for {early_stop_patience} episodes. Stopping training.")
+                    break
 
     env.close()
     if visualize:
-        # graphing.plot_losses(agent.training_logs)
-        # graphing.plot_prob_shift(agent.training_logs)
-        if visualize:
-            agent_name = agent.__class__.__name__
-            env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
-            if getattr(agent, 'use_shield_layer', False):
-                shield_mode = "ShieldLayer"
-            elif getattr(agent, 'use_shield_post', False):
-                shield_mode = "PostShield"
-            else:
-                shield_mode = "Unshielded"
+        agent_name = agent.__class__.__name__
+        env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
+        if getattr(agent, 'use_shield_layer', False):
+            shield_mode = "ShieldLayer"
+        elif getattr(agent, 'use_shield_post', False):
+            shield_mode = "PostShield"
+        else:
+            shield_mode = "Unshielded"
 
-            title_prefix = f"{agent_name} on {env_name} [{shield_mode}]"
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        title_prefix = f"{agent_name} on {env_name} [{shield_mode}]"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-            graphing.plot_rewards(
-                rewards=episode_rewards,
-                title=f"{title_prefix} – Training Reward Curve",
-                xlabel="Episode",
-                ylabel="Reward",
-                rolling_window=20,
-                save_path=f"plots/{agent_name}_{env_name}_{shield_mode}_{timestamp}_training_rewards.png",
-                show=True
-            )
+        graphing.plot_rewards(
+            rewards=episode_rewards,
+            title=f"{title_prefix} – Training Reward Curve",
+            xlabel="Episode",
+            ylabel="Reward",
+            rolling_window=20,
+            save_path=f"plots/{agent_name}_{env_name}_{shield_mode}_{timestamp}_training_rewards.png",
+            show=True
+        )
 
     return agent, episode_rewards, best_weights, best_avg_reward
 
@@ -321,6 +320,7 @@ def train(agent='dqn',
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
                          use_shield_layer=use_shield_layer,
+                         agent_kwargs=agent_kwargs,
                          monitor_constraints=monitor_constraints,
                          mode=mode,
                          verbose=verbose,
@@ -328,7 +328,7 @@ def train(agent='dqn',
                          env=env,
                          use_cnn=use_cnn)
     elif agent == 'ppo':
-        print(f'INitialize use shield post: {use_shield_post}')
+        print(f'Initialize use shield post: {use_shield_post}')
         agent = PPOAgent(input_shape=input_shape,
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,

@@ -5,6 +5,20 @@ from src.utils.preprocessing import prepare_input, prepare_batch
 import torch.optim as optim
 import numpy as np
 from torch.distributions import Categorical
+import torchvision.models as models
+from torchvision.models import resnet18
+resnet = resnet18(pretrained=True)
+mobilenet = models.mobilenet_v2(pretrained=True)
+# Extract features and pool
+mobilenet_encoder = torch.nn.Sequential(
+    mobilenet.features,
+    torch.nn.AdaptiveAvgPool2d((1, 1)),
+    torch.nn.Flatten()
+)
+
+# Freeze all MobileNet parameters
+for param in mobilenet_encoder.parameters():
+    param.requires_grad = False
 
 from src.models.network import ModularNetwork
 from src.utils.shield_controller import ShieldController
@@ -53,6 +67,7 @@ class PPOAgent:
             self.ent_coef = agent_kwargs.get("ent_coef", ent_coef)
             self.batch_size = agent_kwargs.get("batch_size", batch_size)
             self.epochs = agent_kwargs.get("epochs", epochs)
+            self.num_layers = agent_kwargs.get("num_layers", 2)
         else:
             self.lr = lr
             self.gamma = gamma
@@ -62,6 +77,7 @@ class PPOAgent:
             self.epochs = epochs
             self.use_orthogonal_init = use_orthogonal_init
             self.hidden_dim = hidden_dim
+            self.num_layers = 2
 
         self.use_cnn = use_cnn
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,8 +91,10 @@ class PPOAgent:
         self.last_obs = None
         is_shield_active = self.use_shield_layer or self.use_shield_post
         self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose, is_shield_active=is_shield_active)
-        self.policy = ModularNetwork(input_shape, action_dim, self.hidden_dim, use_shield_layer=self.use_shield_layer,
-                                     use_cnn=use_cnn, actor_critic=True, use_orthogonal_init=self.use_orthogonal_init, shield_controller=self.shield_controller).to(self.device)
+        self.policy = ModularNetwork(input_shape, action_dim, self.hidden_dim, num_layers=self.num_layers,
+                                     use_shield_layer=self.use_shield_layer, pretrained_cnn=None,
+                                     use_cnn=use_cnn, actor_critic=True, use_orthogonal_init=self.use_orthogonal_init,
+                                     shield_controller=self.shield_controller).to(self.device)
         self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
         self.shield_controller.constraint_monitor = self.constraint_monitor
         print(f"[PPOAgent] Using device: {self.device}")

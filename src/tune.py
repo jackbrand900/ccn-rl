@@ -7,23 +7,25 @@ from src.train import train
 
 def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_post=False, use_shield_layer=False, use_ram_obs=False):
     # === Shared hyperparameters ===
-    lr = trial.suggest_float("lr", 1e-5, 3e-3, log=True)
+    lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
     gamma = trial.suggest_float("gamma", 0.90, 0.999)
-    hidden_dim = trial.suggest_categorical("hidden_dim", [64, 128, 256])
+    hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512])
     use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [True, False])  # <--- new param
+    num_layers = trial.suggest_int("num_layers", 2, 4)
 
     agent_kwargs = {
         "lr": lr,
         "gamma": gamma,
         "hidden_dim": hidden_dim,
         "use_orthogonal_init": use_orthogonal_init,
+        "num_layers": num_layers
     }
 
     # === Agent-specific parameters ===
     if agent_type == "ppo":
         clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
         ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
-        epochs = trial.suggest_int("epochs", 3, 10)
+        epochs = trial.suggest_int("epochs", 1, 10)
         batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
         agent_kwargs.update({
             "clip_eps": clip_eps,
@@ -54,7 +56,7 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
         use_shield_post=use_shield_post,
         use_shield_layer=use_shield_layer,
         monitor_constraints=False,
-        num_episodes=300,
+        num_episodes=1000,
         verbose=False,
         visualize=False,
         use_ram_obs=use_ram_obs,
@@ -64,8 +66,8 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
     return best_avg_reward
 
 
-def run_optuna(agent_type, env_name, n_trials=30, use_shield_post=False, use_shield_layer=False, use_ram_obs=False):
-    storage = f"sqlite:///optuna_{agent_type}_{env_name.replace('/', '_')}.db"
+def run_optuna(agent_type, env_name, n_trials=50, use_shield_post=False, use_shield_layer=False, use_ram_obs=False):
+    storage = f"sqlite:///optuna_{agent_type}_{env_name.replace('/', '_')}_2.db"
     study = optuna.create_study(
         direction="maximize",
         study_name=f"{agent_type}_{env_name}_tuning",
@@ -96,7 +98,7 @@ def run_optuna(agent_type, env_name, n_trials=30, use_shield_post=False, use_shi
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--agent", choices=["ppo", "dqn", "a2c", "sac"], default="ppo")
+    parser.add_argument("--agent", choices=["ppo", "dqn", "a2c"], default="ppo")
     parser.add_argument("--env", type=str, default="ALE/Freeway-v5")
     parser.add_argument("--trials", type=int, default=30)
     parser.add_argument("--use_ram_obs", action="store_true", help="Use RAM observations instead of pixels")

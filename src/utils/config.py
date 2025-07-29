@@ -39,6 +39,22 @@ def config_by_env(env_name, use_ram_obs=False):
                 "frame_stack": 1,
                 "max_steps": 10000,
             }
+    if "DemonAttack" in env_name:
+        if use_ram_obs:
+            print('using RAM')
+            return {
+                "use_cnn": False,
+                "input_shape": (128,),
+                "frame_stack": 1,
+                "max_steps": 10000,
+            }
+        else:
+            return {
+                "use_cnn": True,
+                "input_shape": (1, 84, 84),
+                "frame_stack": 1,
+                "max_steps": 10000,
+            }
     if "MiniGrid" in env_name:
         return {
             "use_cnn": False,

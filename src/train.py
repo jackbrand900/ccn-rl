@@ -75,7 +75,7 @@ def create_environment(env_name, render=False, use_ram_obs=False):
 
         if env_name == "ALE/Freeway-v5":
             env = gym.make(env_name, render_mode="human" if render else None, frameskip=1, repeat_action_probability=0.0)
-            env = AtariPreprocessing(env, frame_skip=1, scale_obs=True, terminal_on_life_loss=True)
+            env = AtariPreprocessing(env, frame_skip=8, scale_obs=True, terminal_on_life_loss=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
             env = TimeLimit(env, max_episode_steps=2000)
@@ -86,7 +86,7 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=8, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=100)
+            env = TimeLimit(env, max_episode_steps=200)
             return env
 
         # Handle MiniGrid environments

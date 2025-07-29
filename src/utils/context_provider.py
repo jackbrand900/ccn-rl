@@ -100,11 +100,11 @@ def build_context(env, agent):
             if not hasattr(env, "_prev_ram"):
                 env._prev_ram = ram.copy()
 
-            # # Print RAM diffs
-            # changes = [(i, int(ram[i]), int(env._prev_ram[i]))
-            #            for i in range(128) if ram[i] != env._prev_ram[i]]
-            # if changes:
-            #     print(f"[RAM DIFF] (idx, new, old): {changes}")
+            # Print RAM diffs
+            changes = [(i, int(ram[i]), int(env._prev_ram[i]))
+                       for i in range(128) if ram[i] != env._prev_ram[i]]
+            if changes:
+                print(f"[RAM DIFF] (idx, new, old): {changes}")
 
             # Tentative RAM mappings
             player_y = ram[55] / 255.0

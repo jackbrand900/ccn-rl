@@ -17,6 +17,11 @@ class QNetwork(nn.Module):
     def forward(self, x):
         return self.model(x)
 
+def orthogonal_init(layer, gain=nn.init.calculate_gain('relu')):
+    if isinstance(layer, nn.Linear):
+        nn.init.orthogonal_(layer.weight, gain=gain)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
 
 class ModularNetwork(nn.Module):
     def __init__(self,
@@ -26,7 +31,8 @@ class ModularNetwork(nn.Module):
                  use_cnn=False,
                  actor_critic=False,
                  shield_controller=None,
-                 use_shield_layer=False):
+                 use_shield_layer=False,
+                 use_orthogonal_init=False):
         super().__init__()
         self.use_cnn = use_cnn
         self.actor_critic = actor_critic
@@ -90,6 +96,9 @@ class ModularNetwork(nn.Module):
                 nn.Linear(conv_out_dim, hidden_dim), nn.ReLU(),
                 nn.Linear(hidden_dim, output_dim)
             )
+
+        if use_orthogonal_init:
+            self.apply(orthogonal_init)
 
     def forward(self, x, context=None, return_pre_post_probs=False):
         if self.use_cnn:

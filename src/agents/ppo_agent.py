@@ -14,8 +14,9 @@ class PPOAgent:
     def __init__(self,
                  input_shape,
                  action_dim,
-                 hidden_dim=64,
+                 hidden_dim=128,
                  use_cnn=False,
+                 use_orthogonal_init=False,
                  lr=3e-3,
                  gamma=0.99,
                  clip_eps=0.2,
@@ -25,16 +26,14 @@ class PPOAgent:
                  verbose=False,
                  requirements_path=None,
                  env=None,
-                 batch_size=32,
+                 batch_size=64,
                  epochs=4,
                  use_shield_post=True,
                  use_shield_layer=True,
                  monitor_constraints=True,
+                 agent_kwargs=None,
                  mode='hard'):
 
-        self.gamma = gamma
-        self.clip_eps = clip_eps
-        self.ent_coef = ent_coef
         self.lambda_req = lambda_req
         self.lambda_consistency = lambda_consistency
         self.use_shield_post = use_shield_post
@@ -43,12 +42,30 @@ class PPOAgent:
         self.verbose = verbose
         self.env = env
         self.action_dim = action_dim
+
+        print(agent_kwargs)
+        if agent_kwargs is not None:
+            self.hidden_dim = agent_kwargs.get("hidden_dim", hidden_dim)
+            self.use_orthogonal_init = agent_kwargs.get("use_orthogonal_init", use_orthogonal_init)
+            self.lr = agent_kwargs.get("lr", lr)
+            self.gamma = agent_kwargs.get("gamma", gamma)
+            self.clip_eps = agent_kwargs.get("clip_eps", clip_eps)
+            self.ent_coef = agent_kwargs.get("ent_coef", ent_coef)
+            self.batch_size = agent_kwargs.get("batch_size", batch_size)
+            self.epochs = agent_kwargs.get("epochs", epochs)
+        else:
+            self.lr = lr
+            self.gamma = gamma
+            self.clip_eps = clip_eps
+            self.ent_coef = ent_coef
+            self.batch_size = batch_size
+            self.epochs = epochs
+            self.use_orthogonal_init = use_orthogonal_init
+            self.hidden_dim = hidden_dim
+
         self.use_cnn = use_cnn
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.memory = []
-
-        self.batch_size = batch_size
-        self.epochs = epochs
 
         self.learn_step_counter = 0
         self.last_log_prob = None
@@ -58,12 +75,12 @@ class PPOAgent:
         self.last_obs = None
         is_shield_active = self.use_shield_layer or self.use_shield_post
         self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose, is_shield_active=is_shield_active)
-        self.policy = ModularNetwork(input_shape, action_dim, hidden_dim, use_shield_layer=self.use_shield_layer,
-                                     use_cnn=use_cnn, actor_critic=True, shield_controller=self.shield_controller).to(self.device)
+        self.policy = ModularNetwork(input_shape, action_dim, self.hidden_dim, use_shield_layer=self.use_shield_layer,
+                                     use_cnn=use_cnn, actor_critic=True, use_orthogonal_init=self.use_orthogonal_init, shield_controller=self.shield_controller).to(self.device)
         self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
         self.shield_controller.constraint_monitor = self.constraint_monitor
         print(f"[PPOAgent] Using device: {self.device}")
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=self.lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.995)
 
         self.training_logs = {

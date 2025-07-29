@@ -9,7 +9,6 @@ import argparse
 from gymnasium.envs.registration import register
 from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 
-from src.agents.discrete_sac_agent import DiscreteSACAgent
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
@@ -53,7 +52,7 @@ custom_envs = {
     "ALE/Seaquest-v5": (None, None),
 }
 
-def create_environment(env_name, render=False):
+def create_environment(env_name, render=False, use_ram_obs=False):
     if env_name in custom_envs:
         entry_point, kwargs = custom_envs[env_name]
         if entry_point:
@@ -77,16 +76,16 @@ def create_environment(env_name, render=False):
         if env_name == "ALE/Freeway-v5":
             env = gym.make(env_name, render_mode="human" if render else None, frameskip=1, repeat_action_probability=0.0)
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True, terminal_on_life_loss=True)
-            # env = RAMObservationWrapper(env)
-            # env = FreewayFeatureWrapper(env)
+            if use_ram_obs:
+                env = RAMObservationWrapper(env)
             env = TimeLimit(env, max_episode_steps=2000)  # ✅ Set timestep limit
             return env
 
         if env_name == "ALE/Seaquest-v5":
             env = gym.make(env_name, render_mode="human" if render else None, frameskip=1)
             env = AtariPreprocessing(env, frame_skip=1, scale_obs=True)
-            # env = RAMObservationWrapper(env)
-            # env = FreewayFeatureWrapper(env)
+            if use_ram_obs:
+                env = RAMObservationWrapper(env)
             env = TimeLimit(env, max_episode_steps=10000)
             return env
 
@@ -280,13 +279,17 @@ def train(agent='dqn',
           num_episodes=100,
           verbose=False,
           visualize=False,
+          use_ram_obs=False,
+          agent_kwargs=None,
           env_name='MiniGrid-Empty-5x5-v0',
           render=False):
-    env = create_environment(env_name, render=render)
+    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs)
     print("Observation space:", env.observation_space)
     obs_space = env.observation_space
+    if agent_kwargs is None:
+        agent_kwargs = {}
 
-    env_config = config_by_env(env_name)
+    env_config = config_by_env(env_name, use_ram_obs)
     if env_config['use_cnn'] and len(obs_space.shape) == 2:
         # Expand grayscale (H, W) → (C, H, W)
         input_shape = (1, *obs_space.shape)
@@ -329,6 +332,8 @@ def train(agent='dqn',
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
                          use_shield_layer=use_shield_layer,
+                         use_orthogonal_init=True,
+                         agent_kwargs=agent_kwargs,
                          monitor_constraints=monitor_constraints,
                          mode=mode,
                          verbose=verbose,
@@ -468,7 +473,6 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
         print(f"Avg Constraint Violations per Step: {avg_viol_rate:.4f}")
     else:
         avg_reward = np.mean(total_rewards)
-        avg_mod_rate = 0.0
         print("\nEvaluation Summary (No ConstraintMonitor):")
         print(f"Average Reward: {avg_reward:.2f}")
 
@@ -505,11 +509,91 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             show=True
         )
 
+    total_violations = stats["total_violations"]
+    total_modifications = stats["total_modifications"]
+    total_steps_eval = stats["total_steps"]
+
     return {
-        "avg_reward": avg_reward,
-        "avg_shield_mod_rate": avg_mod_rate,
-        "rewards": total_rewards,
+        "avg_reward": np.mean(total_rewards),
+        "std_reward": np.std(total_rewards),
+        "max_reward": np.max(total_rewards),
+        "min_reward": np.min(total_rewards),
+        "avg_shield_mod_rate": total_modifications / max(total_steps_eval, 1),
+        "avg_violations_per_step": total_violations / max(total_steps_eval, 1),
+        "avg_violations_per_episode": total_violations / max(num_episodes, 1),
+        "avg_modifications_per_episode": total_modifications / max(num_episodes, 1),
+        "total_violations": total_violations,
+        "total_modifications": total_modifications,
+        "total_steps": total_steps_eval,
     }
+
+
+def run_multiple_evaluations(
+        agent_name='dqn',
+        env_name='MiniGrid-Empty-5x5-v0',
+        num_runs=5,
+        num_train_episodes=500,
+        num_eval_episodes=100,
+        use_shield_post=False,
+        use_shield_layer=False,
+        monitor_constraints=True,
+        mode='hard',
+        verbose=False,
+        visualize=False,
+        render=False,
+        force_disable_shield=False,
+):
+    all_results = []
+
+    for run in range(num_runs):
+        print(f"\n=== Run {run + 1}/{num_runs} ===")
+
+        agent, episode_rewards, best_weights, best_avg_reward, env = train(
+            agent=agent_name,
+            env_name=env_name,
+            num_episodes=num_train_episodes,
+            use_shield_post=use_shield_post,
+            use_shield_layer=use_shield_layer,
+            monitor_constraints=monitor_constraints,
+            mode=mode,
+            verbose=verbose,
+            visualize=visualize,
+            render=render
+        )
+
+        if hasattr(agent, 'load_weights') and best_weights is not None:
+            agent.load_weights(best_weights)
+
+        results = evaluate_policy(
+            agent,
+            env,
+            num_episodes=num_eval_episodes,
+            visualize=visualize,
+            render=render,
+            force_disable_shield=force_disable_shield
+        )
+
+        all_results.append(results)
+
+    # Aggregate final statistics
+    def aggregate_results(all_results):
+        keys = all_results[0].keys()
+        aggregated = {}
+        for key in keys:
+            values = [r[key] for r in all_results]
+            aggregated[key] = {
+                'mean': np.mean(values),
+                'std': np.std(values)
+            }
+        return aggregated
+
+    final_summary = aggregate_results(all_results)
+
+    print("\n=== Final Aggregated Evaluation over", num_runs, "runs ===")
+    for key, val in final_summary.items():
+        print(f"{key}: {val['mean']:.4f} ± {val['std']:.4f}")
+
+    return final_summary
 
 
 if __name__ == "__main__":
@@ -527,8 +611,25 @@ if __name__ == "__main__":
     parser.add_argument('--num_episodes', type=int, default=500, help='Number of training episodes')
     parser.add_argument('--monitor_constraints', action='store_true', help='Enable constraint monitor')
     parser.add_argument('--no_eval', action='store_true', help='Do not run eval')
+    parser.add_argument('--use_ram_obs', action='store_true', help='Use RAM for observation space')
     args = parser.parse_args()
 
+    # if not args.no_eval:
+    #     run_multiple_evaluations(
+    #         agent_name=args.agent,
+    #         env_name=args.env,
+    #         num_runs=5,
+    #         num_train_episodes=args.num_episodes,
+    #         num_eval_episodes=100,
+    #         use_shield_post=args.use_shield_post,
+    #         use_shield_layer=args.use_shield_layer,
+    #         monitor_constraints=args.monitor_constraints,
+    #         mode=args.mode,
+    #         verbose=args.verbose,
+    #         visualize=args.visualize,
+    #         render=args.render,
+    #         force_disable_shield=args.force_disable_shield,
+    #     )
     trained_agent, episode_rewards, best_weights, best_avg_reward, env = train(agent=args.agent,
                                use_shield_post=args.use_shield_post,
                                use_shield_layer=args.use_shield_layer,
@@ -538,6 +639,7 @@ if __name__ == "__main__":
                                verbose=args.verbose,
                                visualize=args.visualize,
                                env_name=args.env,
+                               use_ram_obs=args.use_ram_obs,
                                render=args.render)
 
     # results = evaluate_policy(trained_agent, env, eval_with_shield=args.eval_with_shield, num_episodes=20,
@@ -549,5 +651,5 @@ if __name__ == "__main__":
             num_episodes=500,
             visualize=args.visualize,
             render=args.render,
-            force_disable_shield=args.force_disable_shield
+            force_disable_shield=args.force_disable_shield,
         )

@@ -19,7 +19,7 @@ class DQNAgent:
                  hidden_dim=128,
                  use_cnn=False,
                  gamma=0.99,
-                 lr=3e-4,
+                 lr=2e-4,
                  batch_size=64,
                  buffer_size=100_000,
                  target_update_freq=500,

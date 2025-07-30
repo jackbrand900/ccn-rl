@@ -35,7 +35,7 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
         })
 
     elif agent_type == "dqn":
-        epsilon_decay = trial.suggest_float("epsilon_decay", 0.95, 0.999)
+        epsilon_decay = trial.suggest_float("epsilon_decay", 1,1)
         target_update_freq = trial.suggest_categorical("target_update_freq", [250, 500, 1000])
         agent_kwargs.update({
             "epsilon_decay": epsilon_decay,

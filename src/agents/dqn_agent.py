@@ -36,7 +36,7 @@ class DQNAgent:
         self.batch_size = 64
         self.buffer_size = 100_000
         self.target_update_freq = 500
-        self.epsilon_start = 0.5
+        self.epsilon_start = 1
         self.epsilon_end = 0.01
         self.epsilon_decay = 10000
         self.hidden_dim = 128
@@ -187,36 +187,45 @@ class DQNAgent:
         rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
         dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
 
-        logits = self.q_net(states, context=contexts)
-        q_values = logits.gather(1, actions)
+        # === Q-Loss computation (directly here) ===
+        q_out = self.q_net(states, context=contexts)
+        q_values = q_out.gather(1, actions)
 
         with torch.no_grad():
-            next_logits = self.target_net(next_states)
-            next_q = next_logits.max(1, keepdim=True)[0]
-            target_q_values = rewards + self.gamma * next_q * (1 - dones)
+            next_q = self.target_net(next_states)
+            next_max_q = next_q.max(1, keepdim=True)[0]
+            target_q_values = rewards + self.gamma * next_max_q * (1 - dones)
 
-        loss = nn.MSELoss()(q_values, target_q_values)
+        td_loss = nn.MSELoss()(q_values, target_q_values)
+
+        raw_probs = torch.softmax(q_out, dim=1)
+        # shielded_probs = raw_probs.clone()
+
+        # if self.use_shield_layer:
+        #     shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts).detach()
+        #
+        # goal = torch.zeros_like(shielded_probs)
+        # goal.scatter_(1, actions, 1.0)
+        #
+        # req_loss = nn.BCELoss()(shielded_probs, goal)
+        # consistency_loss = nn.MSELoss()(raw_probs, shielded_probs)
+        #
+        total_loss = td_loss
 
         self.optimizer.zero_grad()
-        loss.backward()
+        total_loss.backward()
         self.optimizer.step()
 
         if self.steps_done % self.target_update_freq == 0:
             self.target_net.load_state_dict(self.q_net.state_dict())
 
-        raw_probs = torch.softmax(logits, dim=-1).detach()
-        shielded_probs = raw_probs.clone()
-
-        if self.use_shield_layer:
-            shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts).detach()
-
-        prob_shift = torch.abs(raw_probs - shielded_probs).mean().item()
-        mod_rate = (shielded_probs.argmax(dim=1) != raw_probs.argmax(dim=1)).float().mean().item()
-
-        self.training_logs["loss"].append(loss.item())
+        # prob_shift = torch.abs(shielded_probs - raw_probs).mean().item()
+        # mod_rate = (shielded_probs.argmax(dim=1) != raw_probs.argmax(dim=1)).float().mean().item()
+        #
+        self.training_logs["loss"].append(total_loss.item())
         self.training_logs["epsilon"].append(self.epsilon)
-        self.training_logs["prob_shift"].append(prob_shift)
-        self.training_logs["mod_rate"].append(mod_rate)
+        # self.training_logs["prob_shift"].append(prob_shift)
+        # self.training_logs["mod_rate"].append(mod_rate)
 
     def get_weights(self):
         return self.q_net.state_dict()

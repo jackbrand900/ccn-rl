@@ -180,19 +180,20 @@ class ModularNetwork(nn.Module):
         policy_loss = -torch.min(surr1, surr2).mean()
         value_loss = nn.MSELoss()(new_values.squeeze(), returns)
 
-        goal = torch.zeros_like(shielded_probs)
-        goal.scatter_(1, actions.unsqueeze(1), 1.0)
-        req_loss = nn.BCELoss()(shielded_probs, goal)
-        consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
+        # goal = torch.zeros_like(shielded_probs)
+        # goal.scatter_(1, actions.unsqueeze(1), 1.0)
+        # req_loss = nn.BCELoss()(shielded_probs, goal)
+        # consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
 
-        total_loss = policy_loss + 0.5 * value_loss - ent_coef * entropy + lambda_req * req_loss + lambda_consistency * consistency_loss
+        # total_loss = policy_loss + 0.5 * value_loss - ent_coef * entropy + lambda_req * req_loss + lambda_consistency * consistency_loss
+        total_loss = policy_loss + 0.5 * value_loss - ent_coef * entropy
 
         logs = {
             "policy_loss": policy_loss.item(),
             "value_loss": value_loss.item(),
             "entropy": entropy.item(),
-            "req_loss": req_loss.item(),
-            "consistency_loss": consistency_loss.item(),
+            # "req_loss": req_loss.item(),
+            # "consistency_loss": consistency_loss.item(),
             "total_loss": total_loss.item()
         }
 

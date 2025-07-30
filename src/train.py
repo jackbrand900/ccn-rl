@@ -62,16 +62,22 @@ def create_environment(env_name, render=False, use_ram_obs=False):
         # Handle CartPole rendering differently
         if env_name == "CartPole-v1":
             env = gym.make(env_name, render_mode="human" if render else None)
+            env.env_name = env_name
+            env.use_ram = False
             return env
 
         if env_name == "CarRacing-v3":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
             env = TimeLimit(env, max_episode_steps=200)
+            env.env_name = env_name
+            env.use_ram = False
             return env
 
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
             env = TimeLimit(env, max_episode_steps=300)  # ✅ Set timestep limit
+            env.env_name = env_name
+            env.use_ram = False
             return env
 
         if env_name == "ALE/Freeway-v5":
@@ -80,6 +86,8 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
             env = TimeLimit(env, max_episode_steps=3000)
+            env.env_name = env_name
+            env.use_ram = use_ram_obs
             return env
 
         if env_name == "ALE/Seaquest-v5":
@@ -87,7 +95,9 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            # env = TimeLimit(env, max_episode_steps=1000)
+            env = TimeLimit(env, max_episode_steps=1000)
+            env.env_name = env_name
+            env.use_ram = use_ram_obs
             return env
 
         if env_name == "ALE/DemonAttack-v5":
@@ -95,7 +105,9 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            # env = TimeLimit(env, max_episode_steps=1000)
+            env = TimeLimit(env, max_episode_steps=1000)
+            env.env_name = env_name
+            env.use_ram = use_ram_obs
             return env
 
         # Handle MiniGrid environments
@@ -106,6 +118,7 @@ def create_environment(env_name, render=False, use_ram_obs=False):
                 env = FullyObsWrapper(env)
             else:
                 env = FlatObsWrapper(env)
+            env.env_name = env_name
         return env
 
 def log_ram(obs, prev_obs, step):
@@ -183,7 +196,6 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         while not done:
             result = agent.select_action(state)
             step_count += 1
-            # print(f'Step count: {step_count}')
             if isinstance(result, tuple) and len(result) == 3:
                 action, log_prob, value = result
                 context = {}
@@ -213,7 +225,11 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
+            use_ram = 'RAM' if env.use_ram else 'OBS'
             log_msg = (
+                f"[{env.env_name}] "
+                f"[{str(type(agent)).split('.')[-1][:-2]}] "
+                f"[{use_ram}], "
                 f"Episode {episode}, "
                 f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
             )
@@ -313,7 +329,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/seaquest_low_oxygen.cnf'
+    requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -646,12 +662,12 @@ if __name__ == "__main__":
 
     # results = evaluate_policy(trained_agent, env, eval_with_shield=args.eval_with_shield, num_episodes=20,
     # visualize=args.visualize, render=args.render)
-    if not args.no_eval:
-        results = evaluate_policy(
-            trained_agent,
-            env,
-            num_episodes=500,
-            visualize=args.visualize,
-            render=args.render,
-            force_disable_shield=args.force_disable_shield,
-        )
+    # if not args.no_eval:
+    #     results = evaluate_policy(
+    #         trained_agent,
+    #         env,
+    #         num_episodes=500,
+    #         visualize=args.visualize,
+    #         render=args.render,
+    #         force_disable_shield=args.force_disable_shield,
+    #     )

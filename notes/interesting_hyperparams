@@ -1,1 +1,3 @@
-ppo_ram: {'lr': 0.00018751667965293334, 'gamma': 0.9153903287313542, 'hidden_dim': 512, 'use_orthogonal_init': True, 'num_layers': 3, 'clip_eps': 0.10161698238454359, 'ent_coef': 0.009300571355162369, 'epochs': 9, 'batch_size': 64}
+ppo_ram_seaquest: {'lr': 0.00018751667965293334, 'gamma': 0.9153903287313542, 'hidden_dim': 512, 'use_orthogonal_init': True, 'num_layers': 3, 'clip_eps': 0.10161698238454359, 'ent_coef': 0.009300571355162369, 'epochs': 9, 'batch_size': 64}
+ppo_ram_demonattack: {'lr': 0.0006795275600067658, 'gamma': 0.9209516029794826, 'hidden_dim': 256, 'use_orthogonal_init': False, 'num_layers': 3, 'clip_eps': 0.2387171535639805, 'ent_coef': 0.03191088486787187, 'epochs': 8, 'batch_size': 16}
+dqn_ram_demonattack: {'lr': 0.0007265298509749493, 'gamma': 0.9365197676490904, 'hidden_dim': 128, 'use_orthogonal_init': False, 'num_layers': 3, 'epsilon_decay': 0.9536626215683446, 'target_update_freq': 250}

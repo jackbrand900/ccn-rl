@@ -17,3 +17,4 @@ What configs do we need to specify to run in different configurations?
     - Evaluate progressive shielding
     - Shield can be either hard or soft
 
+epsilon decay too low for DQN

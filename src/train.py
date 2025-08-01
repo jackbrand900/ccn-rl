@@ -18,7 +18,7 @@ import sys
 import os
 import ale_py
 
-from src.utils.wrappers import RAMObservationWrapper
+from src.utils.wrappers import RAMObservationWrapper, SeaquestRAMWrapper, DemonAttackRAMWrapper
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
@@ -95,7 +95,7 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=1000)
+            # env = TimeLimit(env, max_episode_steps=1000)
             env.env_name = env_name
             env.use_ram = use_ram_obs
             return env
@@ -105,7 +105,7 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=1000)
+            # env = TimeLimit(env, max_episode_steps=1000)
             env.env_name = env_name
             env.use_ram = use_ram_obs
             return env
@@ -177,7 +177,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
     best_weights = None
     actions_taken = []
     no_improve_counter = 0  # Early stopping counter
-    early_stop_patience = 200  # Stop if no improvement after 200 episodes
+    early_stop_patience = 500 # Stop if no improvement after 500 episodes
 
     for episode in range(1, num_episodes + 1):
         use_cnn = getattr(agent, "use_cnn", False)
@@ -632,33 +632,33 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(f'parser use shield post: {args.use_shield_post}')
 
-    # if not args.no_eval:
-    #     run_multiple_evaluations(
-    #         agent_name=args.agent,
-    #         env_name=args.env,
-    #         num_runs=5,
-    #         num_train_episodes=args.num_episodes,
-    #         num_eval_episodes=100,
-    #         use_shield_post=args.use_shield_post,
-    #         use_shield_layer=args.use_shield_layer,
-    #         monitor_constraints=args.monitor_constraints,
-    #         mode=args.mode,
-    #         verbose=args.verbose,
-    #         visualize=args.visualize,
-    #         render=args.render,
-    #         force_disable_shield=args.force_disable_shield,
-    #     )
-    trained_agent, episode_rewards, best_weights, best_avg_reward, env = train(agent=args.agent,
-                               use_shield_post=args.use_shield_post,
-                               use_shield_layer=args.use_shield_layer,
-                               mode=args.mode,
-                               num_episodes=args.num_episodes,
-                               monitor_constraints=args.monitor_constraints,
-                               verbose=args.verbose,
-                               visualize=args.visualize,
-                               env_name=args.env,
-                               use_ram_obs=args.use_ram_obs,
-                               render=args.render)
+    if not args.no_eval:
+        run_multiple_evaluations(
+            agent_name=args.agent,
+            env_name=args.env,
+            num_runs=5,
+            num_train_episodes=args.num_episodes,
+            num_eval_episodes=100,
+            use_shield_post=args.use_shield_post,
+            use_shield_layer=args.use_shield_layer,
+            monitor_constraints=args.monitor_constraints,
+            mode=args.mode,
+            verbose=args.verbose,
+            visualize=args.visualize,
+            render=args.render,
+            force_disable_shield=args.force_disable_shield,
+        )
+    # trained_agent, episode_rewards, best_weights, best_avg_reward, env = train(agent=args.agent,
+    #                            use_shield_post=args.use_shield_post,
+    #                            use_shield_layer=args.use_shield_layer,
+    #                            mode=args.mode,
+    #                            num_episodes=args.num_episodes,
+    #                            monitor_constraints=args.monitor_constraints,
+    #                            verbose=args.verbose,
+    #                            visualize=args.visualize,
+    #                            env_name=args.env,
+    #                            use_ram_obs=args.use_ram_obs,
+    #                            render=args.render)
 
     # results = evaluate_policy(trained_agent, env, eval_with_shield=args.eval_with_shield, num_episodes=20,
     # visualize=args.visualize, render=args.render)

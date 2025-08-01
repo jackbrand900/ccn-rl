@@ -14,11 +14,8 @@ class A2CAgent:
     def __init__(self,
                  input_shape,
                  action_dim,
-                 hidden_dim=128,
-                 gamma=0.99,
-                 lr=1e-3,
+                 agent_kwargs=None,
                  env=None,
-                 entropy_coef=0.01,
                  use_cnn=False,
                  use_shield_post=False,
                  use_shield_layer=False,
@@ -30,8 +27,6 @@ class A2CAgent:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"[BatchedA2CAgent] Using device: {self.device}")
 
-        self.gamma = gamma
-        self.entropy_coef = entropy_coef
         self.use_cnn = use_cnn
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
@@ -39,6 +34,27 @@ class A2CAgent:
         self.verbose = verbose
         self.env = env
         self.action_dim = action_dim
+
+        self.gamma = 0.99
+        self.lr = 3e-4
+        self.hidden_dim = 128
+        self.entropy_coef = 0.01
+        self.use_cnn = False
+        self.num_layers = 2
+        self.use_orthogonal_init = False
+        self.pretrained_cnn = None
+
+        # === Override from agent_kwargs ===
+        if agent_kwargs is not None:
+            self.gamma = agent_kwargs.get("gamma", self.gamma)
+            self.lr = agent_kwargs.get("lr", self.lr)
+            self.hidden_dim = agent_kwargs.get("hidden_dim", self.hidden_dim)
+            self.entropy_coef = agent_kwargs.get("entropy_coef", self.entropy_coef)
+            self.use_cnn = agent_kwargs.get("use_cnn", self.use_cnn)
+            self.num_layers = agent_kwargs.get("num_layers", self.num_layers)
+            self.use_orthogonal_init = agent_kwargs.get("use_orthogonal_init", self.use_orthogonal_init)
+            self.pretrained_cnn = agent_kwargs.get("pretrained_cnn", self.pretrained_cnn)
+
 
         self.constraint_monitor = ConstraintMonitor(verbose=self.verbose)
         self.shield_controller = ShieldController(
@@ -53,14 +69,14 @@ class A2CAgent:
         self.model = ModularNetwork(
             input_shape=input_shape,
             output_dim=action_dim,
-            hidden_dim=hidden_dim,
-            use_cnn=use_cnn,
+            hidden_dim=self.hidden_dim,
+            use_cnn=self.use_cnn,
             actor_critic=True,
             use_shield_layer=use_shield_layer,
             shield_controller=self.shield_controller if use_shield_layer else None
         ).to(self.device)
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         self.memory = []
 
     def select_action(self, state, env=None, do_apply_shield=True):

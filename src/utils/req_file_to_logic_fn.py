@@ -10,7 +10,7 @@ req_file_to_logic_fn = {
     "freeway_go_up_when_safe.cnf": freeway_flag_logic,
     "freeway_no_go_when_unsafe.cnf": freeway_flag_logic,
     "freeway_go_up_iff_safe.cnf": freeway_flag_logic,
-    "seaquest_low_oxygen.cnf": seaquest_flag_logic
+    "seaquest_low_oxygen_and_diver_go_up.cnf": seaquest_flag_logic
 }
 
 

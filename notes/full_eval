@@ -18,7 +18,7 @@ std_reward: 87.0333 ± 56.1097
 max_reward: 440.8000 ± 118.4000
 min_reward: 100.0000 ± 60.0500
 avg_shield_mod_rate: 0.0105 ± 0.0101
-avg_violations_per_step: 0.0106 ± 0.0101
+avg_violations_per_step: 0.0105 ± 0.0101
 avg_violations_per_episode: 2.8900 ± 2.6838
 avg_modifications_per_episode: 2.8900 ± 2.6838
 total_violations: 289.0000 ± 268.3848
@@ -75,3 +75,31 @@ avg_violations_per_episode: 3.0840 ± 3.7347
 avg_modifications_per_episode: 0.0000 ± 0.0000
 total_violations: 308.4000 ± 373.4737
 total_modifications: 0.0000 ± 0.0000
+
+dqn_undshielded
+=== Final Aggregated Evaluation over 5 runs ===
+avg_reward: 304.1820 ± 28.7721
+std_reward: 66.8789 ± 5.8928
+max_reward: 500.0000 ± 0.0000
+min_reward: 198.2000 ± 18.9779
+avg_shield_mod_rate: 0.0000 ± 0.0000
+avg_violations_per_step: 0.0026 ± 0.0012
+avg_violations_per_episode: 0.8020 ± 0.3378
+avg_modifications_per_episode: 0.0000 ± 0.0000
+total_violations: 80.2000 ± 33.7840
+total_modifications: 0.0000 ± 0.0000
+total_steps: 30418.2000 ± 2877.2105
+
+dqn_shielded_post
+=== Final Aggregated Evaluation over 5 runs ===
+avg_reward: 244.4760 ± 40.4675
+std_reward: 89.1830 ± 20.0207
+max_reward: 479.8000 ± 40.4000
+min_reward: 130.0000 ± 8.8769
+avg_shield_mod_rate: 0.0028 ± 0.0025
+avg_violations_per_step: 0.0028 ± 0.0025
+avg_violations_per_episode: 0.8980 ± 0.6321
+avg_modifications_per_episode: 0.8980 ± 0.6321
+total_violations: 89.8000 ± 63.2120
+total_modifications: 89.8000 ± 63.2120
+

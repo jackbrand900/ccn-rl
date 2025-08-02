@@ -13,11 +13,17 @@ class ShieldController:
     def __init__(self, requirements_path, num_actions, mode="hard", verbose=False, default_flag_logic=None, is_shield_active=False):
         self.requirements_path = requirements_path
         self.num_actions = num_actions
-        self.flag_logic_fn = get_flag_logic_fn(self.requirements_path) or self.default_flag_logic
         self.mode = mode
-        flag_active_val = 0.8 if mode == "soft" else 1.0
-        self.flag_logic_fn = partial(self.flag_logic_fn, flag_active_val=flag_active_val)
+        self._base_flag_logic_fn = get_flag_logic_fn(self.requirements_path) or self.default_flag_logic
+        if self.mode == "progressive":
+            self.episode = 0
+            flag_active_val = self.compute_progressive_flag(self.episode)
+        else:
+            flag_active_val = 0.8 if self.mode == "soft" else 1.0
+
+        self.flag_logic_fn = partial(self._base_flag_logic_fn, flag_active_val=flag_active_val)
         self.flag_logic_batch = self._batchify(self.flag_logic_fn)
+
         # print(f"[DEBUG] Got flag logic function: {get_flag_logic_fn(self.requirements_path)}")
 
         # Parse var names from file
@@ -55,6 +61,16 @@ class ShieldController:
         max_var = max(var_indices)
         all_vars = [f"y_{i}" for i in range(max_var + 1)]
         return all_vars
+
+    def set_episode(self, episode):
+        self.episode = episode
+        if self.mode == "progressive":
+            flag_active_val = self.compute_progressive_flag(episode)
+            self.flag_logic_fn = partial(self._base_flag_logic_fn, flag_active_val=flag_active_val)
+            self.flag_logic_batch = self._batchify(self.flag_logic_fn)
+
+    def compute_progressive_flag(self, episode_num, final_episode=300) -> float:
+        return min(1.0, 0.8 + 0.2 * (episode_num / final_episode))
 
     def flag_logic_with_key_check(self, context):
         """

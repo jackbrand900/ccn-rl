@@ -32,15 +32,15 @@ class DQNAgent:
 
         # === Default parameters ===
         self.gamma = 0.99
-        self.lr = 2e-4
-        self.batch_size = 64
+        self.lr = 3e-3
+        self.batch_size = 128
         self.buffer_size = 100_000
-        self.target_update_freq = 500
-        self.epsilon_start = 0.5
+        self.target_update_freq = 1000
+        self.epsilon_start = 0.25
         self.epsilon_end = 0.01
         self.epsilon_decay = 10000
         self.hidden_dim = 128
-        self.num_layers = 2
+        self.num_layers = 3
         self.use_cnn = use_cnn
         self.use_orthogonal_init = False
         self.pretrained_cnn = None
@@ -127,8 +127,9 @@ class DQNAgent:
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
         # === Epsilon-greedy logic ===
-        self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
-                       np.exp(-1.0 * self.steps_done / self.epsilon_decay)
+        eps_diff = self.epsilon_start - self.epsilon_end
+        decay_ratio = min(1.0, self.steps_done / self.epsilon_decay)
+        self.epsilon = self.epsilon_start - decay_ratio * eps_diff
         self.steps_done += 1
 
         is_greedy = deterministic or random.random() > self.epsilon
@@ -136,19 +137,19 @@ class DQNAgent:
         if is_greedy:
             logits = self.q_net(state_tensor, context=context)
             raw_probs = torch.softmax(logits, dim=-1)
-            dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
-            a_unshielded = dist_unshielded.sample().item()
+            a_unshielded = torch.argmax(raw_probs).item()
 
             if self.use_shield_layer and do_apply_shield:
                 corrected_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
+                a_shielded = torch.argmax(corrected_probs).item()
             elif self.use_shield_post and do_apply_shield:
                 corrected_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
                 corrected_probs /= corrected_probs.sum()
+                a_shielded = torch.argmax(corrected_probs).item()
             else:
                 corrected_probs = raw_probs.clone()
+                a_shielded = a_unshielded
 
-            dist_shielded = torch.distributions.Categorical(probs=corrected_probs)
-            a_shielded = dist_shielded.sample().item()
             selected_action = a_shielded if self.shield_controller.is_shield_active else a_unshielded
         else:
             selected_action = random.randrange(self.action_dim)
@@ -187,36 +188,45 @@ class DQNAgent:
         rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
         dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
 
-        logits = self.q_net(states, context=contexts)
-        q_values = logits.gather(1, actions)
+        # === Q-Loss computation (directly here) ===
+        q_out = self.q_net(states, context=contexts)
+        q_values = q_out.gather(1, actions)
 
         with torch.no_grad():
-            next_logits = self.target_net(next_states)
-            next_q = next_logits.max(1, keepdim=True)[0]
-            target_q_values = rewards + self.gamma * next_q * (1 - dones)
+            next_q = self.target_net(next_states)
+            next_max_q = next_q.max(1, keepdim=True)[0]
+            target_q_values = rewards + self.gamma * next_max_q * (1 - dones)
 
-        loss = nn.MSELoss()(q_values, target_q_values)
+        td_loss = nn.MSELoss()(q_values, target_q_values)
+
+        raw_probs = torch.softmax(q_out, dim=1)
+        # shielded_probs = raw_probs.clone()
+
+        # if self.use_shield_layer:
+        #     shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts).detach()
+        #
+        # goal = torch.zeros_like(shielded_probs)
+        # goal.scatter_(1, actions, 1.0)
+        #
+        # req_loss = nn.BCELoss()(shielded_probs, goal)
+        # consistency_loss = nn.MSELoss()(raw_probs, shielded_probs)
+        #
+        total_loss = td_loss
 
         self.optimizer.zero_grad()
-        loss.backward()
+        total_loss.backward()
         self.optimizer.step()
 
         if self.steps_done % self.target_update_freq == 0:
             self.target_net.load_state_dict(self.q_net.state_dict())
 
-        raw_probs = torch.softmax(logits, dim=-1).detach()
-        shielded_probs = raw_probs.clone()
-
-        if self.use_shield_layer:
-            shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts).detach()
-
-        prob_shift = torch.abs(raw_probs - shielded_probs).mean().item()
-        mod_rate = (shielded_probs.argmax(dim=1) != raw_probs.argmax(dim=1)).float().mean().item()
-
-        self.training_logs["loss"].append(loss.item())
+        # prob_shift = torch.abs(shielded_probs - raw_probs).mean().item()
+        # mod_rate = (shielded_probs.argmax(dim=1) != raw_probs.argmax(dim=1)).float().mean().item()
+        #
+        self.training_logs["loss"].append(total_loss.item())
         self.training_logs["epsilon"].append(self.epsilon)
-        self.training_logs["prob_shift"].append(prob_shift)
-        self.training_logs["mod_rate"].append(mod_rate)
+        # self.training_logs["prob_shift"].append(prob_shift)
+        # self.training_logs["mod_rate"].append(mod_rate)
 
     def get_weights(self):
         return self.q_net.state_dict()

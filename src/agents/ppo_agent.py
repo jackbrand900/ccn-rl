@@ -1,25 +1,13 @@
+import random
+
 import torch
+from torch import nn
 
 from src.utils.constraint_monitor import ConstraintMonitor
 from src.utils.preprocessing import prepare_input, prepare_batch
 import torch.optim as optim
 import numpy as np
 from torch.distributions import Categorical
-import torchvision.models as models
-from torchvision.models import resnet18
-resnet = resnet18(pretrained=True)
-mobilenet = models.mobilenet_v2(pretrained=True)
-# Extract features and pool
-mobilenet_encoder = torch.nn.Sequential(
-    mobilenet.features,
-    torch.nn.AdaptiveAvgPool2d((1, 1)),
-    torch.nn.Flatten()
-)
-
-# Freeze all MobileNet parameters
-for param in mobilenet_encoder.parameters():
-    param.requires_grad = False
-
 from src.models.network import ModularNetwork
 from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
@@ -31,7 +19,7 @@ class PPOAgent:
                  hidden_dim=128,
                  use_cnn=False,
                  use_orthogonal_init=False,
-                 lr=3e-3,
+                 lr=2e-3,
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.01,
@@ -77,7 +65,7 @@ class PPOAgent:
             self.epochs = epochs
             self.use_orthogonal_init = use_orthogonal_init
             self.hidden_dim = hidden_dim
-            self.num_layers = 2
+            self.num_layers = 3
 
         self.use_cnn = use_cnn
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -178,6 +166,9 @@ class PPOAgent:
                 shield_controller=self.shield_controller,
             )
 
+        # testing random action
+        # selected_action = random.sample(range(self.action_dim), 1)[0]
+
         return selected_action, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
@@ -206,10 +197,12 @@ class PPOAgent:
 
         self.learn_step_counter += 1
 
+        # === Unpack memory ===
         states, actions, rewards, next_states, contexts, dones, log_probs, values, raw_probs, shielded_probs = zip(*self.memory)
         contexts = self.ensure_dict_contexts(contexts)
         returns, advantages = self._compute_gae(rewards, values, dones)
 
+        # === Prepare tensors ===
         states = prepare_batch(states, use_cnn=self.use_cnn).to(self.device)
         if self.use_cnn and states.ndim == 4 and states.shape[-1] == 3:
             states = states.permute(0, 3, 1, 2)
@@ -219,32 +212,52 @@ class PPOAgent:
         advantages = torch.FloatTensor(np.array(advantages)).to(self.device)
         old_log_probs = torch.FloatTensor(np.array(log_probs)).to(self.device)
         raw_probs = torch.stack(raw_probs).to(self.device)
-        shielded_probs = torch.stack(shielded_probs).to(self.device)
+        # shielded_probs = torch.stack(shielded_probs).to(self.device)
 
         # Normalize advantages
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         for _ in range(epochs):
-            loss, logs = self.policy.compute_losses(
-                states, actions, old_log_probs, advantages, returns, shielded_probs,
-                clip_eps=self.clip_eps,
-                ent_coef=self.ent_coef,
-                lambda_req=self.lambda_req,
-                lambda_consistency=self.lambda_consistency,
-                contexts=contexts
-            )
+            logits, predicted_values = self.policy(states, context=contexts)
+            dist = Categorical(logits=logits)
+            new_log_probs = dist.log_prob(actions)
+            entropy = dist.entropy().mean()
+
+            ratio = torch.exp(new_log_probs - old_log_probs)
+            surr1 = ratio * advantages
+            surr2 = torch.clamp(ratio, 1 - self.clip_eps, 1 + self.clip_eps) * advantages
+            policy_loss = -torch.min(surr1, surr2).mean()
+            value_loss = nn.MSELoss()(predicted_values.squeeze(), returns)
+
+            # goal = torch.zeros_like(shielded_probs)
+            # goal.scatter_(1, actions.unsqueeze(1), 1.0)
+            # req_loss = nn.BCELoss()(shielded_probs, goal)
+            # consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
+
+            total_loss = (policy_loss +
+                          0.5 * value_loss -
+                          self.ent_coef * entropy)
 
             self.optimizer.zero_grad()
-            loss.backward()
+            total_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
             self.optimizer.step()
 
-        self.scheduler.step()
-        prob_shift = torch.abs(shielded_probs - raw_probs).mean().item()
-        for k in self.training_logs:
-            self.training_logs[k].append(logs.get(k, 0.0))
-        self.training_logs["prob_shift"].append(prob_shift)
+            logs = {
+                "policy_loss": policy_loss.item(),
+                "value_loss": value_loss.item(),
+                "entropy": entropy.item(),
+                # "req_loss": req_loss.item(),
+                # "consistency_loss": consistency_loss.item(),
+                "total_loss": total_loss.item()
+            }
 
+            for k in self.training_logs:
+                self.training_logs[k].append(logs.get(k, 0.0))
+
+        self.scheduler.step()
+        # prob_shift = torch.abs(shielded_probs - raw_probs).mean().item()
+        # self.training_logs["prob_shift"].append(prob_shift)
         self.memory.clear()
 
     def _compute_gae(self, rewards, values, dones, lam=0.95):

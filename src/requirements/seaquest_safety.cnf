@@ -1,0 +1,18 @@
+# Oxygen low → surface, don’t dive
+not y_18 or y_2
+not y_18 or not y_3
+
+# Have diver → surface, don’t dive
+not y_19 or y_2
+not y_19 or not y_3
+
+# Prevent contradictory directions
+not y_20 or not y_21
+y_20 or y_21
+
+# Low oxygen or diver → don’t FIRE
+not y_18 or not y_1
+not y_19 or not y_1
+
+# Low oxygen → prefer safe actions
+not y_18 or y_0 or y_2 or y_4

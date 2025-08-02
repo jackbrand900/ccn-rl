@@ -8,21 +8,6 @@ from src.utils.preprocessing import prepare_input, prepare_batch
 import torch.optim as optim
 import numpy as np
 from torch.distributions import Categorical
-import torchvision.models as models
-from torchvision.models import resnet18
-resnet = resnet18(pretrained=True)
-mobilenet = models.mobilenet_v2(pretrained=True)
-# Extract features and pool
-mobilenet_encoder = torch.nn.Sequential(
-    mobilenet.features,
-    torch.nn.AdaptiveAvgPool2d((1, 1)),
-    torch.nn.Flatten()
-)
-
-# Freeze all MobileNet parameters
-for param in mobilenet_encoder.parameters():
-    param.requires_grad = False
-
 from src.models.network import ModularNetwork
 from src.utils.shield_controller import ShieldController
 import src.utils.context_provider as context_provider
@@ -34,7 +19,7 @@ class PPOAgent:
                  hidden_dim=128,
                  use_cnn=False,
                  use_orthogonal_init=False,
-                 lr=3e-3,
+                 lr=2e-3,
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.01,
@@ -80,7 +65,7 @@ class PPOAgent:
             self.epochs = epochs
             self.use_orthogonal_init = use_orthogonal_init
             self.hidden_dim = hidden_dim
-            self.num_layers = 2
+            self.num_layers = 3
 
         self.use_cnn = use_cnn
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

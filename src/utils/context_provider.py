@@ -106,14 +106,6 @@ def build_context(env, agent):
             oxygen_meter = ram[102] / 255.0
             low_oxygen = oxygen_meter < 0.2
 
-            # # === Enemy or diver projectiles ===
-            # diver_or_enemy_missile_x = [ram[i] for i in range(71, 75)]
-            # enemy_near = any(abs(x - player_x) < 10 for x in diver_or_enemy_missile_x)
-            #
-            # # === Obstacle proximity ===
-            # enemy_obstacles = [ram[i] for i in range(30, 34)]
-            # obstacle_near = any(abs(x - player_x) < 10 for x in enemy_obstacles)
-
             # === Player direction ===
             player_direction = ram[86]
             facing_right = player_direction == 1
@@ -135,6 +127,29 @@ def build_context(env, agent):
         except Exception as e:
             print(f"[Seaquest RAM error] {e}")
             context["oxygen"] = 1.0
+    elif "DemonAttack" in env_id:
+        context["obs"] = agent.last_obs if hasattr(agent, "last_obs") else None
+
+        try:
+            ram = env.unwrapped.ale.getRAM()
+
+            player_x = ram[22] / 255.0
+            enemy_xs = [ram[i] / 255.0 for i in [17, 18, 19]]
+            enemy_ys = [ram[i] / 255.0 for i in [69, 70, 71]]
+            missile_y = ram[21] / 255.0
+            level = ram[62]
+            num_lives = ram[114]
+
+            context.update({
+                "player_x": player_x,
+                "enemy_xs": enemy_xs,
+                "enemy_ys": enemy_ys,
+                "missile_y": missile_y,
+                "level": level,
+                "num_lives": num_lives,
+            })
+        except Exception as e:
+            print(f"[DemonAttack RAM error] {e}")
     else:
         obs = agent.last_obs if hasattr(agent, "last_obs") else None
         # print(f'obs: {obs}')
@@ -275,4 +290,26 @@ def seaquest_flag_logic(context, flag_active_val=1.0):
         "y_20": flag_active_val if context.get("facing_right", False) else 0.0,      # Facing right
         "y_21": flag_active_val if context.get("facing_left", False) else 0.0,       # Facing left
     }
+
+def demonattack_flag_logic(context, flag_active_val=1.0):
+    flags = {}
+    player_x = context.get("player_x", 0.5)
+    enemy_xs = context.get("enemy_xs", [])
+    enemy_ys = context.get("enemy_ys", [])
+    missile_y = context.get("missile_y", 0.5)
+
+    # y_6: Enemy aligned horizontally with player
+    aligned = any(abs(ex - player_x) < 0.1 for ex in enemy_xs)
+
+    # y_7: Missile near bottom (e.g., just fired)
+    missile_low = missile_y > 0.8
+
+    # y_8: Enemy close to bottom (threat zone)
+    enemy_near = any(ey > 0.7 for ey in enemy_ys)
+
+    flags["y_6"] = flag_active_val if aligned else 0.0
+    flags["y_7"] = flag_active_val if missile_low else 0.0
+    flags["y_8"] = flag_active_val if enemy_near else 0.0
+
+    return flags
 

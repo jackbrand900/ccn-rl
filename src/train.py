@@ -177,7 +177,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
     best_weights = None
     actions_taken = []
     no_improve_counter = 0  # Early stopping counter
-    early_stop_patience = 300 # Stop if no improvement after 300 episodes
+    early_stop_patience = 500 # Stop if no improvement after 300 episodes
 
     for episode in range(1, num_episodes + 1):
         use_cnn = getattr(agent, "use_cnn", False)

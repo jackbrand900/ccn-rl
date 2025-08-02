@@ -24,7 +24,7 @@ class ShieldController:
         self.flag_logic_fn = partial(self._base_flag_logic_fn, flag_active_val=flag_active_val)
         self.flag_logic_batch = self._batchify(self.flag_logic_fn)
 
-    # print(f"[DEBUG] Got flag logic function: {get_flag_logic_fn(self.requirements_path)}")
+        # print(f"[DEBUG] Got flag logic function: {get_flag_logic_fn(self.requirements_path)}")
 
         # Parse var names from file
         self.var_names = self._extract_vars_from_requirements()
@@ -70,7 +70,7 @@ class ShieldController:
             self.flag_logic_batch = self._batchify(self.flag_logic_fn)
 
     def compute_progressive_flag(self, episode_num, final_episode=300) -> float:
-        return min(1.0, 0.5 + 0.5 * (episode_num / final_episode))
+        return min(1.0, 0.8 + 0.2 * (episode_num / final_episode))
 
     def flag_logic_with_key_check(self, context):
         """

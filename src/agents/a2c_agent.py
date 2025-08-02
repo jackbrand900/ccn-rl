@@ -36,7 +36,7 @@ class A2CAgent:
         self.action_dim = action_dim
 
         self.gamma = 0.99
-        self.lr = 3e-4
+        self.lr = 2e-4
         self.hidden_dim = 128
         self.entropy_coef = 0.01
         self.use_cnn = False

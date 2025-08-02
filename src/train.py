@@ -177,7 +177,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
     best_weights = None
     actions_taken = []
     no_improve_counter = 0  # Early stopping counter
-    early_stop_patience = 500 # Stop if no improvement after 500 episodes
+    early_stop_patience = 300 # Stop if no improvement after 300 episodes
 
     for episode in range(1, num_episodes + 1):
         use_cnn = getattr(agent, "use_cnn", False)
@@ -189,7 +189,10 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             env.key_pos = key_pos
         except AttributeError:
             key_pos = None
-        prev_ram = None
+
+        if agent.shield_controller.mode == "progressive":
+            agent.shield_controller.set_episode(episode)
+
         done = False
         total_reward = 0
         step_count = 0
@@ -619,7 +622,7 @@ if __name__ == "__main__":
                         help='Which agent to use: dqn, ppo, a2c, or sac')
     parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')
-    parser.add_argument('--mode', choices=['soft', 'hard'], default='hard', help='Constraint mode')
+    parser.add_argument('--mode', choices=['soft', 'hard', 'progressive'], default='hard', help='Constraint mode')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('--visualize', action='store_true', help='Visualize training plots')
     parser.add_argument('--render', action='store_true', help='Render environment (RGB image)')

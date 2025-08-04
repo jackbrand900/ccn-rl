@@ -36,7 +36,7 @@ class DQNAgent:
         self.batch_size = 128
         self.buffer_size = 100_000
         self.target_update_freq = 1000
-        self.epsilon_start = 0.25
+        self.epsilon_start = 0.5
         self.epsilon_end = 0.01
         self.epsilon_decay = 10000
         self.hidden_dim = 128

@@ -88,7 +88,6 @@ avg_violations_per_episode: 0.8020 ± 0.3378
 avg_modifications_per_episode: 0.0000 ± 0.0000
 total_violations: 80.2000 ± 33.7840
 total_modifications: 0.0000 ± 0.0000
-total_steps: 30418.2000 ± 2877.2105
 
 dqn_shielded_post
 === Final Aggregated Evaluation over 5 runs ===
@@ -102,4 +101,17 @@ avg_violations_per_episode: 0.8980 ± 0.6321
 avg_modifications_per_episode: 0.8980 ± 0.6321
 total_violations: 89.8000 ± 63.2120
 total_modifications: 89.8000 ± 63.2120
+
+
+ppo semantic loss 0.05
+=== Final Aggregated Evaluation over 5 runs ===
+avg_reward: 353.7460 ± 111.4980
+std_reward: 103.0699 ± 45.7602
+max_reward: 439.6000 ± 120.8000
+min_reward: 55.0000 ± 52.9755
+avg_shield_mod_rate: 0.0000 ± 0.0000
+avg_violations_per_step: 0.0062 ± 0.0046
+avg_violations_per_episode: 2.0700 ± 1.9245
+avg_modifications_per_episode: 0.0000 ± 0.0000
+total_violations: 207.0000 ± 192.4453
 

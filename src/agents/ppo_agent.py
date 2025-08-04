@@ -23,7 +23,7 @@ class PPOAgent:
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.01,
-                 lambda_req=0.0,
+                 lambda_req=0.05,
                  lambda_consistency=0.0,
                  verbose=False,
                  requirements_path=None,
@@ -234,9 +234,13 @@ class PPOAgent:
             # req_loss = nn.BCELoss()(shielded_probs, goal)
             # consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
 
+            probs = torch.softmax(logits, dim=-1)
+            constraint_loss = self._compute_constraint_loss(probs, contexts)
+
             total_loss = (policy_loss +
                           0.5 * value_loss -
-                          self.ent_coef * entropy)
+                          self.ent_coef * entropy +
+                          self.lambda_req * constraint_loss)
 
             self.optimizer.zero_grad()
             total_loss.backward()
@@ -276,3 +280,22 @@ class PPOAgent:
 
     def load_weights(self, weights):
         self.policy.load_state_dict(weights)
+
+    def _compute_constraint_loss(self, probs, contexts):
+        """
+        probs: [B, num_actions] — output from softmax(logits)
+        contexts: list of dicts
+        """
+        B = probs.size(0)
+        flag_vals = []
+        for ctx in contexts:
+            flags = self.shield_controller.flag_logic_fn(ctx)
+            flag_vals.append([flags.get(name, 0.0) for name in self.shield_controller.flag_names])
+
+        flag_tensor = torch.tensor(flag_vals, dtype=probs.dtype, device=probs.device)  # [B, num_flags]
+        full_input = torch.cat([probs, flag_tensor], dim=1)  # [B, num_actions + num_flags]
+        corrected = self.shield_controller.shield_layer(full_input)
+        corrected_probs = corrected[:, :probs.shape[1]]
+
+        loss = torch.abs(corrected_probs - probs).sum(dim=1).mean()
+        return loss

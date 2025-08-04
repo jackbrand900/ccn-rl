@@ -31,18 +31,18 @@ class DQNAgent:
         self.env = env
 
         # === Default parameters ===
-        self.gamma = 0.99
-        self.lr = 3e-3
+        self.gamma = 0.985
+        self.lr = 1e-5
         self.batch_size = 128
         self.buffer_size = 100_000
-        self.target_update_freq = 1000
+        self.target_update_freq = 500
         self.epsilon_start = 0.5
         self.epsilon_end = 0.01
-        self.epsilon_decay = 10000
-        self.hidden_dim = 128
+        self.epsilon_decay = 54170
+        self.hidden_dim = 256
         self.num_layers = 3
         self.use_cnn = use_cnn
-        self.use_orthogonal_init = False
+        self.use_orthogonal_init = True
         self.pretrained_cnn = None
         print(agent_kwargs)
 

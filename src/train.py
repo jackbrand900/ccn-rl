@@ -332,7 +332,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/emergency_cartpole.cnf'
+    requirements_path = 'src/requirements/seaquest_low_oxygen_go_up.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,

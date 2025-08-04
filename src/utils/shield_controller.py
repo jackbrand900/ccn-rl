@@ -1,3 +1,4 @@
+import itertools
 from functools import partial
 
 import torch
@@ -41,6 +42,9 @@ class ShieldController:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.shield_layer = self.build_shield_layer().to(self.device)
         self.shield_activations = 0
+
+        self.clauses = self._parse_cnf_file()
+        self.satisfying_assignments = self._get_satisfying_assignments()
 
     def _batchify(self, single_fn):
         def batch_fn(contexts):
@@ -203,4 +207,48 @@ class ShieldController:
                         print(f"[SHIELD ACTIVE BUT NO CHANGE] Action output remained the same.")
 
         return corrected
+
+    def _parse_cnf_file(self):
+        clauses = []
+        with open(self.requirements_path, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                literals = re.split(r'\s+or\s+', line.strip())
+                clause = []
+                for lit in literals:
+                    lit = lit.strip()
+                    is_negated = lit.startswith('not ')
+                    name = lit[4:] if is_negated else lit  # remove 'not '
+                    if name not in self.var_names:
+                        raise ValueError(f"Unknown variable '{name}' in CNF file.")
+                    idx = self.var_names.index(name)
+                    clause.append((idx, is_negated))
+                clauses.append(clause)
+        return clauses
+
+    def _get_satisfying_assignments(self):
+        assignments = []
+        for bits in itertools.product([0, 1], repeat=self.num_vars):
+            if all(any(bits[idx] ^ neg for idx, neg in clause) for clause in self.clauses):
+                assignments.append(list(bits))
+        return assignments
+
+    def compute_semantic_loss(self, probs):
+        """
+        probs: [B, num_vars] (Bernoulli outputs from model: actions + flags)
+        Returns: scalar semantic loss
+        """
+        device = probs.device
+        sat_tensor = torch.tensor(self.satisfying_assignments, dtype=probs.dtype, device=device)  # [S, V]
+        log_probs = []
+
+        for x in sat_tensor:  # [V]
+            logp = torch.log(probs * x + (1 - probs) * (1 - x) + 1e-8).sum(dim=1)  # [B]
+            log_probs.append(logp)
+
+        stacked = torch.stack(log_probs, dim=0)  # [S, B]
+        logsumexp = torch.logsumexp(stacked, dim=0)  # [B]
+        return -logsumexp.mean()
+
 

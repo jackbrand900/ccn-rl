@@ -332,7 +332,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/emergency_cartpole.cnf'
+    requirements_path = 'src/requirements/seaquest_low_oxygen_and_diver_go_up.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -389,8 +389,7 @@ def train(agent='dqn',
         print(f"\n[Post-Training] Loading best weights with avg reward: {best_avg_reward:.2f}")
         agent_trained.load_weights(best_weights)
 
-    agent.load_weights(best_weights)
-    return agent, episode_rewards, best_weights, best_avg_reward, env
+    return agent_trained, episode_rewards, best_weights, best_avg_reward, env
 
 
 def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False, force_disable_shield=False):
@@ -551,6 +550,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
 def run_multiple_evaluations(
         agent_name='dqn',
         env_name='MiniGrid-Empty-5x5-v0',
+        use_ram_obs=False,
         num_runs=5,
         num_train_episodes=500,
         num_eval_episodes=100,
@@ -571,6 +571,7 @@ def run_multiple_evaluations(
         agent, episode_rewards, best_weights, best_avg_reward, env = train(
             agent=agent_name,
             env_name=env_name,
+            use_ram_obs=use_ram_obs,
             num_episodes=num_train_episodes,
             use_shield_post=use_shield_post,
             use_shield_layer=use_shield_layer,
@@ -639,6 +640,7 @@ if __name__ == "__main__":
         run_multiple_evaluations(
             agent_name=args.agent,
             env_name=args.env,
+            use_ram_obs=args.use_ram_obs,
             num_runs=5,
             num_train_episodes=args.num_episodes,
             num_eval_episodes=100,

@@ -19,12 +19,12 @@ class PPOAgent:
                  hidden_dim=128,
                  use_cnn=False,
                  use_orthogonal_init=False,
-                 lr=2e-3,
+                 lr=1e-3,
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.01,
-                 lambda_req=0.1,
-                 lambda_consistency=0.0,
+                 lambda_sem=0.1,
+                 lambda_consistency=0.1,
                  verbose=False,
                  requirements_path=None,
                  env=None,
@@ -36,7 +36,7 @@ class PPOAgent:
                  agent_kwargs=None,
                  mode='hard'):
 
-        self.lambda_req = lambda_req
+        self.lambda_sem = lambda_sem
         self.lambda_consistency = lambda_consistency
         self.use_shield_post = use_shield_post
         self.use_shield_layer = use_shield_layer
@@ -229,14 +229,9 @@ class PPOAgent:
             policy_loss = -torch.min(surr1, surr2).mean()
             value_loss = nn.MSELoss()(predicted_values.squeeze(), returns)
 
-            # goal = torch.zeros_like(shielded_probs)
-            # goal.scatter_(1, actions.unsqueeze(1), 1.0)
-            # req_loss = nn.BCELoss()(shielded_probs, goal)
-            # consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
-
             probs = torch.softmax(logits, dim=-1)
             semantic_loss = 0
-            if self.lambda_req > 0:
+            if self.lambda_sem > 0:
                 flag_dicts = self.shield_controller.flag_logic_batch(contexts)
                 flag_values = [
                     [flags.get(name, 0.0) for name in self.shield_controller.flag_names]
@@ -248,7 +243,7 @@ class PPOAgent:
             total_loss = (policy_loss +
                           0.5 * value_loss -
                           self.ent_coef * entropy +
-                          self.lambda_req * semantic_loss)
+                          self.lambda_sem * semantic_loss)
 
             self.optimizer.zero_grad()
             total_loss.backward()
@@ -259,8 +254,6 @@ class PPOAgent:
                 "policy_loss": policy_loss.item(),
                 "value_loss": value_loss.item(),
                 "entropy": entropy.item(),
-                # "req_loss": req_loss.item(),
-                # "consistency_loss": consistency_loss.item(),
                 "total_loss": total_loss.item()
             }
 
@@ -268,8 +261,6 @@ class PPOAgent:
                 self.training_logs[k].append(logs.get(k, 0.0))
 
         self.scheduler.step()
-        # prob_shift = torch.abs(shielded_probs - raw_probs).mean().item()
-        # self.training_logs["prob_shift"].append(prob_shift)
         self.memory.clear()
 
     def _compute_gae(self, rewards, values, dones, lam=0.95):

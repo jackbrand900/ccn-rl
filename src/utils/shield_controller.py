@@ -45,6 +45,7 @@ class ShieldController:
 
         self.clauses = self._parse_cnf_file()
         self.satisfying_assignments = self._get_satisfying_assignments()
+        self._sat_tensor = None
 
     def _batchify(self, single_fn):
         def batch_fn(contexts):
@@ -234,21 +235,36 @@ class ShieldController:
                 assignments.append(list(bits))
         return assignments
 
-    def compute_semantic_loss(self, probs):
+    def compute_semantic_loss(self, probs, num_samples=100):
         """
-        probs: [B, num_vars] (Bernoulli outputs from model: actions + flags)
-        Returns: scalar semantic loss
+        probs: [B, num_vars] — Bernoulli outputs from model
+        num_samples: number of satisfying assignments to sample
+        Returns: scalar semantic loss (approximate)
         """
         device = probs.device
-        sat_tensor = torch.tensor(self.satisfying_assignments, dtype=probs.dtype, device=device)  # [S, V]
-        log_probs = []
 
-        for x in sat_tensor:  # [V]
-            logp = torch.log(probs * x + (1 - probs) * (1 - x) + 1e-8).sum(dim=1)  # [B]
-            log_probs.append(logp)
+        # Convert satisfying assignments to tensor once (if not already)
+        if self._sat_tensor is None or self._sat_tensor.device != device:
+            self._sat_tensor = torch.tensor(
+                self.satisfying_assignments,
+                dtype=probs.dtype,
+                device=device
+            )
 
-        stacked = torch.stack(log_probs, dim=0)  # [S, B]
-        logsumexp = torch.logsumexp(stacked, dim=0)  # [B]
+        total_assignments = self._sat_tensor.shape[0]
+
+        if total_assignments <= num_samples:
+            sampled = self._sat_tensor  # use all
+        else:
+            idx = torch.randperm(total_assignments, device=device)[:num_samples]
+            sampled = self._sat_tensor[idx]  # [num_samples, V]
+
+        # Reshape for broadcasting
+        sampled = sampled.unsqueeze(1)  # [S, 1, V]
+        probs = probs.unsqueeze(0)      # [1, B, V]
+
+        logp = torch.log(probs * sampled + (1 - probs) * (1 - sampled) + 1e-8)  # [S, B, V]
+        logp_sum = logp.sum(dim=2)  # [S, B]
+        logsumexp = torch.logsumexp(logp_sum, dim=0)  # [B]
+
         return -logsumexp.mean()
-
-

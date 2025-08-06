@@ -173,11 +173,13 @@ def step_env(env, action):
 def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constraints=True, visualize=False,
                  verbose=False, log_rewards=False, use_cnn=False, render=False):
     episode_rewards = []
+    mod_rate_per_episode = []
+    viol_rate_per_episode = []
     best_avg_reward = float('-inf')
     best_weights = None
     actions_taken = []
     no_improve_counter = 0  # Early stopping counter
-    early_stop_patience = 500 # Stop if no improvement after 300 episodes
+    early_stop_patience = 500 # Stop if no improvement after 500 episodes
 
     for episode in range(1, num_episodes + 1):
         use_cnn = getattr(agent, "use_cnn", False)
@@ -224,7 +226,13 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             state = next_state
             total_reward += reward
 
+        constraint_monitor = agent.constraint_monitor
+        stats = constraint_monitor.summary()
+        episode_mod_rate = stats['episode_mod_rate']
+        episode_viol_rate = stats['episode_viol_rate']
         episode_rewards.append(total_reward)
+        mod_rate_per_episode.append(episode_mod_rate)
+        viol_rate_per_episode.append(episode_viol_rate)
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
@@ -240,12 +248,15 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                 constraint_monitor = agent.constraint_monitor
                 stats = constraint_monitor.summary()
                 total_mods = stats['total_modifications']
+                episode_mods = stats['episode_modifications']
                 total_violations = stats['total_violations']
+                episode_viols = stats['episode_violations']
                 mod_rate = stats['total_mod_rate']
                 viol_rate = stats['total_viol_rate']
                 monitor_logs = (f"Total Mods: {total_mods}, Mod Rate: {mod_rate:.3f}, "
                                 f"Total Violations: {total_violations}, Viol Rate: {viol_rate: .3f}")
                 log_msg += monitor_logs
+
 
             if hasattr(agent, "epsilon"):
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
@@ -267,13 +278,15 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         agent_name = agent.__class__.__name__
         env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
         if getattr(agent, 'use_shield_layer', False):
-            shield_mode = "ShieldLayer"
+            shield_mode = "Layered Shield"
         elif getattr(agent, 'use_shield_post', False):
-            shield_mode = "PostShield"
+            shield_mode = "Post-hoc Shield"
+        elif agent.lambda_sem > 0:
+            shield_mode = "Semantic Loss"
         else:
             shield_mode = "Unshielded"
 
-        title_prefix = f"{agent_name} on {env_name} [{shield_mode}]"
+        title_prefix = f"{agent_name} on {env_name}, {shield_mode}"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         graphing.plot_rewards(
@@ -286,10 +299,18 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             show=True
         )
 
+        graphing.plot_summary_metrics(
+            rewards=episode_rewards,
+            mod_rate=mod_rate_per_episode,
+            viol_rate=viol_rate_per_episode,
+            title_prefix=title_prefix,
+            save_dir="plots"
+        )
+
     return agent, episode_rewards, best_weights, best_avg_reward
 
 
-def train(agent='dqn',
+def train(agent='ppo',
           use_shield_post=False,
           use_shield_layer=False,
           mode='hard',
@@ -332,7 +353,7 @@ def train(agent='dqn',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/seaquest_low_oxygen_go_up.cnf'
+    requirements_path = 'src/requirements/emergency_cartpole.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -376,6 +397,7 @@ def train(agent='dqn',
 
     print(f"Training {agent.__class__.__name__} agent on {env_name} with shield post: {use_shield_post} "
           f"with shield layer: {use_shield_layer}")
+
     agent_trained, episode_rewards, best_weights, best_avg_reward = run_training(
         agent, env,
         verbose=verbose,
@@ -504,10 +526,12 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             shield_mode = "ShieldLayer"
         elif use_post:
             shield_mode = "PostShield"
+        elif agent.lambda_sem > 0:
+            shield_mode = "Semantic Loss"
         else:
             shield_mode = "Unshielded"
 
-        title_prefix = f"{agent_name} on {env_name} [{shield_mode}]"
+        title_prefix = f"{agent_name} on {env_name} {shield_mode}"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         graphing.plot_rewards(
@@ -520,13 +544,13 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             show=True
         )
 
-        graphing.plot_violations(
-            violations=violations_per_episode,
-            total_steps=total_steps,
-            title=f"{title_prefix} – Violations per Episode",
-            save_path=f"plots/{agent_name}_{env_name}_{shield_mode}_{timestamp}_violations.png",
-            show=True
-        )
+        # graphing.plot_violations(
+        #     violations=violations_per_episode,
+        #     total_steps=total_steps,
+        #     title=f"{title_prefix} – Violations per Episode",
+        #     save_path=f"plots/{agent_name}_{env_name}_{shield_mode}_{timestamp}_violations.png",
+        #     show=True
+        # )
 
     total_violations = stats["total_violations"]
     total_modifications = stats["total_modifications"]
@@ -552,7 +576,7 @@ def run_multiple_evaluations(
         env_name='MiniGrid-Empty-5x5-v0',
         use_ram_obs=False,
         num_runs=5,
-        num_train_episodes=500,
+        num_train_episodes=2000,
         num_eval_episodes=100,
         use_shield_post=False,
         use_shield_layer=False,
@@ -619,8 +643,8 @@ def run_multiple_evaluations(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN, A2C, PPO) with optional shield and environment.")
-    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c', 'sac'], default='dqn',
-                        help='Which agent to use: dqn, ppo, a2c, or sac')
+    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='ppo',
+                        help='Which agent to use: dqn, ppo, a2c')
     parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')
     parser.add_argument('--mode', choices=['soft', 'hard', 'progressive'], default='hard', help='Constraint mode')
@@ -629,7 +653,7 @@ if __name__ == "__main__":
     parser.add_argument('--render', action='store_true', help='Render environment (RGB image)')
     parser.add_argument('--env', type=str, default='MiniGrid-Empty-5x5-v0', help='Gym environment to train on')
     parser.add_argument('--force_disable_shield', action='store_true', help='Force shield off during evaluation')
-    parser.add_argument('--num_episodes', type=int, default=500, help='Number of training episodes')
+    parser.add_argument('--num_episodes', type=int, default=2000, help='Number of training episodes')
     parser.add_argument('--monitor_constraints', action='store_true', help='Enable constraint monitor')
     parser.add_argument('--no_eval', action='store_true', help='Do not run eval')
     parser.add_argument('--use_ram_obs', action='store_true', help='Use RAM for observation space')
@@ -641,7 +665,7 @@ if __name__ == "__main__":
             agent_name=args.agent,
             env_name=args.env,
             use_ram_obs=args.use_ram_obs,
-            num_runs=5,
+            num_runs=1,
             num_train_episodes=args.num_episodes,
             num_eval_episodes=100,
             use_shield_post=args.use_shield_post,

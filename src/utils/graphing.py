@@ -25,11 +25,19 @@ def plot_rewards(
     avg_reward = np.mean(rewards)
     std_reward = np.std(rewards)
 
-    # Rolling mean and std
-    if rolling_window > 1:
-        rolling_mean = np.convolve(rewards, np.ones(rolling_window) / rolling_window, mode='valid')
-        rolling_std = np.std([rewards[max(0, i - rolling_window):i] for i in range(rolling_window, len(rewards) + 1)], axis=1)
-        rolling_episodes = np.arange(rolling_window, len(rewards) + 1)
+    # Rolling mean and std for all episodes (including early ones)
+    if rolling_window > 1 and len(rewards) >= 2:
+        rolling_windows = [
+            rewards[max(0, i - rolling_window):i]
+            for i in range(1, len(rewards) + 1)
+        ]
+        rolling_array = np.vstack([
+            np.pad(window.astype(float), (rolling_window - len(window), 0), constant_values=np.nan)
+            for window in rolling_windows
+        ])
+        rolling_mean = np.nanmean(rolling_array, axis=1)
+        rolling_std = np.nanstd(rolling_array, axis=1)
+        rolling_episodes = np.arange(1, len(rewards) + 1)
 
         ax.plot(rolling_episodes, rolling_mean, label=f"{rolling_window}-Episode Average", linewidth=2)
         ax.fill_between(rolling_episodes,
@@ -54,6 +62,7 @@ def plot_rewards(
     ax.set_title(title)
     ax.grid(alpha=0.3)
 
+    # Save
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path)
@@ -284,4 +293,72 @@ def plot_violations(
     else:
         plt.close()
 
+import matplotlib.patches as mpatches
 
+def plot_summary_metrics(rewards, mod_rate, viol_rate, title_prefix, save_dir="plots", rolling_window=10):
+    os.makedirs(save_dir, exist_ok=True)
+    episodes = np.arange(len(rewards))
+
+    # Compute basic stats
+    mod_mean = np.mean(mod_rate)
+    mod_std = np.std(mod_rate)
+    vio_mean = np.mean(viol_rate)
+    vio_std = np.std(viol_rate)
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    def rolling_stats(data):
+        data = np.array(data)
+        rolling_mean = np.convolve(data, np.ones(rolling_window) / rolling_window, mode='valid')
+        rolling_windows = [data[max(0, i - rolling_window):i] for i in range(rolling_window, len(data) + 1)]
+        rolling_array = np.vstack([
+            np.pad(window.astype(float), (rolling_window - len(window), 0), constant_values=np.nan)
+            for window in rolling_windows
+        ])
+        rolling_std = np.nanstd(rolling_array, axis=1)
+        rolling_episodes = np.arange(rolling_window, len(data) + 1)
+        return rolling_episodes, rolling_mean, rolling_std
+
+    legend_handles = []
+
+    if rolling_window > 1 and len(rewards) >= rolling_window:
+        # Modifications
+        mod_eps, mod_mean_arr, mod_std_arr = rolling_stats(mod_rate)
+        mod_line, = ax.plot(mod_eps, mod_mean_arr, color='orange',
+                            label=f"Modification Rate (Mean:{mod_mean:.2f}, Std Dev:{mod_std:.2f})")
+        ax.fill_between(mod_eps, mod_mean_arr - mod_std_arr, mod_mean_arr + mod_std_arr,
+                        color='orange', alpha=0.2)
+        mod_fill_patch = mpatches.Patch(color='orange', alpha=0.2, label='±1 Std Dev (Modifications)')
+        legend_handles.extend([mod_line, mod_fill_patch])
+
+        # Violations
+        vio_eps, vio_mean_arr, vio_std_arr = rolling_stats(viol_rate)
+        vio_line, = ax.plot(vio_eps, vio_mean_arr, color='red',
+                            label=f"Violation Rate (Mean:{vio_mean:.2f}, Std Dev:{vio_std:.2f})")
+        ax.fill_between(vio_eps, vio_mean_arr - vio_std_arr, vio_mean_arr + vio_std_arr,
+                        color='red', alpha=0.2)
+        vio_fill_patch = mpatches.Patch(color='red', alpha=0.2, label='±1 Std Dev (Violations)')
+        legend_handles.extend([vio_line, vio_fill_patch])
+
+    else:
+        # Fallback to raw plots
+        mod_line, = ax.plot(episodes, mod_rate, color='orange',
+                            label=f"Modification Rate (Mean:{mod_mean:.2f}, Std Dev:{mod_std:.2f})")
+        vio_line, = ax.plot(episodes, viol_rate, color='red',
+                            label=f"Violation Rate (Mean:{vio_mean:.2f}, Std Dev:{vio_std:.2f})")
+        legend_handles.extend([mod_line, vio_line])
+
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Value")
+    ax.set_title(f"{title_prefix} – Modification and Violation Rates per Episode")
+    ax.grid(alpha=0.3)
+    ax.legend(handles=legend_handles, loc='upper right')
+
+    # Save
+    safe_prefix = title_prefix.replace(" ", "_").replace("/", "-").lower()
+    filename = f"{safe_prefix}_summary.png"
+    save_path = os.path.join(save_dir, filename)
+    fig.savefig(save_path)
+    print(f"Plot saved to {save_path}")
+    plt.show()
+    plt.close(fig)

@@ -19,7 +19,7 @@ class PPOAgent:
                  hidden_dim=128,
                  use_cnn=False,
                  use_orthogonal_init=False,
-                 lr=1e-3,
+                 lr=2e-3,
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.01,

@@ -86,33 +86,34 @@ class ConstraintMonitor:
 
     def would_violate(self, action, context, shield_controller, epsilon=1e-5):
         """
-        Returns True if the given action would have been significantly modified by the shield layer.
-        In soft mode, considers if the probability mass on the selected action was reduced.
+        Returns True if the given action would be blocked by the hard shield.
+
+        This is used as a consistent way to log constraint violations regardless
+        of whether the active shield mode is soft, post, or integrated.
         """
         device = next(shield_controller.shield_layer.parameters()).device
 
+        # One-hot encode the action
         one_hot = torch.zeros(1, shield_controller.num_actions, dtype=torch.float32, device=device)
         one_hot[0, action] = 1.0
 
-        # Get flags
+        # Get flag values from context
         flags = shield_controller.flag_logic_fn(context)
         flag_values = [flags.get(name, 0) for name in shield_controller.flag_names]
-        flag_tensor = torch.tensor(flag_values, dtype=one_hot.dtype, device=device).unsqueeze(0)
+        flag_tensor = torch.tensor(flag_values, dtype=torch.float32, device=device).unsqueeze(0)
 
+        # Build shield input and compute corrected probabilities
         input_tensor = torch.cat([one_hot, flag_tensor], dim=1)
-        corrected = shield_controller.shield_layer(input_tensor)
-        corrected_probs = corrected[0, :shield_controller.num_actions]
 
-        if shield_controller.mode == "soft":
-            corrected_probs = corrected_probs / corrected_probs.sum()
+        with torch.no_grad():
+            corrected = shield_controller.shield_layer(input_tensor)
+            corrected_probs = corrected[0, :shield_controller.num_actions]  # shape: [num_actions]
 
-            # If shield *lowered* the selected action's probability significantly, count as violation
-            changed = corrected_probs[action] < (1.0 - epsilon)
-            return bool(changed)
-        else:
-            # Hard mode: just check if action changed
-            corrected_action = corrected_probs.argmax().item()
-            return int(corrected_action != action)
+        # In hard shield mode, invalid actions get zero probability
+        max_prob = corrected_probs.max().item()
+
+        # If the chosen action has significantly less than the max prob, it would be blocked
+        return corrected_probs[action].item() < (max_prob - epsilon)
 
 
     def summary(self):

@@ -30,14 +30,14 @@ class DQNAgent:
         print(f"[ShieldedDQNAgent] Using device: {self.device}")
         self.env = env
 
-        self.gamma = 0.99
-        self.lr = 3e-4
+        self.gamma = 0.999
+        self.lr = 1e-4
         self.batch_size = 64
         self.buffer_size = 100_000
         self.target_update_freq = 500
         self.epsilon_start = 0.5
         self.epsilon_end = 0.01
-        self.epsilon_decay = 50000
+        self.epsilon_decay = 50000 # fix this
         self.hidden_dim = 128
         self.lambda_sem = 0.1
         self.num_layers = 3

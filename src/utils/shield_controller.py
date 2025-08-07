@@ -138,9 +138,7 @@ class ShieldController:
 
         flag_active = any(flag_values)
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
-        # print(f"[DEBUG] Flag logic function used: {self.flag_logic_fn}")
         flags = self.flag_logic_fn(context)
-        # print(f"[DEBUG] Flags from logic: {flags}")
         if self.verbose:
             print(f"[DEBUG] Raw flags: {flags}, Flag values: {flag_values}")
             if flag_active:

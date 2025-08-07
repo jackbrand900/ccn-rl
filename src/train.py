@@ -187,7 +187,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         state, _ = env.reset()
         state = preprocess_state(state, use_cnn=use_cnn)
         try:
-            key_pos = find_key(env)
+            key_pos = find_key(env) # TODO: move this
             env.key_pos = key_pos
         except AttributeError:
             key_pos = None

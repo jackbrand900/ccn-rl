@@ -18,6 +18,7 @@ class DQNAgent:
                  action_dim,
                  agent_kwargs=None,
                  use_shield_post=False,
+                 use_shield_pre=False,
                  use_shield_layer=False,
                  monitor_constraints=True,
                  requirements_path=None,
@@ -30,16 +31,16 @@ class DQNAgent:
         print(f"[ShieldedDQNAgent] Using device: {self.device}")
         self.env = env
 
-        self.gamma = 0.999
-        self.lr = 1e-4
+        self.gamma = 0.99
+        self.lr = 3e-4
         self.batch_size = 64
         self.buffer_size = 100_000
         self.target_update_freq = 500
         self.epsilon_start = 0.5
         self.epsilon_end = 0.01
-        self.epsilon_decay = 50000 # fix this
+        self.epsilon_decay = 30000
         self.hidden_dim = 128
-        self.lambda_sem = 0.1
+        self.lambda_sem = 0.0
         self.num_layers = 3
         self.use_cnn = use_cnn
         self.use_orthogonal_init = True
@@ -64,6 +65,7 @@ class DQNAgent:
 
         self.action_dim = action_dim
         self.use_shield_post = use_shield_post
+        self.use_shield_pre = use_shield_pre
         self.use_shield_layer = use_shield_layer
         self.monitor_constraints = monitor_constraints
 
@@ -74,7 +76,7 @@ class DQNAgent:
             num_actions=action_dim,
             mode=mode,
             verbose=verbose,
-            is_shield_active=(self.use_shield_layer or self.use_shield_post)
+            is_shield_active=(self.use_shield_layer or self.use_shield_post or self.use_shield_pre)
         )
         self.shield_controller.constraint_monitor = self.constraint_monitor
 
@@ -144,7 +146,7 @@ class DQNAgent:
             if self.use_shield_layer and do_apply_shield:
                 corrected_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
                 a_shielded = torch.argmax(corrected_probs).item()
-            elif self.use_shield_post and do_apply_shield:
+            elif self.use_shield_post or self.use_shield_pre and do_apply_shield:
                 corrected_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
                 corrected_probs /= corrected_probs.sum()
                 a_shielded = torch.argmax(corrected_probs).item()
@@ -170,7 +172,7 @@ class DQNAgent:
                 shield_controller=self.shield_controller
             )
 
-        return selected_action, context
+        return selected_action, a_unshielded, a_shielded, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.replay_buffer.append((state, action, reward, next_state, done))

@@ -1,8 +1,11 @@
+from datetime import datetime
+
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import math
 from collections import defaultdict
+import matplotlib.patches as mpatches
 
 def plot_rewards(
         rewards,
@@ -11,7 +14,8 @@ def plot_rewards(
         ylabel="Reward",
         rolling_window=10,
         save_path=None,
-        show=True
+        show=True,
+        run_dir=None
 ):
     episodes = np.arange(1, len(rewards) + 1)
     rewards = np.array(rewards)
@@ -19,59 +23,56 @@ def plot_rewards(
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
 
-    # Plot raw rewards
     ax.plot(episodes, rewards, label="Episode Reward", alpha=0.6)
 
     avg_reward = np.mean(rewards)
     std_reward = np.std(rewards)
 
-    # Rolling mean and std for all episodes (including early ones)
     if rolling_window > 1 and len(rewards) >= 2:
-        rolling_windows = [
-            rewards[max(0, i - rolling_window):i]
-            for i in range(1, len(rewards) + 1)
-        ]
-        rolling_array = np.vstack([
-            np.pad(window.astype(float), (rolling_window - len(window), 0), constant_values=np.nan)
-            for window in rolling_windows
+        rolling_mean = np.array([
+            np.mean(rewards[max(0, i - rolling_window):i + 1])
+            for i in range(len(rewards))
         ])
-        rolling_mean = np.nanmean(rolling_array, axis=1)
-        rolling_std = np.nanstd(rolling_array, axis=1)
-        rolling_episodes = np.arange(1, len(rewards) + 1)
-
-        ax.plot(rolling_episodes, rolling_mean, label=f"{rolling_window}-Episode Average", linewidth=2)
-        ax.fill_between(rolling_episodes,
+        rolling_std = np.array([
+            np.std(rewards[max(0, i - rolling_window):i + 1])
+            for i in range(len(rewards))
+        ])
+        ax.plot(episodes, rolling_mean, label=f"{rolling_window}-Episode Average", linewidth=2)
+        ax.fill_between(episodes,
                         rolling_mean - rolling_std,
                         rolling_mean + rolling_std,
                         alpha=0.2,
                         color="gray",
                         label="±1 Std Dev")
 
-    # Add stats to top-left
     stats_text = f"Mean: {avg_reward:.2f}\nStd Dev: {std_reward:.2f}"
     ax.text(0.02, 0.95, stats_text, transform=ax.transAxes,
             verticalalignment='top', horizontalalignment='left',
             fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.5))
 
-    # Add legend to top-right
     ax.legend(loc='upper right')
-
-    # Labels and formatting
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(alpha=0.3)
-
-    # Save
+    print(f'run dir: {run_dir}')
+    # Save if a filename was provided
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path)
         print(f"Plot saved to {save_path}")
+    elif run_dir:
+        os.makedirs(run_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"reward_plot_{timestamp}.png"
+        full_path = os.path.join(run_dir, filename)
+        plt.savefig(full_path)
+        print(f"Plot saved to {full_path}")
 
-    if show:
-        plt.show()
-    else:
-        plt.close()
+    # if show:
+    #     plt.show()
+    # else:
+    #     plt.close()
 
 
 def plot_action_frequencies(actions, action_labels=None, title="Action Selection Frequencies", save_path=None, show=True):
@@ -293,9 +294,8 @@ def plot_violations(
     else:
         plt.close()
 
-import matplotlib.patches as mpatches
 
-def plot_summary_metrics(rewards, mod_rate, viol_rate, title_prefix, save_dir="plots", rolling_window=10):
+def plot_summary_metrics(rewards, mod_rate, viol_rate, title_prefix, save_dir="plots", rolling_window=10, run_dir=None):
     os.makedirs(save_dir, exist_ok=True)
     episodes = np.arange(len(rewards))
 
@@ -354,11 +354,20 @@ def plot_summary_metrics(rewards, mod_rate, viol_rate, title_prefix, save_dir="p
     ax.grid(alpha=0.3)
     ax.legend(handles=legend_handles, loc='upper right')
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"summary_metrics_{timestamp}.png"
+
     # Save
-    safe_prefix = title_prefix.replace(" ", "_").replace("/", "-").lower()
-    filename = f"{safe_prefix}_summary.png"
-    save_path = os.path.join(save_dir, filename)
-    fig.savefig(save_path)
-    print(f"Plot saved to {save_path}")
-    plt.show()
-    plt.close(fig)
+    print(f'run dir:{run_dir}')
+    if run_dir:
+        os.makedirs(run_dir, exist_ok=True)
+        save_path = os.path.join(run_dir, filename)
+        fig.savefig(save_path)
+        print(f"Plot saved to {save_path}")
+    elif save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, filename)
+        fig.savefig(save_path)
+        print(f"Plot saved to {save_path}")
+    # plt.show()
+    # plt.close(fig)

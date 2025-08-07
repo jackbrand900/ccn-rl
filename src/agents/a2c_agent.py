@@ -18,6 +18,7 @@ class A2CAgent:
                  env=None,
                  use_cnn=False,
                  use_shield_post=False,
+                 use_shield_pre=False,
                  use_shield_layer=False,
                  monitor_constraints=False,
                  requirements_path=None,
@@ -29,6 +30,7 @@ class A2CAgent:
 
         self.use_cnn = use_cnn
         self.use_shield_post = use_shield_post
+        self.use_shield_pre = use_shield_pre
         self.use_shield_layer = use_shield_layer
         self.monitor_constraints = monitor_constraints
         self.verbose = verbose
@@ -89,7 +91,7 @@ class A2CAgent:
 
         if self.use_shield_layer and do_apply_shield:
             shielded_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
-        elif self.use_shield_post and do_apply_shield:
+        elif self.use_shield_post or self.use_shield_pre and do_apply_shield:
             shielded_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
             shielded_probs = shielded_probs / shielded_probs.sum()
         else:
@@ -120,7 +122,7 @@ class A2CAgent:
                 shield_controller=self.shield_controller,
             )
 
-        return selected_action, context
+        return selected_action, a_unshielded, a_shielded, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.memory.append((
@@ -161,7 +163,7 @@ class A2CAgent:
 
         if self.use_shield_layer:
             shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts)
-        elif self.use_shield_post:
+        elif self.use_shield_pre:
             shielded_probs = torch.stack([
                 self.shield_controller.apply(p.unsqueeze(0), c).squeeze(0)
                 for p, c in zip(raw_probs, contexts)

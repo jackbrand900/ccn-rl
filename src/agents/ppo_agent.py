@@ -19,19 +19,20 @@ class PPOAgent:
                  hidden_dim=128,
                  use_cnn=False,
                  use_orthogonal_init=False,
-                 lr=2e-3,
+                 lr=5e-4,
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.01,
-                 lambda_sem=0.1,
+                 lambda_sem=0,
                  lambda_consistency=0.1,
                  verbose=False,
                  requirements_path=None,
                  env=None,
                  batch_size=64,
                  epochs=4,
-                 use_shield_post=True,
-                 use_shield_layer=True,
+                 use_shield_post=False,
+                 use_shield_pre=False,
+                 use_shield_layer=False,
                  monitor_constraints=True,
                  agent_kwargs=None,
                  mode='hard'):
@@ -39,6 +40,7 @@ class PPOAgent:
         self.lambda_sem = lambda_sem
         self.lambda_consistency = lambda_consistency
         self.use_shield_post = use_shield_post
+        self.use_shield_pre = use_shield_pre
         self.use_shield_layer = use_shield_layer
         self.monitor_constraints = monitor_constraints
         self.verbose = verbose
@@ -77,7 +79,7 @@ class PPOAgent:
         self.last_raw_probs = None
         self.last_shielded_probs = None
         self.last_obs = None
-        is_shield_active = self.use_shield_layer or self.use_shield_post
+        is_shield_active = self.use_shield_layer or self.use_shield_post or self.use_shield_pre
         self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose, is_shield_active=is_shield_active)
         self.policy = ModularNetwork(input_shape, action_dim, self.hidden_dim, num_layers=self.num_layers,
                                      use_shield_layer=self.use_shield_layer, pretrained_cnn=None,
@@ -100,7 +102,6 @@ class PPOAgent:
 
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
-        # print(state)
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
@@ -119,10 +120,8 @@ class PPOAgent:
             selected_action = a_shielded
             log_prob_tensor = log_prob
 
-        # TODO: this is actually use_shield_pre, for shield_post store a_unshielded
-        elif self.use_shield_post and do_apply_shield:
+        elif self.use_shield_post or self.use_shield_pre and do_apply_shield:
             # Sample unshielded action from raw_probs
-            # print('use shield post')
             dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
             a_unshielded = dist_unshielded.sample().item()
 
@@ -166,10 +165,7 @@ class PPOAgent:
                 shield_controller=self.shield_controller,
             )
 
-        # testing random action
-        # selected_action = random.sample(range(self.action_dim), 1)[0]
-
-        return selected_action, context
+        return selected_action, a_unshielded, a_shielded, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.memory.append((

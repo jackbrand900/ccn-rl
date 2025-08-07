@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import gymnasium as gym
@@ -171,7 +172,7 @@ def step_env(env, action):
 
 
 def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constraints=True, visualize=False,
-                 verbose=False, log_rewards=False, use_cnn=False, render=False):
+                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False):
     episode_rewards = []
     mod_rate_per_episode = []
     viol_rate_per_episode = []
@@ -181,9 +182,27 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
     no_improve_counter = 0  # Early stopping counter
     early_stop_patience = 500 # Stop if no improvement after 500 episodes
 
+    if not softness:
+        softness = ""
+    else:
+        softness = softness.capitalize()
+
+    env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
+    if getattr(agent, 'use_shield_layer', False):
+        shield_mode = "Layered Shield"
+    elif getattr(agent, 'use_shield_post', False):
+        shield_mode = "Post-hoc Shield"
+    elif getattr(agent, 'use_shield_pre', False):
+        shield_mode = "Pre-emptive Shield"
+    elif agent.lambda_sem > 0:
+        shield_mode = "Semantic Loss"
+    else:
+        shield_mode = "Unshielded"
+
     for episode in range(1, num_episodes + 1):
         use_cnn = getattr(agent, "use_cnn", False)
-
+        if hasattr(agent, "start_new_episode"):
+            agent.start_new_episode()
         state, _ = env.reset()
         state = preprocess_state(state, use_cnn=use_cnn)
         try:
@@ -200,19 +219,29 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         step_count = 0
         while not done:
             result = agent.select_action(state)
-            step_count += 1
-            if isinstance(result, tuple) and len(result) == 3:
-                action, log_prob, value = result
-                context = {}
+            if isinstance(result, tuple) and len(result) == 4:
+                selected_action, a_unshielded, a_shielded, context = result
+                if agent.use_shield_pre or agent.use_shield_layer:
+                    action_for_training = a_shielded
+                else:
+                    action_for_training = a_unshielded
             else:
-                action, context = result
-                log_prob = None
-                value = None
+                raise ValueError("Expected select_action to return 4-tuple (selected_action, a_unshielded, "
+                                 "a_shielded, context)")
+
+            step_count += 1
+            # if isinstance(result, tuple) and len(result) == 3:
+            #     action, log_prob, value = result
+            #     context = {}
+            # else:
+            #     action, context = result
+            #     log_prob = None
+            #     value = None
 
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
-            actions_taken.append((x, y, action))
-            next_state, reward, terminated, truncated, info = env.step(action)
+            actions_taken.append((x, y, selected_action))
+            next_state, reward, terminated, truncated, info = env.step(selected_action)
 
             if render:
                 env.render()
@@ -221,7 +250,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
             done = terminated or truncated
 
-            agent.store_transition(state, action, reward, next_state, context, done)
+            agent.store_transition(state, action_for_training, reward, next_state, context, done)
             agent.update()
             state = next_state
             total_reward += reward
@@ -240,6 +269,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             log_msg = (
                 f"[{env.env_name}] "
                 f"[{str(type(agent)).split('.')[-1][:-2]}] "
+                f"[{shield_mode.capitalize()}] "
+                f"[{softness.capitalize()}] "
                 f"[{use_ram}], "
                 f"Episode {episode}, "
                 f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
@@ -276,18 +307,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
     env.close()
     if visualize:
         agent_name = agent.__class__.__name__
-        env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
-        if getattr(agent, 'use_shield_layer', False):
-            shield_mode = "Layered Shield"
-        elif getattr(agent, 'use_shield_post', False):
-            shield_mode = "Post-hoc Shield"
-        elif agent.lambda_sem > 0:
-            shield_mode = "Semantic Loss"
-        else:
-            shield_mode = "Unshielded"
 
-        title_prefix = f"{agent_name} on {env_name}, {shield_mode}"
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        title_prefix = f"{agent_name} on {env_name}, {shield_mode} {softness}"
 
         graphing.plot_rewards(
             rewards=episode_rewards,
@@ -295,8 +316,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             xlabel="Episode",
             ylabel="Reward",
             rolling_window=20,
-            save_path=f"plots/{agent_name}_{env_name}_{shield_mode}_{timestamp}_training_rewards.png",
-            show=True
+            show=True,
+            run_dir=run_dir
         )
 
         graphing.plot_summary_metrics(
@@ -304,7 +325,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             mod_rate=mod_rate_per_episode,
             viol_rate=viol_rate_per_episode,
             title_prefix=title_prefix,
-            save_dir="plots"
+            run_dir=run_dir
         )
 
     return agent, episode_rewards, best_weights, best_avg_reward
@@ -312,6 +333,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
 def train(agent='ppo',
           use_shield_post=False,
+          use_shield_pre=False,
           use_shield_layer=False,
           mode='hard',
           monitor_constraints=True,
@@ -359,6 +381,7 @@ def train(agent='ppo',
         agent = DQNAgent(input_shape=input_shape,
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
+                         use_shield_pre=use_shield_pre,
                          use_shield_layer=use_shield_layer,
                          agent_kwargs=agent_kwargs,
                          monitor_constraints=monitor_constraints,
@@ -368,10 +391,10 @@ def train(agent='ppo',
                          env=env,
                          use_cnn=use_cnn)
     elif agent == 'ppo':
-        print(f'Initialize use shield post: {use_shield_post}')
         agent = PPOAgent(input_shape=input_shape,
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
+                         use_shield_pre=use_shield_pre,
                          use_shield_layer=use_shield_layer,
                          use_orthogonal_init=True,
                          agent_kwargs=agent_kwargs,
@@ -385,6 +408,7 @@ def train(agent='ppo',
         agent = A2CAgent(input_shape=input_shape,
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
+                         use_shield_pre=use_shield_pre,
                          use_shield_layer=use_shield_layer,
                          monitor_constraints=monitor_constraints,
                          mode=mode,
@@ -396,7 +420,7 @@ def train(agent='ppo',
         raise ValueError("Unsupported agent type.")
 
     print(f"Training {agent.__class__.__name__} agent on {env_name} with shield post: {use_shield_post} "
-          f"with shield layer: {use_shield_layer}")
+          f"with shield layer: {use_shield_layer} with shield pre: {use_shield_pre}")
 
     agent_trained, episode_rewards, best_weights, best_avg_reward = run_training(
         agent, env,
@@ -404,6 +428,7 @@ def train(agent='ppo',
         num_episodes=num_episodes,
         visualize=visualize,
         render=render,
+        softness=mode,
         use_cnn=use_cnn
     )
 
@@ -414,13 +439,19 @@ def train(agent='ppo',
     return agent_trained, episode_rewards, best_weights, best_avg_reward, env
 
 
-def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False, force_disable_shield=False):
+def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False, force_disable_shield=False, run_dir=None, softness=""):
     use_layer = getattr(agent, 'use_shield_layer', False)
     use_post = getattr(agent, 'use_shield_post', False)
+    use_pre = getattr(agent, 'use_shield_pre', False)
+
+    if not softness:
+        softness = ""
+    else:
+        softness = softness.capitalize()
 
     # Optionally disable shielding entirely
     if force_disable_shield:
-        print("[Evaluation] ⚠️ Forcing shield OFF for evaluation")
+        print("[Evaluation] Forcing shield OFF for evaluation")
         use_layer = False
         use_post = False
 
@@ -458,13 +489,13 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
 
         while not done:
             try:
-                action, context = agent.select_action(
+                selected_action, a_unshielded, a_shielded, context = agent.select_action(
                     state, env, do_apply_shield=not force_disable_shield
                 )
             except TypeError:
-                action = agent.select_action(state, env, do_apply_shield=not force_disable_shield)
+                selected_action, a_unshielded, a_shielded, context = agent.select_action(state, env, do_apply_shield=not force_disable_shield)
 
-            state, reward, done, _ = step_env(env, action)
+            state, reward, done, _ = step_env(env, selected_action)
             episode_reward += reward
             total_steps += 1
 
@@ -484,16 +515,16 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             violation_rate = stats['total_viol_rate']
             violations_per_episode.append(episode_violations)
 
-            print(
-                f"Episode {episode + 1}: "
-                f"Reward = {episode_reward:.2f}, "
-                f"Episode Modifications = {episode_modifications}, "
-                f"Episode Violations = {episode_violations}, "
-                f"Total Modifications = {total_modifications}, "
-                f"Total Violations = {total_violations}, "
-                f"Mod Rate = {modification_rate:.4f}, "
-                f"Viol Rate = {violation_rate:.4f}"
-            )
+            # print(
+            #     f"Episode {episode + 1}: "
+            #     f"Reward = {episode_reward:.2f}, "
+            #     f"Episode Modifications = {episode_modifications}, "
+            #     f"Episode Violations = {episode_violations}, "
+            #     f"Total Modifications = {total_modifications}, "
+            #     f"Total Violations = {total_violations}, "
+            #     f"Mod Rate = {modification_rate:.4f}, "
+            #     f"Viol Rate = {violation_rate:.4f}"
+            # )
 
     if original_epsilon is not None:
         agent.epsilon = original_epsilon
@@ -523,15 +554,17 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
         if force_disable_shield:
             shield_mode = "Unshielded (forced)"
         elif use_layer:
-            shield_mode = "ShieldLayer"
+            shield_mode = "Shield Layer"
         elif use_post:
-            shield_mode = "PostShield"
+            shield_mode = "Post Shield"
+        elif use_pre:
+            shield_mode = "Pre-emptive Shield"
         elif agent.lambda_sem > 0:
             shield_mode = "Semantic Loss"
         else:
             shield_mode = "Unshielded"
 
-        title_prefix = f"{agent_name} on {env_name} {shield_mode}"
+        title_prefix = f"{agent_name} on {env_name} {shield_mode} {softness}"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         graphing.plot_rewards(
@@ -540,8 +573,8 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             xlabel="Episode",
             ylabel="Reward",
             rolling_window=5,
-            save_path=f"plots/{agent_name}_{env_name}_{shield_mode}_{timestamp}_rewards.png",
-            show=True
+            run_dir=run_dir,
+            show=False,
         )
 
         # graphing.plot_violations(
@@ -575,10 +608,11 @@ def run_multiple_evaluations(
         agent_name='dqn',
         env_name='MiniGrid-Empty-5x5-v0',
         use_ram_obs=False,
-        num_runs=5,
+        num_runs=3,
         num_train_episodes=2000,
-        num_eval_episodes=100,
+        num_eval_episodes=15,
         use_shield_post=False,
+        use_shield_pre=False,
         use_shield_layer=False,
         monitor_constraints=True,
         mode='hard',
@@ -586,6 +620,7 @@ def run_multiple_evaluations(
         visualize=False,
         render=False,
         force_disable_shield=False,
+        run_dir=None
 ):
     all_results = []
 
@@ -598,6 +633,7 @@ def run_multiple_evaluations(
             use_ram_obs=use_ram_obs,
             num_episodes=num_train_episodes,
             use_shield_post=use_shield_post,
+            use_shield_pre=use_shield_pre,
             use_shield_layer=use_shield_layer,
             monitor_constraints=monitor_constraints,
             mode=mode,
@@ -615,8 +651,41 @@ def run_multiple_evaluations(
             num_episodes=num_eval_episodes,
             visualize=visualize,
             render=render,
-            force_disable_shield=force_disable_shield
+            softness=mode,
+            force_disable_shield=force_disable_shield,
+            run_dir=run_dir
         )
+
+        # === CSV-Formatted Output for Excel Logging ===
+        if force_disable_shield:
+            shield_mode = "Unshielded (forced)"
+        elif use_shield_layer:
+            shield_mode = "ShieldLayer"
+        elif use_shield_post:
+            shield_mode = "PostShield"
+        elif use_shield_pre:
+            shield_mode = "PreemptiveShield"
+        elif hasattr(agent, 'lambda_sem') and agent.lambda_sem > 0:
+            shield_mode = "SemanticLoss"
+        else:
+            shield_mode = "Unshielded"
+
+        csv_line = "\t".join([
+            env_name,
+            agent_name.upper(),
+            "emergency_cartpole.cnf", # TODO: make this not hardcoded
+            shield_mode,
+            f"{run + 1}",
+            f"{results['avg_reward']:.2f}",
+            f"{results['std_reward']:.2f}",
+            f"{results['total_modifications']}",
+            f"{results['avg_shield_mod_rate']:.4f}",
+            f"{results['total_violations']}",
+            f"{results['avg_violations_per_step']:.4f}"
+        ])
+        csv_path = os.path.join(run_dir, "evaluation_summary.csv")
+        with open(csv_path, "a") as f:
+            f.write(csv_line + "\n")
 
         all_results.append(results)
 
@@ -640,12 +709,30 @@ def run_multiple_evaluations(
 
     return final_summary
 
+def make_run_dir(base_dir="results", env_name=None, agent_name=None, softness="",
+                 use_shield_post=False, use_shield_pre=False, use_shield_layer=False,
+                 run_index=None):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    shield_mode = (
+        "ShieldLayer" if use_shield_layer else
+        "PostShield" if use_shield_post else
+        "PreemptiveShield" if use_shield_pre else
+        "Unshielded"
+    )
+    parts = [env_name, agent_name, shield_mode, softness, timestamp]
+    if run_index is not None:
+        parts.append(f"run{run_index}")
+    dir_name = "_".join(filter(None, parts))
+    run_dir = os.path.join(base_dir, dir_name)
+    os.makedirs(run_dir, exist_ok=True)
+    return run_dir
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN, A2C, PPO) with optional shield and environment.")
     parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='ppo',
                         help='Which agent to use: dqn, ppo, a2c')
     parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
+    parser.add_argument('--use_shield_pre', action='store_true', help='Enable preemptive constraints during training')
     parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')
     parser.add_argument('--mode', choices=['soft', 'hard', 'progressive'], default='hard', help='Constraint mode')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
@@ -661,14 +748,28 @@ if __name__ == "__main__":
     print(f'parser use shield post: {args.use_shield_post}')
 
     if not args.no_eval:
+        if not args.mode:
+            softness = ""
+
+        run_dir = make_run_dir(
+            env_name=args.env,
+            agent_name=args.agent,
+            use_shield_post=args.use_shield_post,
+            use_shield_pre=args.use_shield_pre,
+            use_shield_layer=args.use_shield_layer,
+            softness=args.mode,
+            run_index=1  # Optional if running multiple experiments
+        )
+
         run_multiple_evaluations(
             agent_name=args.agent,
             env_name=args.env,
             use_ram_obs=args.use_ram_obs,
-            num_runs=1,
+            num_runs=10,
             num_train_episodes=args.num_episodes,
             num_eval_episodes=100,
             use_shield_post=args.use_shield_post,
+            use_shield_pre=args.use_shield_pre,
             use_shield_layer=args.use_shield_layer,
             monitor_constraints=args.monitor_constraints,
             mode=args.mode,
@@ -676,27 +777,5 @@ if __name__ == "__main__":
             visualize=args.visualize,
             render=args.render,
             force_disable_shield=args.force_disable_shield,
+            run_dir=run_dir
         )
-    # trained_agent, episode_rewards, best_weights, best_avg_reward, env = train(agent=args.agent,
-    #                            use_shield_post=args.use_shield_post,
-    #                            use_shield_layer=args.use_shield_layer,
-    #                            mode=args.mode,
-    #                            num_episodes=args.num_episodes,
-    #                            monitor_constraints=args.monitor_constraints,
-    #                            verbose=args.verbose,
-    #                            visualize=args.visualize,
-    #                            env_name=args.env,
-    #                            use_ram_obs=args.use_ram_obs,
-    #                            render=args.render)
-
-    # results = evaluate_policy(trained_agent, env, eval_with_shield=args.eval_with_shield, num_episodes=20,
-    # visualize=args.visualize, render=args.render)
-    # if not args.no_eval:
-    #     results = evaluate_policy(
-    #         trained_agent,
-    #         env,
-    #         num_episodes=500,
-    #         visualize=args.visualize,
-    #         render=args.render,
-    #         force_disable_shield=args.force_disable_shield,
-    #     )

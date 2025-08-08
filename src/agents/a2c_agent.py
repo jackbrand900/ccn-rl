@@ -38,9 +38,10 @@ class A2CAgent:
         self.action_dim = action_dim
 
         self.gamma = 0.99
-        self.lr = 2e-4
+        self.lr = 3e-4
         self.hidden_dim = 128
         self.entropy_coef = 0.01
+        self.lambda_sem = 0
         self.use_cnn = False
         self.num_layers = 2
         self.use_orthogonal_init = False
@@ -173,12 +174,26 @@ class A2CAgent:
             shielded_probs = raw_probs
 
         dist = Categorical(probs=shielded_probs)
-        new_log_probs = dist.log_prob(actions)
+        new_log_probs = log_probs  # already stored during action selection
         entropy = dist.entropy().mean()
 
         policy_loss = -(advantages.detach() * new_log_probs).mean()
         value_loss = nn.MSELoss()(predicted_values.squeeze(), targets)
-        loss = policy_loss + value_loss - self.entropy_coef * entropy
+
+        # === Semantic Loss ===
+        semantic_loss = 0
+        if self.lambda_sem > 0:
+            flag_dicts = self.shield_controller.flag_logic_batch(contexts)
+            flag_values = [
+                [flags.get(name, 0.0) for name in self.shield_controller.flag_names]
+                for flags in flag_dicts
+            ]
+            flag_tensor = torch.tensor(flag_values, dtype=raw_probs.dtype, device=raw_probs.device)
+            probs_all = torch.cat([raw_probs, flag_tensor], dim=1)
+            semantic_loss = self.shield_controller.compute_semantic_loss(probs_all)
+
+        # === Total Loss ===
+        loss = policy_loss + value_loss - self.entropy_coef * entropy + self.lambda_sem * semantic_loss
 
         self.optimizer.zero_grad()
         loss.backward()

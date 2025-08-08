@@ -76,16 +76,6 @@ def plot_rewards(
 
 
 def plot_action_frequencies(actions, action_labels=None, title="Action Selection Frequencies", save_path=None, show=True):
-    """
-    Plot a histogram showing the frequency of each action selected.
-
-    Args:
-        actions (list or np.array): List of actions selected (integers).
-        action_labels (list or None): List of labels for actions, e.g. ['Left', 'Right', ...]. If None, uses indices.
-        title (str): Title of the plot.
-        save_path (str or None): If provided, saves the plot to this path.
-        show (bool): If True, displays the plot.
-    """
     actions = np.array(actions)
     unique_actions, counts = np.unique(actions, return_counts=True)
 

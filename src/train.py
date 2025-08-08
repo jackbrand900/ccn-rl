@@ -734,7 +734,7 @@ if __name__ == "__main__":
     parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--use_shield_pre', action='store_true', help='Enable preemptive constraints during training')
     parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')
-    parser.add_argument('--mode', choices=['soft', 'hard', 'progressive'], default='hard', help='Constraint mode')
+    parser.add_argument('--mode', choices=['soft', 'hard', 'progressive', ''], default='', help='Constraint mode')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('--visualize', action='store_true', help='Visualize training plots')
     parser.add_argument('--render', action='store_true', help='Render environment (RGB image)')

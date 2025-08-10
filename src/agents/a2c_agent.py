@@ -65,7 +65,7 @@ class A2CAgent:
             num_actions=action_dim,
             mode=mode,
             verbose=verbose,
-            is_shield_active=(use_shield_layer or use_shield_post)
+            is_shield_active=(use_shield_layer or use_shield_post or use_shield_pre)
         )
         self.shield_controller.constraint_monitor = self.constraint_monitor
 

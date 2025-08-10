@@ -18,6 +18,7 @@ class DQNAgent:
                  action_dim,
                  agent_kwargs=None,
                  use_shield_post=False,
+                 use_shield_pre=False,
                  use_shield_layer=False,
                  monitor_constraints=True,
                  requirements_path=None,
@@ -30,19 +31,19 @@ class DQNAgent:
         print(f"[ShieldedDQNAgent] Using device: {self.device}")
         self.env = env
 
-        # === Default parameters ===
-        self.gamma = 0.99
-        self.lr = 3e-3
+        self.gamma = 0.985
+        self.lr = 1e-5
         self.batch_size = 128
         self.buffer_size = 100_000
-        self.target_update_freq = 1000
+        self.target_update_freq = 500
         self.epsilon_start = 0.5
         self.epsilon_end = 0.01
-        self.epsilon_decay = 10000
-        self.hidden_dim = 128
+        self.epsilon_decay = 54170
+        self.hidden_dim = 256
         self.num_layers = 3
         self.use_cnn = use_cnn
-        self.use_orthogonal_init = False
+        self.lambda_sem = 0
+        self.use_orthogonal_init = True
         self.pretrained_cnn = None
         print(agent_kwargs)
 
@@ -64,6 +65,7 @@ class DQNAgent:
 
         self.action_dim = action_dim
         self.use_shield_post = use_shield_post
+        self.use_shield_pre = use_shield_pre
         self.use_shield_layer = use_shield_layer
         self.monitor_constraints = monitor_constraints
 
@@ -74,7 +76,7 @@ class DQNAgent:
             num_actions=action_dim,
             mode=mode,
             verbose=verbose,
-            is_shield_active=(self.use_shield_layer or self.use_shield_post)
+            is_shield_active=(self.use_shield_layer or self.use_shield_post or self.use_shield_pre)
         )
         self.shield_controller.constraint_monitor = self.constraint_monitor
 
@@ -118,7 +120,9 @@ class DQNAgent:
             "loss": [],
             "epsilon": [],
             "prob_shift": [],
-            "mod_rate": []
+            "mod_rate": [],
+            "td_loss": [],
+            "semantic_loss": []
         }
 
     def select_action(self, state, deterministic=False, do_apply_shield=True):
@@ -142,7 +146,7 @@ class DQNAgent:
             if self.use_shield_layer and do_apply_shield:
                 corrected_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
                 a_shielded = torch.argmax(corrected_probs).item()
-            elif self.use_shield_post and do_apply_shield:
+            elif self.use_shield_post or self.use_shield_pre and do_apply_shield:
                 corrected_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
                 corrected_probs /= corrected_probs.sum()
                 a_shielded = torch.argmax(corrected_probs).item()
@@ -168,7 +172,7 @@ class DQNAgent:
                 shield_controller=self.shield_controller
             )
 
-        return selected_action, context
+        return selected_action, a_unshielded, a_shielded, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.replay_buffer.append((state, action, reward, next_state, done))
@@ -188,7 +192,7 @@ class DQNAgent:
         rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
         dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
 
-        # === Q-Loss computation (directly here) ===
+        # === Q-Loss ===
         q_out = self.q_net(states, context=contexts)
         q_values = q_out.gather(1, actions)
 
@@ -199,19 +203,26 @@ class DQNAgent:
 
         td_loss = nn.MSELoss()(q_values, target_q_values)
 
-        raw_probs = torch.softmax(q_out, dim=1)
-        # shielded_probs = raw_probs.clone()
+        # === Semantic Loss (Xu et al. 2023) ===
+        semantic_loss = 0
+        if self.lambda_sem > 0:
+            # Convert logits to probs
+            with torch.no_grad():
+                probs = torch.softmax(q_out, dim=-1)
 
-        # if self.use_shield_layer:
-        #     shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts).detach()
-        #
-        # goal = torch.zeros_like(shielded_probs)
-        # goal.scatter_(1, actions, 1.0)
-        #
-        # req_loss = nn.BCELoss()(shielded_probs, goal)
-        # consistency_loss = nn.MSELoss()(raw_probs, shielded_probs)
-        #
-        total_loss = td_loss
+            # Get logical flags
+            flag_dicts = self.shield_controller.flag_logic_batch(contexts)
+            flag_values = [
+                [flags.get(name, 0.0) for name in self.shield_controller.flag_names]
+                for flags in flag_dicts
+            ]
+            flag_tensor = torch.tensor(flag_values, dtype=probs.dtype, device=probs.device)
+
+            # Concatenate for joint input to semantic loss
+            probs_all = torch.cat([probs, flag_tensor], dim=1)
+            semantic_loss = self.shield_controller.compute_semantic_loss(probs_all)
+
+        total_loss = td_loss + self.lambda_sem * semantic_loss
 
         self.optimizer.zero_grad()
         total_loss.backward()
@@ -220,13 +231,12 @@ class DQNAgent:
         if self.steps_done % self.target_update_freq == 0:
             self.target_net.load_state_dict(self.q_net.state_dict())
 
-        # prob_shift = torch.abs(shielded_probs - raw_probs).mean().item()
-        # mod_rate = (shielded_probs.argmax(dim=1) != raw_probs.argmax(dim=1)).float().mean().item()
-        #
+        # === Logging ===
         self.training_logs["loss"].append(total_loss.item())
         self.training_logs["epsilon"].append(self.epsilon)
-        # self.training_logs["prob_shift"].append(prob_shift)
-        # self.training_logs["mod_rate"].append(mod_rate)
+        self.training_logs["td_loss"].append(td_loss.item())
+        if self.lambda_sem > 0:
+            self.training_logs["semantic_loss"].append(semantic_loss.item())
 
     def get_weights(self):
         return self.q_net.state_dict()

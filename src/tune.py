@@ -7,7 +7,7 @@ from src.train import train
 
 def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_post=False, use_shield_layer=False, use_ram_obs=False):
     # === Shared hyperparameters ===
-    lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
+    lr = trial.suggest_float("lr", 1e-5, 1e-3, log=True)
     gamma = trial.suggest_float("gamma", 0.90, 0.999)
     hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512])
     use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [True, False])  # <--- new param
@@ -35,11 +35,17 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
         })
 
     elif agent_type == "dqn":
-        epsilon_decay = trial.suggest_float("epsilon_decay", 50_000, 100_000)
+        epsilon_decay = trial.suggest_float("epsilon_decay", 50_000, 500_000)
+        epsilon_end = trial.suggest_float("epsilon_end", 0.01, 0.1)
         target_update_freq = trial.suggest_categorical("target_update_freq", [250, 500, 1000])
+        batch_size = trial.suggest_categorical("batch_size", [32, 64])
+        buffer_size = trial.suggest_int("buffer_size", 100_000, 300_000)
         agent_kwargs.update({
             "epsilon_decay": epsilon_decay,
+            "epsilon_end": epsilon_end,
             "target_update_freq": target_update_freq,
+            "buffer_size": buffer_size,
+            "batch_size": batch_size
         })
 
     elif agent_type == "a2c":
@@ -56,7 +62,7 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
         use_shield_post=use_shield_post,
         use_shield_layer=use_shield_layer,
         monitor_constraints=False,
-        num_episodes=2000,
+        num_episodes=5000,
         verbose=False,
         visualize=False,
         use_ram_obs=use_ram_obs,

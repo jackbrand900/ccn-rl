@@ -19,26 +19,28 @@ class PPOAgent:
                  hidden_dim=128,
                  use_cnn=False,
                  use_orthogonal_init=False,
-                 lr=2e-3,
+                 lr=5e-4,
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.01,
-                 lambda_req=0.0,
-                 lambda_consistency=0.0,
+                 lambda_sem=0.1,
+                 lambda_consistency=0,
                  verbose=False,
                  requirements_path=None,
                  env=None,
                  batch_size=64,
                  epochs=4,
-                 use_shield_post=True,
-                 use_shield_layer=True,
+                 use_shield_post=False,
+                 use_shield_pre=False,
+                 use_shield_layer=False,
                  monitor_constraints=True,
                  agent_kwargs=None,
                  mode='hard'):
 
-        self.lambda_req = lambda_req
+        self.lambda_sem = lambda_sem
         self.lambda_consistency = lambda_consistency
         self.use_shield_post = use_shield_post
+        self.use_shield_pre = use_shield_pre
         self.use_shield_layer = use_shield_layer
         self.monitor_constraints = monitor_constraints
         self.verbose = verbose
@@ -77,7 +79,7 @@ class PPOAgent:
         self.last_raw_probs = None
         self.last_shielded_probs = None
         self.last_obs = None
-        is_shield_active = self.use_shield_layer or self.use_shield_post
+        is_shield_active = self.use_shield_layer or self.use_shield_post or self.use_shield_pre
         self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose, is_shield_active=is_shield_active)
         self.policy = ModularNetwork(input_shape, action_dim, self.hidden_dim, num_layers=self.num_layers,
                                      use_shield_layer=self.use_shield_layer, pretrained_cnn=None,
@@ -100,7 +102,6 @@ class PPOAgent:
 
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
-        # print(state)
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
@@ -119,9 +120,8 @@ class PPOAgent:
             selected_action = a_shielded
             log_prob_tensor = log_prob
 
-        elif self.use_shield_post and do_apply_shield:
+        elif self.use_shield_post or self.use_shield_pre and do_apply_shield:
             # Sample unshielded action from raw_probs
-            # print('use shield post')
             dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
             a_unshielded = dist_unshielded.sample().item()
 
@@ -135,7 +135,6 @@ class PPOAgent:
             log_prob_tensor = dist_shielded.log_prob(torch.tensor(a_shielded).to(self.device))
 
         else:
-            # print(f'use shield post: {self.use_shield_post}')
             # === Unshielded path: sample raw and get hypothetical shielded action
             dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
             a_unshielded = dist_unshielded.sample().item()
@@ -166,10 +165,7 @@ class PPOAgent:
                 shield_controller=self.shield_controller,
             )
 
-        # testing random action
-        # selected_action = random.sample(range(self.action_dim), 1)[0]
-
-        return selected_action, context
+        return selected_action, a_unshielded, a_shielded, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.memory.append((
@@ -229,14 +225,21 @@ class PPOAgent:
             policy_loss = -torch.min(surr1, surr2).mean()
             value_loss = nn.MSELoss()(predicted_values.squeeze(), returns)
 
-            # goal = torch.zeros_like(shielded_probs)
-            # goal.scatter_(1, actions.unsqueeze(1), 1.0)
-            # req_loss = nn.BCELoss()(shielded_probs, goal)
-            # consistency_loss = nn.MSELoss()(torch.softmax(logits, dim=-1), shielded_probs)
-
+            probs = torch.softmax(logits, dim=-1)
+            semantic_loss = 0
+            if self.lambda_sem > 0:
+                flag_dicts = self.shield_controller.flag_logic_batch(contexts)
+                flag_values = [
+                    [flags.get(name, 0.0) for name in self.shield_controller.flag_names]
+                    for flags in flag_dicts
+                ]
+                flag_tensor = torch.tensor(flag_values, dtype=probs.dtype, device=probs.device)
+                probs_all = torch.cat([probs, flag_tensor], dim=1)  # [B, num_vars]
+                semantic_loss = self.shield_controller.compute_semantic_loss(probs_all)
             total_loss = (policy_loss +
                           0.5 * value_loss -
-                          self.ent_coef * entropy)
+                          self.ent_coef * entropy +
+                          self.lambda_sem * semantic_loss)
 
             self.optimizer.zero_grad()
             total_loss.backward()
@@ -247,8 +250,6 @@ class PPOAgent:
                 "policy_loss": policy_loss.item(),
                 "value_loss": value_loss.item(),
                 "entropy": entropy.item(),
-                # "req_loss": req_loss.item(),
-                # "consistency_loss": consistency_loss.item(),
                 "total_loss": total_loss.item()
             }
 
@@ -256,8 +257,6 @@ class PPOAgent:
                 self.training_logs[k].append(logs.get(k, 0.0))
 
         self.scheduler.step()
-        # prob_shift = torch.abs(shielded_probs - raw_probs).mean().item()
-        # self.training_logs["prob_shift"].append(prob_shift)
         self.memory.clear()
 
     def _compute_gae(self, rewards, values, dones, lam=0.95):

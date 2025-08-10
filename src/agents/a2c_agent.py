@@ -18,6 +18,7 @@ class A2CAgent:
                  env=None,
                  use_cnn=False,
                  use_shield_post=False,
+                 use_shield_pre=False,
                  use_shield_layer=False,
                  monitor_constraints=False,
                  requirements_path=None,
@@ -29,6 +30,7 @@ class A2CAgent:
 
         self.use_cnn = use_cnn
         self.use_shield_post = use_shield_post
+        self.use_shield_pre = use_shield_pre
         self.use_shield_layer = use_shield_layer
         self.monitor_constraints = monitor_constraints
         self.verbose = verbose
@@ -36,9 +38,10 @@ class A2CAgent:
         self.action_dim = action_dim
 
         self.gamma = 0.99
-        self.lr = 2e-4
+        self.lr = 3e-4
         self.hidden_dim = 128
         self.entropy_coef = 0.01
+        self.lambda_sem = 0
         self.use_cnn = False
         self.num_layers = 2
         self.use_orthogonal_init = False
@@ -89,7 +92,7 @@ class A2CAgent:
 
         if self.use_shield_layer and do_apply_shield:
             shielded_probs = self.shield_controller.forward_differentiable(raw_probs, [context]).squeeze(0)
-        elif self.use_shield_post and do_apply_shield:
+        elif self.use_shield_post or self.use_shield_pre and do_apply_shield:
             shielded_probs = self.shield_controller.apply(raw_probs, context).squeeze(0)
             shielded_probs = shielded_probs / shielded_probs.sum()
         else:
@@ -120,7 +123,7 @@ class A2CAgent:
                 shield_controller=self.shield_controller,
             )
 
-        return selected_action, context
+        return selected_action, a_unshielded, a_shielded, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         self.memory.append((
@@ -161,7 +164,7 @@ class A2CAgent:
 
         if self.use_shield_layer:
             shielded_probs = self.shield_controller.forward_differentiable(raw_probs, contexts)
-        elif self.use_shield_post:
+        elif self.use_shield_pre:
             shielded_probs = torch.stack([
                 self.shield_controller.apply(p.unsqueeze(0), c).squeeze(0)
                 for p, c in zip(raw_probs, contexts)
@@ -171,12 +174,26 @@ class A2CAgent:
             shielded_probs = raw_probs
 
         dist = Categorical(probs=shielded_probs)
-        new_log_probs = dist.log_prob(actions)
+        new_log_probs = log_probs  # already stored during action selection
         entropy = dist.entropy().mean()
 
         policy_loss = -(advantages.detach() * new_log_probs).mean()
         value_loss = nn.MSELoss()(predicted_values.squeeze(), targets)
-        loss = policy_loss + value_loss - self.entropy_coef * entropy
+
+        # === Semantic Loss ===
+        semantic_loss = 0
+        if self.lambda_sem > 0:
+            flag_dicts = self.shield_controller.flag_logic_batch(contexts)
+            flag_values = [
+                [flags.get(name, 0.0) for name in self.shield_controller.flag_names]
+                for flags in flag_dicts
+            ]
+            flag_tensor = torch.tensor(flag_values, dtype=raw_probs.dtype, device=raw_probs.device)
+            probs_all = torch.cat([raw_probs, flag_tensor], dim=1)
+            semantic_loss = self.shield_controller.compute_semantic_loss(probs_all)
+
+        # === Total Loss ===
+        loss = policy_loss + value_loss - self.entropy_coef * entropy + self.lambda_sem * semantic_loss
 
         self.optimizer.zero_grad()
         loss.backward()

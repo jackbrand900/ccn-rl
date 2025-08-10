@@ -1,3 +1,4 @@
+import itertools
 from functools import partial
 
 import torch
@@ -41,6 +42,10 @@ class ShieldController:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.shield_layer = self.build_shield_layer().to(self.device)
         self.shield_activations = 0
+
+        self.clauses = self._parse_cnf_file()
+        self.satisfying_assignments = self._get_satisfying_assignments()
+        self._sat_tensor = None
 
     def _batchify(self, single_fn):
         def batch_fn(contexts):
@@ -133,9 +138,7 @@ class ShieldController:
 
         flag_active = any(flag_values)
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
-        # print(f"[DEBUG] Flag logic function used: {self.flag_logic_fn}")
         flags = self.flag_logic_fn(context)
-        # print(f"[DEBUG] Flags from logic: {flags}")
         if self.verbose:
             print(f"[DEBUG] Raw flags: {flags}, Flag values: {flag_values}")
             if flag_active:
@@ -203,3 +206,63 @@ class ShieldController:
                         print(f"[SHIELD ACTIVE BUT NO CHANGE] Action output remained the same.")
 
         return corrected
+
+    def _parse_cnf_file(self):
+        clauses = []
+        with open(self.requirements_path, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                literals = re.split(r'\s+or\s+', line.strip())
+                clause = []
+                for lit in literals:
+                    lit = lit.strip()
+                    is_negated = lit.startswith('not ')
+                    name = lit[4:] if is_negated else lit  # remove 'not '
+                    if name not in self.var_names:
+                        raise ValueError(f"Unknown variable '{name}' in CNF file.")
+                    idx = self.var_names.index(name)
+                    clause.append((idx, is_negated))
+                clauses.append(clause)
+        return clauses
+
+    def _get_satisfying_assignments(self):
+        assignments = []
+        for bits in itertools.product([0, 1], repeat=self.num_vars):
+            if all(any(bits[idx] ^ neg for idx, neg in clause) for clause in self.clauses):
+                assignments.append(list(bits))
+        return assignments
+
+    def compute_semantic_loss(self, probs, num_samples=100):
+        """
+        probs: [B, num_vars] — Bernoulli outputs from model
+        num_samples: number of satisfying assignments to sample
+        Returns: scalar semantic loss (approximate)
+        """
+        device = probs.device
+
+        # Convert satisfying assignments to tensor once (if not already)
+        if self._sat_tensor is None or self._sat_tensor.device != device:
+            self._sat_tensor = torch.tensor(
+                self.satisfying_assignments,
+                dtype=probs.dtype,
+                device=device
+            )
+
+        total_assignments = self._sat_tensor.shape[0]
+
+        if total_assignments <= num_samples:
+            sampled = self._sat_tensor  # use all
+        else:
+            idx = torch.randperm(total_assignments, device=device)[:num_samples]
+            sampled = self._sat_tensor[idx]  # [num_samples, V]
+
+        # Reshape for broadcasting
+        sampled = sampled.unsqueeze(1)  # [S, 1, V]
+        probs = probs.unsqueeze(0)      # [1, B, V]
+
+        logp = torch.log(probs * sampled + (1 - probs) * (1 - sampled) + 1e-8)  # [S, B, V]
+        logp_sum = logp.sum(dim=2)  # [S, B]
+        logsumexp = torch.logsumexp(logp_sum, dim=0)  # [B]
+
+        return -logsumexp.mean()

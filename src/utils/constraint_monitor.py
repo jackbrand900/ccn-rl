@@ -86,33 +86,24 @@ class ConstraintMonitor:
 
     def would_violate(self, action, context, shield_controller, epsilon=1e-5):
         """
-        Returns True if the given action would have been significantly modified by the shield layer.
-        In soft mode, considers if the probability mass on the selected action was reduced.
+        Returns True if the given action would be blocked by the hard shield.
+
+        This is used as a consistent way to log constraint violations regardless
+        of whether the active shield mode is soft, post, or integrated.
         """
         device = next(shield_controller.shield_layer.parameters()).device
 
-        one_hot = torch.zeros(1, shield_controller.num_actions, dtype=torch.float32, device=device)
-        one_hot[0, action] = 1.0
+        # Simulate an action probability distribution (one-hot for the chosen action)
+        one_hot_action_probs = torch.zeros(1, shield_controller.num_actions, dtype=torch.float32, device=device)
+        one_hot_action_probs[0, action] = 1.0
 
-        # Get flags
-        flags = shield_controller.flag_logic_fn(context)
-        flag_values = [flags.get(name, 0) for name in shield_controller.flag_names]
-        flag_tensor = torch.tensor(flag_values, dtype=one_hot.dtype, device=device).unsqueeze(0)
+        with torch.no_grad():
+            # Let shield_controller handle flag construction and full input prep
+            corrected = shield_controller.apply(one_hot_action_probs, context)
+            corrected_probs = corrected[:, :shield_controller.num_actions]  # Ensure correct slice
 
-        input_tensor = torch.cat([one_hot, flag_tensor], dim=1)
-        corrected = shield_controller.shield_layer(input_tensor)
-        corrected_probs = corrected[0, :shield_controller.num_actions]
-
-        if shield_controller.mode == "soft":
-            corrected_probs = corrected_probs / corrected_probs.sum()
-
-            # If shield *lowered* the selected action's probability significantly, count as violation
-            changed = corrected_probs[action] < (1.0 - epsilon)
-            return bool(changed)
-        else:
-            # Hard mode: just check if action changed
-            corrected_action = corrected_probs.argmax().item()
-            return int(corrected_action != action)
+        max_prob = corrected_probs.max().item()
+        return corrected_probs[0, action].item() < (max_prob - epsilon)
 
 
     def summary(self):

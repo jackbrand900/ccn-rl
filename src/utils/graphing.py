@@ -1,8 +1,11 @@
+from datetime import datetime
+
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import math
 from collections import defaultdict
+import matplotlib.patches as mpatches
 
 def plot_rewards(
         rewards,
@@ -11,7 +14,8 @@ def plot_rewards(
         ylabel="Reward",
         rolling_window=10,
         save_path=None,
-        show=True
+        show=True,
+        run_dir=None
 ):
     episodes = np.arange(1, len(rewards) + 1)
     rewards = np.array(rewards)
@@ -19,63 +23,59 @@ def plot_rewards(
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
 
-    # Plot raw rewards
     ax.plot(episodes, rewards, label="Episode Reward", alpha=0.6)
 
     avg_reward = np.mean(rewards)
     std_reward = np.std(rewards)
 
-    # Rolling mean and std
-    if rolling_window > 1:
-        rolling_mean = np.convolve(rewards, np.ones(rolling_window) / rolling_window, mode='valid')
-        rolling_std = np.std([rewards[max(0, i - rolling_window):i] for i in range(rolling_window, len(rewards) + 1)], axis=1)
-        rolling_episodes = np.arange(rolling_window, len(rewards) + 1)
-
-        ax.plot(rolling_episodes, rolling_mean, label=f"{rolling_window}-Episode Average", linewidth=2)
-        ax.fill_between(rolling_episodes,
+    if rolling_window > 1 and len(rewards) >= 2:
+        rolling_mean = np.array([
+            np.mean(rewards[max(0, i - rolling_window):i + 1])
+            for i in range(len(rewards))
+        ])
+        rolling_std = np.array([
+            np.std(rewards[max(0, i - rolling_window):i + 1])
+            for i in range(len(rewards))
+        ])
+        ax.plot(episodes, rolling_mean, label=f"{rolling_window}-Episode Average", linewidth=2)
+        ax.fill_between(episodes,
                         rolling_mean - rolling_std,
                         rolling_mean + rolling_std,
                         alpha=0.2,
                         color="gray",
                         label="±1 Std Dev")
 
-    # Add stats to top-left
     stats_text = f"Mean: {avg_reward:.2f}\nStd Dev: {std_reward:.2f}"
     ax.text(0.02, 0.95, stats_text, transform=ax.transAxes,
             verticalalignment='top', horizontalalignment='left',
             fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.5))
 
-    # Add legend to top-right
     ax.legend(loc='upper right')
-
-    # Labels and formatting
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(alpha=0.3)
-
+    print(f'run dir: {run_dir}')
+    # Save if a filename was provided
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path)
         print(f"Plot saved to {save_path}")
+    elif run_dir:
+        os.makedirs(run_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"reward_plot_{timestamp}.png"
+        full_path = os.path.join(run_dir, filename)
+        plt.savefig(full_path)
+        print(f"Plot saved to {full_path}")
 
-    if show:
-        plt.show()
-    else:
-        plt.close()
+    # if show:
+    #     plt.show()
+    # else:
+    #     plt.close()
 
 
 def plot_action_frequencies(actions, action_labels=None, title="Action Selection Frequencies", save_path=None, show=True):
-    """
-    Plot a histogram showing the frequency of each action selected.
-
-    Args:
-        actions (list or np.array): List of actions selected (integers).
-        action_labels (list or None): List of labels for actions, e.g. ['Left', 'Right', ...]. If None, uses indices.
-        title (str): Title of the plot.
-        save_path (str or None): If provided, saves the plot to this path.
-        show (bool): If True, displays the plot.
-    """
     actions = np.array(actions)
     unique_actions, counts = np.unique(actions, return_counts=True)
 
@@ -285,3 +285,79 @@ def plot_violations(
         plt.close()
 
 
+def plot_summary_metrics(rewards, mod_rate, viol_rate, title_prefix, save_dir="plots", rolling_window=10, run_dir=None):
+    os.makedirs(save_dir, exist_ok=True)
+    episodes = np.arange(len(rewards))
+
+    # Compute basic stats
+    mod_mean = np.mean(mod_rate)
+    mod_std = np.std(mod_rate)
+    vio_mean = np.mean(viol_rate)
+    vio_std = np.std(viol_rate)
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    def rolling_stats(data):
+        data = np.array(data)
+        rolling_mean = np.convolve(data, np.ones(rolling_window) / rolling_window, mode='valid')
+        rolling_windows = [data[max(0, i - rolling_window):i] for i in range(rolling_window, len(data) + 1)]
+        rolling_array = np.vstack([
+            np.pad(window.astype(float), (rolling_window - len(window), 0), constant_values=np.nan)
+            for window in rolling_windows
+        ])
+        rolling_std = np.nanstd(rolling_array, axis=1)
+        rolling_episodes = np.arange(rolling_window, len(data) + 1)
+        return rolling_episodes, rolling_mean, rolling_std
+
+    legend_handles = []
+
+    if rolling_window > 1 and len(rewards) >= rolling_window:
+        # Modifications
+        mod_eps, mod_mean_arr, mod_std_arr = rolling_stats(mod_rate)
+        mod_line, = ax.plot(mod_eps, mod_mean_arr, color='orange',
+                            label=f"Modification Rate (Mean:{mod_mean:.2f}, Std Dev:{mod_std:.2f})")
+        ax.fill_between(mod_eps, mod_mean_arr - mod_std_arr, mod_mean_arr + mod_std_arr,
+                        color='orange', alpha=0.2)
+        mod_fill_patch = mpatches.Patch(color='orange', alpha=0.2, label='±1 Std Dev (Modifications)')
+        legend_handles.extend([mod_line, mod_fill_patch])
+
+        # Violations
+        vio_eps, vio_mean_arr, vio_std_arr = rolling_stats(viol_rate)
+        vio_line, = ax.plot(vio_eps, vio_mean_arr, color='red',
+                            label=f"Violation Rate (Mean:{vio_mean:.2f}, Std Dev:{vio_std:.2f})")
+        ax.fill_between(vio_eps, vio_mean_arr - vio_std_arr, vio_mean_arr + vio_std_arr,
+                        color='red', alpha=0.2)
+        vio_fill_patch = mpatches.Patch(color='red', alpha=0.2, label='±1 Std Dev (Violations)')
+        legend_handles.extend([vio_line, vio_fill_patch])
+
+    else:
+        # Fallback to raw plots
+        mod_line, = ax.plot(episodes, mod_rate, color='orange',
+                            label=f"Modification Rate (Mean:{mod_mean:.2f}, Std Dev:{mod_std:.2f})")
+        vio_line, = ax.plot(episodes, viol_rate, color='red',
+                            label=f"Violation Rate (Mean:{vio_mean:.2f}, Std Dev:{vio_std:.2f})")
+        legend_handles.extend([mod_line, vio_line])
+
+    ax.set_xlabel("Episode")
+    ax.set_ylabel("Value")
+    ax.set_title(f"{title_prefix} – Modification and Violation Rates per Episode")
+    ax.grid(alpha=0.3)
+    ax.legend(handles=legend_handles, loc='upper right')
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"summary_metrics_{timestamp}.png"
+
+    # Save
+    print(f'run dir:{run_dir}')
+    if run_dir:
+        os.makedirs(run_dir, exist_ok=True)
+        save_path = os.path.join(run_dir, filename)
+        fig.savefig(save_path)
+        print(f"Plot saved to {save_path}")
+    elif save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, filename)
+        fig.savefig(save_path)
+        print(f"Plot saved to {save_path}")
+    # plt.show()
+    # plt.close(fig)

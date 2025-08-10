@@ -38,9 +38,9 @@ class A2CAgent:
         self.action_dim = action_dim
 
         self.gamma = 0.99
-        self.lr = 3e-4
+        self.lr = 5e-4
         self.hidden_dim = 128
-        self.entropy_coef = 0.01
+        self.entropy_coef = 0.1
         self.lambda_sem = 0
         self.use_cnn = False
         self.num_layers = 2
@@ -65,7 +65,7 @@ class A2CAgent:
             num_actions=action_dim,
             mode=mode,
             verbose=verbose,
-            is_shield_active=(use_shield_layer or use_shield_post)
+            is_shield_active=(use_shield_layer or use_shield_post or use_shield_pre)
         )
         self.shield_controller.constraint_monitor = self.constraint_monitor
 
@@ -174,9 +174,15 @@ class A2CAgent:
             shielded_probs = raw_probs
 
         dist = Categorical(probs=shielded_probs)
-        new_log_probs = log_probs  # already stored during action selection
-        entropy = dist.entropy().mean()
 
+        if self.use_shield_layer:
+            # Recompute log_probs because the shield is inside the model
+            new_log_probs = dist.log_prob(actions)
+        else:
+            # Use stored log_probs (from raw or shielded sampling)
+            new_log_probs = log_probs
+
+        entropy = dist.entropy().mean()
         policy_loss = -(advantages.detach() * new_log_probs).mean()
         value_loss = nn.MSELoss()(predicted_values.squeeze(), targets)
 

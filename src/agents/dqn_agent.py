@@ -31,18 +31,18 @@ class DQNAgent:
         print(f"[ShieldedDQNAgent] Using device: {self.device}")
         self.env = env
 
-        self.gamma = 0.985
-        self.lr = 1e-5
-        self.batch_size = 128
-        self.buffer_size = 100_000
+        self.gamma = 0.99
+        self.lr = 8e-5
+        self.batch_size = 64
+        self.buffer_size = 200_000
         self.target_update_freq = 500
-        self.epsilon_start = 0.5
-        self.epsilon_end = 0.01
-        self.epsilon_decay = 54170
+        self.epsilon_start = 1
+        self.epsilon_end = 0.04
+        self.epsilon_decay = 500_000
         self.hidden_dim = 256
         self.num_layers = 3
         self.use_cnn = use_cnn
-        self.lambda_sem = 0
+        self.lambda_sem = 0.0
         self.use_orthogonal_init = True
         self.pretrained_cnn = None
         print(agent_kwargs)

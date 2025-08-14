@@ -1,6 +1,8 @@
 from datetime import datetime
-
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+plt.ioff()
 import numpy as np
 import os
 import math
@@ -20,7 +22,7 @@ def plot_rewards(
     episodes = np.arange(1, len(rewards) + 1)
     rewards = np.array(rewards)
 
-    plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(10, 6))
     ax = plt.gca()
 
     ax.plot(episodes, rewards, label="Episode Reward", alpha=0.6)
@@ -73,7 +75,7 @@ def plot_rewards(
     #     plt.show()
     # else:
     #     plt.close()
-
+    plt.close(fig)
 
 def plot_action_frequencies(actions, action_labels=None, title="Action Selection Frequencies", save_path=None, show=True):
     actions = np.array(actions)
@@ -99,8 +101,8 @@ def plot_action_frequencies(actions, action_labels=None, title="Action Selection
 
     if show:
         plt.show()
-    else:
-        plt.close()
+
+    plt.close()
 
 def plot_action_heatmaps(visited_actions, grid_size=(5, 5), num_actions=7):
     """
@@ -141,6 +143,7 @@ def plot_action_heatmaps(visited_actions, grid_size=(5, 5), num_actions=7):
 
     plt.tight_layout()
     plt.show()
+    plt.close()
 
 def get_action_counts_per_state(visited_actions, grid_size=(5, 5), num_actions=7):
     """
@@ -193,6 +196,7 @@ def plot_action_histograms(action_counts, action_names=None, max_cols=10):
 
     plt.tight_layout()
     plt.show()
+    plt.close()
 
 def moving_average(values, window=10):
     if len(values) < window:
@@ -225,6 +229,7 @@ def plot_losses(logs, window=10, save_path=None):
     if save_path:
         plt.savefig(save_path)
     plt.show()
+    plt.close()
 
 def plot_prob_shift(logs, window=10, save_path=None):
     prob_shift = moving_average(logs["prob_shift"], window)
@@ -241,6 +246,7 @@ def plot_prob_shift(logs, window=10, save_path=None):
     if save_path:
         plt.savefig(save_path)
     plt.show()
+    plt.close()
 
 def plot_violations(
         violations,
@@ -281,8 +287,8 @@ def plot_violations(
 
     if show:
         plt.show()
-    else:
-        plt.close()
+
+    plt.close()
 
 
 def plot_summary_metrics(rewards, mod_rate, viol_rate, title_prefix, save_dir="plots", rolling_window=10, run_dir=None):
@@ -361,3 +367,4 @@ def plot_summary_metrics(rewards, mod_rate, viol_rate, title_prefix, save_dir="p
         print(f"Plot saved to {save_path}")
     # plt.show()
     # plt.close(fig)
+    plt.close(fig)

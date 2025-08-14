@@ -178,7 +178,6 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
     viol_rate_per_episode = []
     best_avg_reward = float('-inf')
     best_weights = None
-    actions_taken = []
     no_improve_counter = 0  # Early stopping counter
     early_stop_patience = 2000 # Stop if no improvement after 500 episodes
 
@@ -240,7 +239,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
-            actions_taken.append((x, y, selected_action))
+            # actions_taken.append((x, y, selected_action))
             next_state, reward, terminated, truncated, info = env.step(selected_action)
 
             if render:
@@ -304,7 +303,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                     print(f"[Early Stopping] No improvement for {early_stop_patience} episodes. Stopping training.")
                     break
 
-    env.close()
+
     if visualize:
         agent_name = agent.__class__.__name__
 
@@ -327,7 +326,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             title_prefix=title_prefix,
             run_dir=run_dir
         )
-
+    env.close()
     return agent, episode_rewards, best_weights, best_avg_reward
 
 
@@ -375,7 +374,7 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/seaquest_low_oxygen_go_up.cnf'
+    requirements_path = 'src/requirements/seaquest_low_oxygen_deep_go_up.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -588,6 +587,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
     total_violations = stats["total_violations"]
     total_modifications = stats["total_modifications"]
     total_steps_eval = stats["total_steps"]
+    env.close()
 
     return {
         "avg_reward": np.mean(total_rewards),
@@ -655,6 +655,7 @@ def run_multiple_evaluations(
             force_disable_shield=force_disable_shield,
             run_dir=run_dir
         )
+        env.close()
 
         # === CSV-Formatted Output for Excel Logging ===
         if force_disable_shield:
@@ -673,7 +674,7 @@ def run_multiple_evaluations(
         csv_line = "\t".join([
             env_name,
             agent_name.upper(),
-            "seaquest_low_oxygen_go_up.cnf", # TODO: make this not hardcoded
+            "seaquest_low_oxygen_deep_go_up.cnf", # TODO: make this not hardcoded
             shield_mode,
             f"{run + 1}",
             f"{results['avg_reward']:.2f}",
@@ -765,7 +766,7 @@ if __name__ == "__main__":
             agent_name=args.agent,
             env_name=args.env,
             use_ram_obs=args.use_ram_obs,
-            num_runs=5,
+            num_runs=3,
             num_train_episodes=args.num_episodes,
             num_eval_episodes=100,
             use_shield_post=args.use_shield_post,

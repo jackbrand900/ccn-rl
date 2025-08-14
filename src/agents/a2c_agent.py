@@ -38,7 +38,7 @@ class A2CAgent:
         self.action_dim = action_dim
 
         self.gamma = 0.99
-        self.lr = 5e-4
+        self.lr = 3e-4
         self.hidden_dim = 128
         self.entropy_coef = 0.1
         self.lambda_sem = 0
@@ -196,7 +196,7 @@ class A2CAgent:
             ]
             flag_tensor = torch.tensor(flag_values, dtype=raw_probs.dtype, device=raw_probs.device)
             probs_all = torch.cat([raw_probs, flag_tensor], dim=1)
-            semantic_loss = self.shield_controller.compute_semantic_loss(probs_all)
+            semantic_loss = self.shield_controller.compute_semantic_loss(probs_all, flag_tensor)
 
         # === Total Loss ===
         loss = policy_loss + value_loss - self.entropy_coef * entropy + self.lambda_sem * semantic_loss

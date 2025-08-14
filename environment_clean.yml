@@ -1,4 +1,4 @@
-name: car-racing
+conname: car-racing
 channels:
   - conda-forge
   - defaults

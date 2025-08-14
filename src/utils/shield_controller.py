@@ -44,8 +44,7 @@ class ShieldController:
         self.shield_activations = 0
 
         self.clauses = self._parse_cnf_file()
-        self.satisfying_assignments = self._get_satisfying_assignments()
-        self._sat_tensor = None
+        self.sat_assignments_cache = {}
 
     def _batchify(self, single_fn):
         def batch_fn(contexts):
@@ -226,43 +225,128 @@ class ShieldController:
                 clauses.append(clause)
         return clauses
 
-    def _get_satisfying_assignments(self):
-        assignments = []
-        for bits in itertools.product([0, 1], repeat=self.num_vars):
-            if all(any(bits[idx] ^ neg for idx, neg in clause) for clause in self.clauses):
-                assignments.append(list(bits))
-        return assignments
-
-    def compute_semantic_loss(self, probs, num_samples=100):
+    def _get_satisfying_assignments(self, flag_values):
         """
-        probs: [B, num_vars] — Bernoulli outputs from model
-        num_samples: number of satisfying assignments to sample
-        Returns: scalar semantic loss (approximate)
+        For categorical actions: find which ACTION INDICES (0-17) satisfy constraints.
+        Returns a list of action indices that satisfy the CNF when combined with flag_values.
         """
-        device = probs.device
+        key = tuple(flag_values)
+        if key in self.sat_assignments_cache:
+            return self.sat_assignments_cache[key]
 
-        # Convert satisfying assignments to tensor once (if not already)
-        if self._sat_tensor is None or self._sat_tensor.device != device:
-            self._sat_tensor = torch.tensor(
-                self.satisfying_assignments,
-                dtype=probs.dtype,
-                device=device
-            )
+        satisfying_actions = []
 
-        total_assignments = self._sat_tensor.shape[0]
+        # Check each possible action (0 to num_actions-1)
+        for action_idx in range(self.num_actions):
+            # Create one-hot encoding for this action
+            action_bits = [0] * self.num_actions
+            action_bits[action_idx] = 1
 
-        if total_assignments <= num_samples:
-            sampled = self._sat_tensor  # use all
-        else:
-            idx = torch.randperm(total_assignments, device=device)[:num_samples]
-            sampled = self._sat_tensor[idx]  # [num_samples, V]
+            # Combine with flag values
+            full_bits = action_bits + list(flag_values)
 
-        # Reshape for broadcasting
-        sampled = sampled.unsqueeze(1)  # [S, 1, V]
-        probs = probs.unsqueeze(0)      # [1, B, V]
+            # Check if this satisfies all clauses
+            if all(any(int(full_bits[idx]) ^ neg for idx, neg in clause) for clause in self.clauses):
+                satisfying_actions.append(action_idx)
 
-        logp = torch.log(probs * sampled + (1 - probs) * (1 - sampled) + 1e-8)  # [S, B, V]
-        logp_sum = logp.sum(dim=2)  # [S, B]
-        logsumexp = torch.logsumexp(logp_sum, dim=0)  # [B]
+        # For categorical actions, we don't need sampling - just return all satisfying actions
+        self.sat_assignments_cache[key] = satisfying_actions
+        return satisfying_actions
 
-        return -logsumexp.mean()
+    def compute_semantic_loss(self, action_probs, flag_tensor, debug=False):
+        """
+        Computes semantic loss for categorical actions (softmax distribution).
+        action_probs: [B, num_actions] — softmax probabilities that sum to 1
+        flag_tensor: [B, num_flags] — already-computed binary flags
+        debug: if True, print detailed debugging info
+        Returns: scalar semantic loss (averaged across batch)
+        """
+        device = action_probs.device
+        B = action_probs.size(0)
+        losses = []
+
+        # Debug statistics
+        total_satisfying_actions = 0
+        total_possible_actions = 0
+        min_satisfying_prob = float('inf')
+        max_satisfying_prob = 0.0
+        violation_count = 0
+
+        for i in range(B):
+            probs_i = action_probs[i]  # [num_actions]
+            flag_values = flag_tensor[i].tolist()
+
+            # Get satisfying action indices
+            satisfying_actions = self._get_satisfying_assignments(flag_values)
+
+            # Debug info for first few batches - only when constraints are restrictive
+            is_restrictive = len(satisfying_actions) < self.num_actions
+            if debug and i < 3 and is_restrictive:
+                print(f"\n--- Batch item {i} (RESTRICTIVE CONSTRAINTS) ---")
+                print(f"Flag values: {flag_values}")
+                print(f"Satisfying actions: {satisfying_actions} ({len(satisfying_actions)}/{self.num_actions})")
+                print(f"Action probs (top 5): {torch.topk(probs_i, 5)}")
+
+            if not satisfying_actions:
+                # No actions satisfy constraints - add large penalty
+                violation_count += 1
+                if debug:  # Always print violations
+                    print(f"NO SATISFYING ACTIONS! Batch item {i}, Adding penalty of 10.0")
+                losses.append(torch.tensor(10.0, device=device))
+                continue
+
+            # Convert to tensor of action indices
+            sat_actions = torch.tensor(satisfying_actions, dtype=torch.long, device=device)
+
+            # Get probabilities of satisfying actions
+            satisfying_probs = probs_i[sat_actions]  # [num_satisfying_actions]
+
+            # Total probability mass on satisfying actions
+            total_satisfying_prob = satisfying_probs.sum()
+
+            # Update debug statistics
+            total_satisfying_actions += len(satisfying_actions)
+            total_possible_actions += self.num_actions
+            min_satisfying_prob = min(min_satisfying_prob, total_satisfying_prob.item())
+            max_satisfying_prob = max(max_satisfying_prob, total_satisfying_prob.item())
+
+            # Debug info for first few batches - only when constraints are restrictive
+            if debug and i < 3 and is_restrictive:
+                print(f"Satisfying probs: {satisfying_probs}")
+                print(f"Total satisfying prob: {total_satisfying_prob.item():.8f}")
+                print(f"Predicted action (argmax): {probs_i.argmax().item()}")
+                print(f"Is predicted action valid: {probs_i.argmax().item() in satisfying_actions}")
+
+            # Semantic loss is negative log of total probability on satisfying actions
+            # Clamp to avoid numerical issues
+            total_satisfying_prob = torch.clamp(total_satisfying_prob, min=1e-8, max=1.0)
+            semantic_loss = -torch.log(total_satisfying_prob)
+            losses.append(semantic_loss)
+
+            if debug and i < 3 and is_restrictive:
+                print(f"Individual semantic loss: {semantic_loss.item():.2e}")
+
+        if not losses:
+            return torch.tensor(0.0, device=device)
+
+        # Return mean loss with numerical stability
+        final_loss = torch.stack(losses).mean()
+
+        # Print debug summary - only if there were restrictions or violations
+        if debug:
+            avg_satisfying_ratio = total_satisfying_actions / max(total_possible_actions, 1)
+            restrictive_cases = total_satisfying_actions < total_possible_actions
+
+            if restrictive_cases or violation_count > 0:
+                print(f"\n=== SEMANTIC LOSS DEBUG SUMMARY ===")
+                print(f"Batch size: {B}")
+                print(f"Average satisfying actions ratio: {avg_satisfying_ratio:.3f}")
+                print(f"Min satisfying prob: {min_satisfying_prob:.8f}")
+                print(f"Max satisfying prob: {max_satisfying_prob:.8f}")
+                print(f"Violations (no valid actions): {violation_count}/{B}")
+                print(f"Final semantic loss: {final_loss.item():.2e}")
+                print("=====================================\n")
+            elif avg_satisfying_ratio == 1.0:
+                print(f"All actions satisfy constraints for all {B} batch items (ratio: {avg_satisfying_ratio:.3f})")
+
+        return torch.clamp(final_loss, min=0.0)

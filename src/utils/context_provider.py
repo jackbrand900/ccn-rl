@@ -101,6 +101,7 @@ def build_context(env, agent):
             # === Player position ===
             player_x = ram[70]
             player_y = ram[97]
+            low_depth = player_y > 70
 
             # === Oxygen status ===
             oxygen_meter = ram[102]
@@ -119,6 +120,7 @@ def build_context(env, agent):
                 "player_y": player_y,
                 "oxygen": oxygen_meter,
                 "low_oxygen": low_oxygen,
+                "low_depth": low_depth,
                 "facing_right": facing_right,
                 "facing_left": facing_left,
                 "divers_collected": divers_collected,
@@ -289,6 +291,7 @@ def seaquest_flag_logic(context, flag_active_val=1.0):
         "y_19": flag_active_val if context.get("divers_collected", 0) > 0 else 0.0,  # at least one diver collected
         "y_20": flag_active_val if context.get("facing_right", False) else 0.0,      # Facing right
         "y_21": flag_active_val if context.get("facing_left", False) else 0.0,       # Facing left
+        "y_22": flag_active_val if context.get("low_depth", False) else 0.0
     }
 
 def demonattack_flag_logic(context, flag_active_val=1.0):

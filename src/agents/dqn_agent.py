@@ -42,7 +42,7 @@ class DQNAgent:
         self.hidden_dim = 256
         self.num_layers = 3
         self.use_cnn = use_cnn
-        self.lambda_sem = 0.0
+        self.lambda_sem = 1000
         self.use_orthogonal_init = True
         self.pretrained_cnn = None
         print(agent_kwargs)
@@ -206,21 +206,20 @@ class DQNAgent:
         # === Semantic Loss (Xu et al. 2023) ===
         semantic_loss = 0
         if self.lambda_sem > 0:
-            # Convert logits to probs
             with torch.no_grad():
-                probs = torch.softmax(q_out, dim=-1)
+                probs = torch.softmax(q_out, dim=-1)  # [B, num_actions]
 
-            # Get logical flags
-            flag_dicts = self.shield_controller.flag_logic_batch(contexts)
-            flag_values = [
-                [flags.get(name, 0.0) for name in self.shield_controller.flag_names]
-                for flags in flag_dicts
-            ]
-            flag_tensor = torch.tensor(flag_values, dtype=probs.dtype, device=probs.device)
+                flag_dicts = self.shield_controller.flag_logic_batch(contexts)
+                flag_values = [
+                    [flags.get(name, 0.0) for name in self.shield_controller.flag_names]
+                    for flags in flag_dicts
+                ]
+                flag_tensor = torch.tensor(flag_values, dtype=probs.dtype, device=self.device)  # [B, num_flags]
 
-            # Concatenate for joint input to semantic loss
-            probs_all = torch.cat([probs, flag_tensor], dim=1)
-            semantic_loss = self.shield_controller.compute_semantic_loss(probs_all)
+            # Call fixed semantic loss (no concatenation needed)
+            semantic_loss = self.shield_controller.compute_semantic_loss(probs, flag_tensor)
+            # print(f'TD loss: {td_loss}')
+            # print(f'Semantic loss: {semantic_loss}')
 
         total_loss = td_loss + self.lambda_sem * semantic_loss
 

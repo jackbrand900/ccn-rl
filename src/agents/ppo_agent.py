@@ -235,7 +235,7 @@ class PPOAgent:
                 ]
                 flag_tensor = torch.tensor(flag_values, dtype=probs.dtype, device=probs.device)
                 probs_all = torch.cat([probs, flag_tensor], dim=1)  # [B, num_vars]
-                semantic_loss = self.shield_controller.compute_semantic_loss(probs_all)
+                semantic_loss = self.shield_controller.compute_semantic_loss(probs_all, flag_tensor)
             total_loss = (policy_loss +
                           0.5 * value_loss -
                           self.ent_coef * entropy +

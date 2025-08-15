@@ -42,7 +42,7 @@ class DQNAgent:
         self.hidden_dim = 256
         self.num_layers = 3
         self.use_cnn = use_cnn
-        self.lambda_sem = 1000
+        self.lambda_sem = 1
         self.use_orthogonal_init = True
         self.pretrained_cnn = None
         print(agent_kwargs)

@@ -120,6 +120,7 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             else:
                 env = FlatObsWrapper(env)
             env.env_name = env_name
+            env.use_ram = False
         return env
 
 def log_ram(obs, prev_obs, step):
@@ -205,7 +206,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         state, _ = env.reset()
         state = preprocess_state(state, use_cnn=use_cnn)
         try:
-            key_pos = find_key(env) # TODO: move this
+            key_pos = find_key(env)
             env.key_pos = key_pos
         except AttributeError:
             key_pos = None
@@ -374,7 +375,7 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/seaquest_low_oxygen_deep_go_up.cnf'
+    requirements_path = 'src/requirements/pickup_on_key.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -674,7 +675,7 @@ def run_multiple_evaluations(
         csv_line = "\t".join([
             env_name,
             agent_name.upper(),
-            "seaquest_low_oxygen_deep_go_up.cnf", # TODO: make this not hardcoded
+            "pickup_on_key.cnf", # TODO: make this not hardcoded
             shield_mode,
             f"{run + 1}",
             f"{results['avg_reward']:.2f}",
@@ -766,7 +767,7 @@ if __name__ == "__main__":
             agent_name=args.agent,
             env_name=args.env,
             use_ram_obs=args.use_ram_obs,
-            num_runs=3,
+            num_runs=5,
             num_train_episodes=args.num_episodes,
             num_eval_episodes=100,
             use_shield_post=args.use_shield_post,

@@ -62,7 +62,7 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
         use_shield_post=use_shield_post,
         use_shield_layer=use_shield_layer,
         monitor_constraints=False,
-        num_episodes=500,
+        num_episodes=1000,
         verbose=False,
         visualize=False,
         use_ram_obs=use_ram_obs,

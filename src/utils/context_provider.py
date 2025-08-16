@@ -152,6 +152,43 @@ def build_context(env, agent):
             })
         except Exception as e:
             print(f"[DemonAttack RAM error] {e}")
+    elif "CliffWalking" in env_id:
+        obs = agent.last_obs if hasattr(agent, "last_obs") else None
+        context["obs"] = obs
+
+        try:
+            state = int(np.argmax(obs)) if isinstance(obs, np.ndarray) else int(obs)
+            width = 12
+            height = 4
+
+            x = state % width
+            y = state // width
+
+            def is_cliff(s):
+                # Cliff is the bottom row excluding start (36) and goal (47)
+                return s in list(range(37, 47))
+
+            cliff_right = False
+            cliff_down = False
+
+            # Check if moving RIGHT leads to cliff
+            if x < width - 1:
+                s_right = state + 1
+                cliff_right = is_cliff(s_right)
+
+            # Check if moving DOWN leads to cliff
+            if y < height - 1:
+                s_down = state + width
+                cliff_down = is_cliff(s_down)
+
+            context["cliff_right"] = cliff_right
+            context["cliff_down"] = cliff_down
+            # print(f'state: {state}')
+            # print(f'cliff right? {cliff_right}')
+            # print(f'cliff down? {cliff_down}')
+
+        except Exception as e:
+            print(f"[CliffWalking context error] {e}")
     else:
         obs = agent.last_obs if hasattr(agent, "last_obs") else None
         # print(f'obs: {obs}')
@@ -315,4 +352,16 @@ def demonattack_flag_logic(context, flag_active_val=1.0):
     flags["y_8"] = flag_active_val if enemy_near else 0.0
 
     return flags
+
+def cliffwalking_flag_logic(context, flag_active_val=1.0):
+    cliff_right = context.get("cliff_right", False)
+    cliff_down = context.get("cliff_down", False)
+
+    # print(f"[Flag Logic] cliff_right={cliff_right}, cliff_down={cliff_down}")
+
+    return {
+        "y_4": flag_active_val if cliff_right else 0.0,
+        "y_5": flag_active_val if cliff_down else 0.0,
+    }
+
 

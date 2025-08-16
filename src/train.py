@@ -71,7 +71,8 @@ custom_envs = {
     "ALE/Freeway-v5": (None, None),
     "FreewayNoFrameskip-v4": (None, None),
     "ALE/Seaquest-v5": (None, None),
-    "ALE/DemonAttack-v5": (None, None)
+    "ALE/DemonAttack-v5": (None, None),
+    "CliffWalking-v1": (None, None),
 }
 
 def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
@@ -131,6 +132,16 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
             env.use_ram = use_ram_obs
             return env
 
+        if env_name == "CliffWalking-v1":
+            env = gym.make(env_name, render_mode="human" if render else None)
+            env = TimeLimit(env, max_episode_steps=1000)
+            env.env_name = env_name
+            env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
+            return env
+
         # Handle MiniGrid environments
         env = gym.make(env_name, render_mode="human" if render else None)
         if "MiniGrid" in env_name:
@@ -154,9 +165,14 @@ def log_ram(obs, prev_obs, step):
         print(f"[RAM] Changed indices: {changed}, deltas: {delta[changed]}")
 
 
-def preprocess_state(state, use_cnn=False):
+def preprocess_state(state, use_cnn=False, obs_space=None):
     if isinstance(state, dict):
         state = state['image']
+    if isinstance(state, int):
+        n_states = obs_space.n if obs_space else 48
+        one_hot = np.zeros(n_states, dtype=np.float32)
+        one_hot[state] = 1.0
+        return one_hot
     if isinstance(state, np.ndarray):
         if use_cnn:
             if state.ndim == 2:
@@ -203,14 +219,14 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
     best_avg_reward = float('-inf')
     best_weights = None
     no_improve_counter = 0  # Early stopping counter
-    early_stop_patience = 2000 # Stop if no improvement after 500 episodes
+    early_stop_patience = 200 # Stop if no improvement after 200 episodes
 
     if not softness:
         softness = ""
     else:
         softness = softness.capitalize()
 
-    env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
+    env_name = getattr(env.unwrapped, 'env_name', getattr(getattr(env, 'spec', None), 'id', 'UnknownEnv'))
     if getattr(agent, 'use_shield_layer', False):
         shield_mode = "Layered Shield"
     elif getattr(agent, 'use_shield_post', False):
@@ -288,7 +304,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            use_ram = 'RAM' if env.use_ram else 'OBS'
+            use_ram = 'RAM' if getattr(env, 'use_ram', False) else 'OBS'
             log_msg = (
                 f"[{env.env_name}] "
                 f"[{str(type(agent)).split('.')[-1][:-2]}] "
@@ -394,6 +410,9 @@ def train(agent='ppo',
         state_dim = int(np.prod(obs_space.shape))
     elif isinstance(obs_space, gym.spaces.Dict) and 'image' in obs_space.spaces:
         state_dim = int(np.prod(obs_space.spaces['image'].shape))
+    elif isinstance(obs_space, gym.spaces.Discrete):
+        state_dim = obs_space.n
+        input_shape = (obs_space.n,)  # for one-hot encoding
     else:
         raise ValueError(f"Unsupported observation space type: {obs_space}")
 
@@ -402,7 +421,7 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/red_light_stop.cnf'
+    requirements_path = 'src/requirements/cliff_safe.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -507,7 +526,8 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
         agent.constraint_monitor.reset_all()
 
     for episode in range(num_episodes):
-        state = reset_env(env)
+        obs_space = env.observation_space
+        state = preprocess_state(reset_env(env), use_cnn=getattr(agent, "use_cnn", False), obs_space=obs_space)
         done = False
         episode_reward = 0
 
@@ -523,6 +543,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
                 selected_action, a_unshielded, a_shielded, context = agent.select_action(state, env, do_apply_shield=not force_disable_shield)
 
             state, reward, done, _ = step_env(env, selected_action)
+            state = preprocess_state(state, use_cnn=getattr(agent, "use_cnn", False), obs_space=obs_space)
             episode_reward += reward
             total_steps += 1
 

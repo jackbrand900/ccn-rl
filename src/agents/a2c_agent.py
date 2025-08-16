@@ -38,13 +38,13 @@ class A2CAgent:
         self.action_dim = action_dim
 
         self.gamma = 0.99
-        self.lr = 3e-4
+        self.lr = 1e-3
         self.hidden_dim = 128
-        self.entropy_coef = 0.1
+        self.entropy_coef = 0.03
         self.lambda_sem = 0
         self.use_cnn = False
         self.num_layers = 2
-        self.use_orthogonal_init = False
+        self.use_orthogonal_init = True
         self.pretrained_cnn = None
 
         # === Override from agent_kwargs ===

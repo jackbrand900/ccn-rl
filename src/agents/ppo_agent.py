@@ -16,10 +16,10 @@ class PPOAgent:
     def __init__(self,
                  input_shape,
                  action_dim,
-                 hidden_dim=64,
+                 hidden_dim=128,
                  use_cnn=False,
                  use_orthogonal_init=True,
-                 lr=1e-3,
+                 lr=3e-4,
                  gamma=0.99,
                  clip_eps=0.2,
                  ent_coef=0.05,
@@ -28,8 +28,8 @@ class PPOAgent:
                  verbose=False,
                  requirements_path=None,
                  env=None,
-                 batch_size=256,
-                 epochs=4,
+                 batch_size=4096,
+                 epochs=10,
                  use_shield_post=False,
                  use_shield_pre=False,
                  use_shield_layer=False,
@@ -145,6 +145,8 @@ class PPOAgent:
                 shielded_probs /= shielded_probs.sum()
                 dist_shielded = torch.distributions.Categorical(probs=shielded_probs)
                 a_shielded = dist_shielded.sample().item()
+            else:
+                a_shielded = None
 
             selected_action = a_unshielded
 

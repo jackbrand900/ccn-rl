@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from random import random
 
 import gymnasium as gym
 import numpy as np
@@ -24,6 +25,25 @@ from src.utils.wrappers import RAMObservationWrapper, SeaquestRAMWrapper, DemonA
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
 # import cv2
+
+def set_seed(seed: int):
+    # NumPy
+    np.random.seed(seed)
+
+    # PyTorch (CPU + CUDA)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # Make CuDNN deterministic
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    # Optional: ensure hash-based ops are deterministic
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"  # for CUDA >=10.2 deterministic matmul
+
+    print(f"[Seed set to {seed}]")
 
 register(
     id="CarRacingWithTrafficLights-v0",
@@ -54,7 +74,7 @@ custom_envs = {
     "ALE/DemonAttack-v5": (None, None)
 }
 
-def create_environment(env_name, render=False, use_ram_obs=False):
+def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
     if env_name in custom_envs:
         entry_point, kwargs = custom_envs[env_name]
         if entry_point:
@@ -76,7 +96,7 @@ def create_environment(env_name, render=False, use_ram_obs=False):
 
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=300)  # ✅ Set timestep limit
+            env = TimeLimit(env, max_episode_steps=300)
             env.env_name = env_name
             env.use_ram = False
             return env
@@ -121,6 +141,9 @@ def create_environment(env_name, render=False, use_ram_obs=False):
                 env = FlatObsWrapper(env)
             env.env_name = env_name
             env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
         return env
 
 def log_ram(obs, prev_obs, step):
@@ -343,8 +366,12 @@ def train(agent='ppo',
           use_ram_obs=False,
           agent_kwargs=None,
           env_name='MiniGrid-Empty-5x5-v0',
-          render=False):
-    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs)
+          render=False,
+          seed=42):
+    # rand_seed = np.random.randint(0, 2**32 - 1)
+    # print(f'Rand_seed: {rand_seed}')
+    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
+    set_seed(seed)
     print("Observation space:", env.observation_space)
     obs_space = env.observation_space
     if agent_kwargs is None:
@@ -375,7 +402,7 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/pickup_on_key.cnf'
+    requirements_path = 'src/requirements/red_light_stop.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -640,7 +667,8 @@ def run_multiple_evaluations(
             mode=mode,
             verbose=verbose,
             visualize=visualize,
-            render=render
+            render=render,
+            seed=run+1 # seed is run number (1-indexed)
         )
 
         if hasattr(agent, 'load_weights') and best_weights is not None:
@@ -675,7 +703,7 @@ def run_multiple_evaluations(
         csv_line = "\t".join([
             env_name,
             agent_name.upper(),
-            "pickup_on_key.cnf", # TODO: make this not hardcoded
+            "red_light_stop.cnf", # TODO: make this not hardcoded
             shield_mode,
             f"{run + 1}",
             f"{results['avg_reward']:.2f}",
@@ -767,7 +795,7 @@ if __name__ == "__main__":
             agent_name=args.agent,
             env_name=args.env,
             use_ram_obs=args.use_ram_obs,
-            num_runs=5,
+            num_runs=3,
             num_train_episodes=args.num_episodes,
             num_eval_episodes=100,
             use_shield_post=args.use_shield_post,

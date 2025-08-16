@@ -52,7 +52,7 @@ def plot_rewards(
             verticalalignment='top', horizontalalignment='left',
             fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.5))
 
-    ax.legend(loc='upper right')
+    ax.legend(loc='best')
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
@@ -269,7 +269,7 @@ def plot_violations(
     ax.set_ylabel("Violations")
     ax.set_title(title)
     ax.grid(True)
-    ax.legend(loc="upper right")
+    ax.legend(loc="best")
 
     # Top-left annotation
     stats_text = (
@@ -348,7 +348,7 @@ def plot_summary_metrics(rewards, mod_rate, viol_rate, title_prefix, save_dir="p
     ax.set_ylabel("Value")
     ax.set_title(f"{title_prefix} – Modification and Violation Rates per Episode")
     ax.grid(alpha=0.3)
-    ax.legend(handles=legend_handles, loc='upper right')
+    ax.legend(handles=legend_handles, loc='best')
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"summary_metrics_{timestamp}.png"

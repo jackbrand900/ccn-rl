@@ -27,21 +27,20 @@ import copy
 # import cv2
 
 def set_seed(seed: int):
-    # NumPy
+    import random, os
+    random.seed(seed)
     np.random.seed(seed)
-
-    # PyTorch (CPU + CUDA)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-    # Make CuDNN deterministic
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    # Optional: ensure hash-based ops are deterministic
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"  # for CUDA >=10.2 deterministic matmul
+    torch.use_deterministic_algorithms(True)
 
     print(f"[Seed set to {seed}]")
 
@@ -97,9 +96,12 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
 
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=300)
+            env = TimeLimit(env, max_episode_steps=500)
             env.env_name = env_name
             env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
             return env
 
         if env_name == "ALE/Freeway-v5":
@@ -421,7 +423,7 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/cliff_safe.cnf'
+    requirements_path = 'src/requirements/red_light_stop.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,

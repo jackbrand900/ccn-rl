@@ -18,18 +18,18 @@ class PPOAgent:
                  action_dim,
                  hidden_dim=128,
                  use_cnn=False,
-                 use_orthogonal_init=True,
-                 lr=3e-4,
-                 gamma=0.99,
-                 clip_eps=0.2,
-                 ent_coef=0.05,
+                 use_orthogonal_init=False,
+                 lr=0.0008574514491391816,
+                 gamma=0.9846371384394292,
+                 clip_eps=0.2139571285323152,
+                 ent_coef=0.01884295620699892,
                  lambda_sem=0.0,
                  lambda_consistency=0,
                  verbose=False,
                  requirements_path=None,
                  env=None,
-                 batch_size=4096,
-                 epochs=10,
+                 batch_size=512,
+                 epochs=7,
                  use_shield_post=False,
                  use_shield_pre=False,
                  use_shield_layer=False,
@@ -67,7 +67,7 @@ class PPOAgent:
             self.epochs = epochs
             self.use_orthogonal_init = use_orthogonal_init
             self.hidden_dim = hidden_dim
-            self.num_layers = 3
+            self.num_layers = 2
 
         self.use_cnn = use_cnn
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

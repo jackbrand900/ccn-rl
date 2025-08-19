@@ -73,7 +73,7 @@ class ShieldController:
             self.flag_logic_fn = partial(self._base_flag_logic_fn, flag_active_val=flag_active_val)
             self.flag_logic_batch = self._batchify(self.flag_logic_fn)
 
-    def compute_progressive_flag(self, episode_num, final_episode=300) -> float:
+    def compute_progressive_flag(self, episode_num, final_episode=500) -> float:
         return min(1.0, 0.5 + 0.5 * (episode_num / final_episode))
 
     def flag_logic_with_key_check(self, context):

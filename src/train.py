@@ -129,9 +129,12 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            # env = TimeLimit(env, max_episode_steps=1000)
+            env = TimeLimit(env, max_episode_steps=1000)
             env.env_name = env_name
             env.use_ram = use_ram_obs
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
             return env
 
         if env_name == "CliffWalking-v1":
@@ -221,7 +224,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
     best_avg_reward = float('-inf')
     best_weights = None
     no_improve_counter = 0  # Early stopping counter
-    early_stop_patience = 200 # Stop if no improvement after 200 episodes
+    early_stop_patience = 1000 # Stop if no improvement after 500 episodes
 
     if not softness:
         softness = ""
@@ -259,6 +262,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         total_reward = 0
         step_count = 0
         while not done:
+            # print(f'Step count: {step_count+1}')
             result = agent.select_action(state)
             if isinstance(result, tuple) and len(result) == 4:
                 selected_action, a_unshielded, a_shielded, context = result
@@ -423,7 +427,7 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/red_light_stop.cnf'
+    requirements_path = 'src/requirements/demon_attack_defensive.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -726,7 +730,7 @@ def run_multiple_evaluations(
         csv_line = "\t".join([
             env_name,
             agent_name.upper(),
-            "red_light_stop.cnf", # TODO: make this not hardcoded
+            "demon_attack_defensive.cnf", # TODO: make this not hardcoded
             shield_mode,
             f"{run + 1}",
             f"{results['avg_reward']:.2f}",

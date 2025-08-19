@@ -333,23 +333,27 @@ def seaquest_flag_logic(context, flag_active_val=1.0):
 
 def demonattack_flag_logic(context, flag_active_val=1.0):
     flags = {}
+
+    # === Context extraction ===
     player_x = context.get("player_x", 0.5)
     enemy_xs = context.get("enemy_xs", [])
     enemy_ys = context.get("enemy_ys", [])
     missile_y = context.get("missile_y", 0.5)
 
-    # y_6: Enemy aligned horizontally with player
+    # === THREAT FLAGS ===
+
+    # y_6: Enemy very close to bottom (immediate danger)
+    flags["y_6"] = flag_active_val if any(ey > 0.85 for ey in enemy_ys) else 0.0
+
+    # y_7: Missile is still in flight (can't fire again yet)
+    flags["y_7"] = flag_active_val if missile_y > 0.2 else 0.0
+
+    # y_8: Any enemy decently aligned with the player (within 0.1)
     aligned = any(abs(ex - player_x) < 0.1 for ex in enemy_xs)
+    flags["y_8"] = flag_active_val if aligned else 0.0
 
-    # y_7: Missile near bottom (e.g., just fired)
-    missile_low = missile_y > 0.8
-
-    # y_8: Enemy close to bottom (threat zone)
-    enemy_near = any(ey > 0.7 for ey in enemy_ys)
-
-    flags["y_6"] = flag_active_val if aligned else 0.0
-    flags["y_7"] = flag_active_val if missile_low else 0.0
-    flags["y_8"] = flag_active_val if enemy_near else 0.0
+    # y_10: High-density wave (many enemies visible)
+    flags["y_10"] = flag_active_val if len(enemy_xs) >= 3 else 0.0
 
     return flags
 
@@ -363,5 +367,6 @@ def cliffwalking_flag_logic(context, flag_active_val=1.0):
         "y_4": flag_active_val if cliff_right else 0.0,
         "y_5": flag_active_val if cliff_down else 0.0,
     }
+
 
 

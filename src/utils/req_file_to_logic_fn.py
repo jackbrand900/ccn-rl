@@ -1,6 +1,6 @@
 from src.utils.context_provider import (key_flag_logic, position_flag_logic, cartpole_emergency_flag_logic,
                                         red_light_flag_logic, wheel_on_grass_flag_logic, freeway_flag_logic,
-                                        seaquest_flag_logic, cliffwalking_flag_logic)
+                                        seaquest_flag_logic, cliffwalking_flag_logic, demonattack_flag_logic)
 req_file_to_logic_fn = {
     "emergency_cartpole.cnf": cartpole_emergency_flag_logic,
     "forward_on_flag.cnf": position_flag_logic,
@@ -14,6 +14,8 @@ req_file_to_logic_fn = {
     "seaquest_low_oxygen_go_up.cnf": seaquest_flag_logic,
     "seaquest_low_oxygen_deep_go_up.cnf": seaquest_flag_logic,
     "cliff_safe.cnf": cliffwalking_flag_logic,
+    "demon_attack_defensive.cnf": demonattack_flag_logic,
+    "demon_attack_offensive.cnf": demonattack_flag_logic,
 }
 
 

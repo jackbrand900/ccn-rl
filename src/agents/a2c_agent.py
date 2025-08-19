@@ -26,7 +26,7 @@ class A2CAgent:
                  verbose=False):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"[BatchedA2CAgent] Using device: {self.device}")
+        print(f"[A2CAgent] Using device: {self.device}")
 
         self.use_cnn = use_cnn
         self.use_shield_post = use_shield_post
@@ -36,6 +36,7 @@ class A2CAgent:
         self.verbose = verbose
         self.env = env
         self.action_dim = action_dim
+        print(f'Action dim: {action_dim}')
 
         self.gamma = 0.99
         self.lr = 1e-3
@@ -47,6 +48,8 @@ class A2CAgent:
         self.use_orthogonal_init = True
         self.pretrained_cnn = None
 
+        agent_kwargs = {'lr': 0.002672200217255932, 'gamma': 0.9922901067579246, 'hidden_dim': 256, 'use_orthogonal_init': True, 'num_layers': 4, 'ent_coef': 0.020992784929734585}
+        print(agent_kwargs)
         # === Override from agent_kwargs ===
         if agent_kwargs is not None:
             self.gamma = agent_kwargs.get("gamma", self.gamma)

@@ -129,7 +129,7 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=1000)
+            env = TimeLimit(env, max_episode_steps=5000)
             env.env_name = env_name
             env.use_ram = use_ram_obs
             env.reset(seed=seed)

@@ -48,7 +48,7 @@ class A2CAgent:
         self.use_orthogonal_init = True
         self.pretrained_cnn = None
 
-        agent_kwargs = {'lr': 0.002672200217255932, 'gamma': 0.9922901067579246, 'hidden_dim': 256, 'use_orthogonal_init': True, 'num_layers': 4, 'ent_coef': 0.020992784929734585}
+        agent_kwargs = {'lr': 0.001, 'gamma': 0.99, 'hidden_dim': 256, 'num_layers': 2, 'use_orthogonal_init': True, 'ent_coef': 0.01}
         print(agent_kwargs)
         # === Override from agent_kwargs ===
         if agent_kwargs is not None:
@@ -76,6 +76,7 @@ class A2CAgent:
             input_shape=input_shape,
             output_dim=action_dim,
             hidden_dim=self.hidden_dim,
+            num_layers=self.num_layers,
             use_cnn=self.use_cnn,
             actor_critic=True,
             use_shield_layer=use_shield_layer,
@@ -136,8 +137,8 @@ class A2CAgent:
             prepare_input(next_state, use_cnn=self.use_cnn).squeeze(0).to(self.device),
             context,
             done,
-            self.last_log_prob,
-            self.last_value
+            self.last_log_prob.detach(),
+            self.last_value.detach()
         ))
 
     def update(self):
@@ -187,7 +188,7 @@ class A2CAgent:
 
         entropy = dist.entropy().mean()
         policy_loss = -(advantages.detach() * new_log_probs).mean()
-        value_loss = nn.MSELoss()(predicted_values.squeeze(), targets)
+        value_loss = nn.MSELoss()(predicted_values.view(-1), targets.view(-1))
 
         # === Semantic Loss ===
         semantic_loss = 0

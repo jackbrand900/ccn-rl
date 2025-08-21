@@ -24,10 +24,10 @@ from src.utils.wrappers import RAMObservationWrapper, SeaquestRAMWrapper, DemonA
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
+import random, os
 # import cv2
 
 def set_seed(seed: int):
-    import random, os
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -390,10 +390,10 @@ def train(agent='ppo',
           env_name='MiniGrid-Empty-5x5-v0',
           render=False,
           seed=42):
-    # rand_seed = np.random.randint(0, 2**32 - 1)
-    # print(f'Rand_seed: {rand_seed}')
-    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
-    set_seed(seed)
+    rand_seed = np.random.randint(0, 2**32 - 1)
+    print(f'Rand_seed: {rand_seed}')
+    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=rand_seed)
+    set_seed(rand_seed)
     print("Observation space:", env.observation_space)
     obs_space = env.observation_space
     if agent_kwargs is None:
@@ -427,7 +427,7 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/demon_attack_defensive.cnf'
+    requirements_path = 'src/requirements/seaquest_low_oxygen_go_up.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -663,9 +663,9 @@ def run_multiple_evaluations(
         agent_name='dqn',
         env_name='MiniGrid-Empty-5x5-v0',
         use_ram_obs=False,
-        num_runs=3,
+        num_runs=2,
         num_train_episodes=2000,
-        num_eval_episodes=15,
+        num_eval_episodes=100,
         use_shield_post=False,
         use_shield_pre=False,
         use_shield_layer=False,
@@ -695,7 +695,7 @@ def run_multiple_evaluations(
             verbose=verbose,
             visualize=visualize,
             render=render,
-            seed=run+1 # seed is run number (1-indexed)
+            seed=run+2 # seed is run number (1-indexed)
         )
 
         if hasattr(agent, 'load_weights') and best_weights is not None:
@@ -730,7 +730,7 @@ def run_multiple_evaluations(
         csv_line = "\t".join([
             env_name,
             agent_name.upper(),
-            "demon_attack_defensive.cnf", # TODO: make this not hardcoded
+            "seaquest_low_oxygen_go_up.cnf", # TODO: make this not hardcoded
             shield_mode,
             f"{run + 1}",
             f"{results['avg_reward']:.2f}",

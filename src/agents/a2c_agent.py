@@ -48,8 +48,15 @@ class A2CAgent:
         self.use_orthogonal_init = True
         self.pretrained_cnn = None
 
-        agent_kwargs = {'lr': 0.001, 'gamma': 0.99, 'hidden_dim': 256, 'num_layers': 2, 'use_orthogonal_init': True, 'ent_coef': 0.01}
-        print(agent_kwargs)
+        # agent_kwargs = {
+        #     'lr': 1e-3,
+        #     'gamma': 0.99,
+        #     'hidden_dim': 256,
+        #     'num_layers': 3,
+        #     'use_orthogonal_init': False,
+        #     'ent_coef': 0.01
+        # }
+        # print(agent_kwargs)
         # === Override from agent_kwargs ===
         if agent_kwargs is not None:
             self.gamma = agent_kwargs.get("gamma", self.gamma)
@@ -137,8 +144,8 @@ class A2CAgent:
             prepare_input(next_state, use_cnn=self.use_cnn).squeeze(0).to(self.device),
             context,
             done,
-            self.last_log_prob.detach(),
-            self.last_value.detach()
+            self.last_log_prob,
+            self.last_value
         ))
 
     def update(self):

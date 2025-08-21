@@ -42,10 +42,11 @@ class DQNAgent:
         self.hidden_dim = 256
         self.num_layers = 3
         self.use_cnn = use_cnn
-        self.lambda_sem = 1
+        self.lambda_sem = 0
         self.use_orthogonal_init = True
         self.pretrained_cnn = None
-        print(agent_kwargs)
+        # agent_kwargs = {'gamma': 0.999, 'lr': 8e-5, 'batch_size': 128, 'buffer_size': 200000, 'target_update_freq': 1000, 'epsilon_start': 1.0, 'epsilon_end': 0.05, 'epsilon_decay': 1000000, 'hidden_dim': 256, 'num_layers': 3, 'use_cnn': False, 'lambda_sem': 0.0, 'use_orthogonal_init': True, 'pretrained_cnn': None}
+        # print(agent_kwargs)
 
         # === Override from agent_kwargs ===
         if agent_kwargs is not None:

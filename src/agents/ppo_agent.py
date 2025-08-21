@@ -19,17 +19,17 @@ class PPOAgent:
                  hidden_dim=128,
                  use_cnn=False,
                  use_orthogonal_init=False,
-                 lr=3e-4,
+                 lr=5e-4,
                  gamma=0.99,
                  clip_eps=0.2,
-                 ent_coef=0.015,
+                 ent_coef=0.01,
                  lambda_sem=0.1,
                  lambda_consistency=0,
                  verbose=False,
                  requirements_path=None,
                  env=None,
-                 batch_size=512,
-                 epochs=7,
+                 batch_size=64,
+                 epochs=4,
                  use_shield_post=False,
                  use_shield_pre=False,
                  use_shield_layer=False,
@@ -46,7 +46,7 @@ class PPOAgent:
         self.verbose = verbose
         self.env = env
         self.action_dim = action_dim
-        agent_kwargs = {'lr': 0.0009836111562499252, 'gamma': 0.9884995391196614, 'hidden_dim': 128, 'use_orthogonal_init': False, 'num_layers': 2, 'clip_eps': 0.21312490598946232, 'ent_coef': 0.013917372958293163, 'epochs': 7, 'batch_size': 512}
+        # agent_kwargs = {'lr': 0.0009836111562499252, 'gamma': 0.9884995391196614, 'hidden_dim': 128, 'use_orthogonal_init': False, 'num_layers': 2, 'clip_eps': 0.21312490598946232, 'ent_coef': 0.013917372958293163, 'epochs': 7, 'batch_size': 512}
         print(agent_kwargs)
         if agent_kwargs is not None:
             self.hidden_dim = agent_kwargs.get("hidden_dim", hidden_dim)

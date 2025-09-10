@@ -69,5 +69,12 @@ def config_by_env(env_name, use_ram_obs=False):
             "frame_stack": 1,
             "max_steps": 500,
         }
+    if "CliffWalking" in env_name:
+        return {
+            "use_cnn": False,
+            "input_shape": 4,
+            "frame_stack": 1,
+            "max_steps": 500,
+        }
     raise ValueError(f"Unknown environment: {env_name}")
 

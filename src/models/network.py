@@ -78,6 +78,8 @@ class ModularNetwork(nn.Module):
                     nn.ReLU(),
                     nn.Conv2d(64, 128, kernel_size=3, stride=1),
                     nn.ReLU(),
+                    nn.Conv2d(128, 128, kernel_size=3, stride=1),
+                    nn.ReLU(),
                     nn.Flatten()
                 )
 

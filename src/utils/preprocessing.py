@@ -60,3 +60,5 @@ def prepare_batch(states, use_cnn=False):
         states_tensor = torch.FloatTensor(states).view(len(states), -1)
 
     return states_tensor
+
+

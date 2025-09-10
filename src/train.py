@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
-
+from random import random
+import csv
 import gymnasium as gym
 import numpy as np
 from gymnasium.wrappers import TimeLimit, AtariPreprocessing
@@ -13,6 +14,7 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
+from src.agents.constrained_ppo_agent import ConstrainedPPOAgent
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 import sys
@@ -23,7 +25,25 @@ from src.utils.wrappers import RAMObservationWrapper, SeaquestRAMWrapper, DemonA
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
+import random, os
 # import cv2
+
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    torch.use_deterministic_algorithms(True)
+
+    print(f"[Seed set to {seed}]")
 
 register(
     id="CarRacingWithTrafficLights-v0",
@@ -51,10 +71,11 @@ custom_envs = {
     "ALE/Freeway-v5": (None, None),
     "FreewayNoFrameskip-v4": (None, None),
     "ALE/Seaquest-v5": (None, None),
-    "ALE/DemonAttack-v5": (None, None)
+    "ALE/DemonAttack-v5": (None, None),
+    "CliffWalking-v1": (None, None),
 }
 
-def create_environment(env_name, render=False, use_ram_obs=False):
+def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
     if env_name in custom_envs:
         entry_point, kwargs = custom_envs[env_name]
         if entry_point:
@@ -76,9 +97,12 @@ def create_environment(env_name, render=False, use_ram_obs=False):
 
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=300)  # ✅ Set timestep limit
+            env = TimeLimit(env, max_episode_steps=500)
             env.env_name = env_name
             env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
             return env
 
         if env_name == "ALE/Freeway-v5":
@@ -106,9 +130,22 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            # env = TimeLimit(env, max_episode_steps=1000)
+            env = TimeLimit(env, max_episode_steps=5000)
             env.env_name = env_name
             env.use_ram = use_ram_obs
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
+            return env
+
+        if env_name == "CliffWalking-v1":
+            env = gym.make(env_name, render_mode="human" if render else None)
+            env = TimeLimit(env, max_episode_steps=1000)
+            env.env_name = env_name
+            env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
             return env
 
         # Handle MiniGrid environments
@@ -120,6 +157,10 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             else:
                 env = FlatObsWrapper(env)
             env.env_name = env_name
+            env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
         return env
 
 def log_ram(obs, prev_obs, step):
@@ -130,9 +171,14 @@ def log_ram(obs, prev_obs, step):
         print(f"[RAM] Changed indices: {changed}, deltas: {delta[changed]}")
 
 
-def preprocess_state(state, use_cnn=False):
+def preprocess_state(state, use_cnn=False, obs_space=None):
     if isinstance(state, dict):
         state = state['image']
+    if isinstance(state, int):
+        n_states = obs_space.n if obs_space else 48
+        one_hot = np.zeros(n_states, dtype=np.float32)
+        one_hot[state] = 1.0
+        return one_hot
     if isinstance(state, np.ndarray):
         if use_cnn:
             if state.ndim == 2:
@@ -172,22 +218,29 @@ def step_env(env, action):
 
 
 def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constraints=True, visualize=False,
-                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False):
+                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1):
+    print(f'Run dir: {run_dir}')
+    if run_dir is not None:
+        rewards_log_path = os.path.join(run_dir, f"train_metrics_run{run_id}.csv")
+        with open(rewards_log_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["episode", "reward", "violations", "violation_rate", "modifications", "modification_rate"])
+    else:
+        rewards_log_path = None
     episode_rewards = []
     mod_rate_per_episode = []
     viol_rate_per_episode = []
     best_avg_reward = float('-inf')
     best_weights = None
-    actions_taken = []
     no_improve_counter = 0  # Early stopping counter
-    early_stop_patience = 2000 # Stop if no improvement after 500 episodes
+    early_stop_patience = 1000 # Stop if no improvement after 500 episodes
 
     if not softness:
         softness = ""
     else:
         softness = softness.capitalize()
 
-    env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
+    env_name = getattr(env.unwrapped, 'env_name', getattr(getattr(env, 'spec', None), 'id', 'UnknownEnv'))
     if getattr(agent, 'use_shield_layer', False):
         shield_mode = "Layered Shield"
     elif getattr(agent, 'use_shield_post', False):
@@ -206,7 +259,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         state, _ = env.reset()
         state = preprocess_state(state, use_cnn=use_cnn)
         try:
-            key_pos = find_key(env) # TODO: move this
+            key_pos = find_key(env)
             env.key_pos = key_pos
         except AttributeError:
             key_pos = None
@@ -218,6 +271,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         total_reward = 0
         step_count = 0
         while not done:
+            # print(f'Step count: {step_count+1}')
             result = agent.select_action(state)
             if isinstance(result, tuple) and len(result) == 4:
                 selected_action, a_unshielded, a_shielded, context = result
@@ -240,7 +294,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
-            actions_taken.append((x, y, selected_action))
+            # actions_taken.append((x, y, selected_action))
             next_state, reward, terminated, truncated, info = env.step(selected_action)
 
             if render:
@@ -263,9 +317,26 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         mod_rate_per_episode.append(episode_mod_rate)
         viol_rate_per_episode.append(episode_viol_rate)
 
+        episode_violations = stats['episode_violations']
+        episode_violation_rate = stats['episode_viol_rate']
+        episode_modifications = stats['episode_modifications']
+        episode_modification_rate = stats['episode_mod_rate']
+
+        if rewards_log_path:
+            with open(rewards_log_path, "a", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    episode,
+                    total_reward,
+                    episode_violations,
+                    episode_violation_rate,
+                    episode_modifications,
+                    episode_modification_rate
+                ])
+
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            use_ram = 'RAM' if env.use_ram else 'OBS'
+            use_ram = 'RAM' if getattr(env, 'use_ram', False) else 'OBS'
             log_msg = (
                 f"[{env.env_name}] "
                 f"[{str(type(agent)).split('.')[-1][:-2]}] "
@@ -304,7 +375,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                     print(f"[Early Stopping] No improvement for {early_stop_patience} episodes. Stopping training.")
                     break
 
-    env.close()
+
     if visualize:
         agent_name = agent.__class__.__name__
 
@@ -327,7 +398,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             title_prefix=title_prefix,
             run_dir=run_dir
         )
-
+    env.close()
     return agent, episode_rewards, best_weights, best_avg_reward
 
 
@@ -343,8 +414,12 @@ def train(agent='ppo',
           use_ram_obs=False,
           agent_kwargs=None,
           env_name='MiniGrid-Empty-5x5-v0',
-          render=False):
-    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs)
+          render=False,
+          seed=42):
+    # rand_seed = np.random.randint(0, 2**32 - 1)
+    # print(f'Rand_seed: {rand_seed}')
+    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
+    set_seed(seed)
     print("Observation space:", env.observation_space)
     obs_space = env.observation_space
     if agent_kwargs is None:
@@ -367,6 +442,9 @@ def train(agent='ppo',
         state_dim = int(np.prod(obs_space.shape))
     elif isinstance(obs_space, gym.spaces.Dict) and 'image' in obs_space.spaces:
         state_dim = int(np.prod(obs_space.spaces['image'].shape))
+    elif isinstance(obs_space, gym.spaces.Discrete):
+        state_dim = obs_space.n
+        input_shape = (obs_space.n,)  # for one-hot encoding
     else:
         raise ValueError(f"Unsupported observation space type: {obs_space}")
 
@@ -375,7 +453,7 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/seaquest_low_oxygen_go_up.cnf'
+    requirements_path = 'src/requirements/cliff_safe.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -404,6 +482,18 @@ def train(agent='ppo',
                          requirements_path=requirements_path,
                          env=env,
                          use_cnn=use_cnn)
+    elif agent == 'cppo':
+        agent = ConstrainedPPOAgent(
+            input_shape=input_shape,
+            action_dim=action_dim,
+            agent_kwargs=agent_kwargs,
+            monitor_constraints=monitor_constraints,
+            mode=mode,
+            verbose=verbose,
+            requirements_path=requirements_path,
+            env=env,
+            use_cnn=use_cnn
+        )
     elif agent == 'a2c':
         agent = A2CAgent(input_shape=input_shape,
                          action_dim=action_dim,
@@ -429,7 +519,8 @@ def train(agent='ppo',
         visualize=visualize,
         render=render,
         softness=mode,
-        use_cnn=use_cnn
+        use_cnn=use_cnn,
+        run_id=seed
     )
 
     if hasattr(agent_trained, 'load_weights') and best_weights is not None:
@@ -480,7 +571,8 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
         agent.constraint_monitor.reset_all()
 
     for episode in range(num_episodes):
-        state = reset_env(env)
+        obs_space = env.observation_space
+        state = preprocess_state(reset_env(env), use_cnn=getattr(agent, "use_cnn", False), obs_space=obs_space)
         done = False
         episode_reward = 0
 
@@ -496,6 +588,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
                 selected_action, a_unshielded, a_shielded, context = agent.select_action(state, env, do_apply_shield=not force_disable_shield)
 
             state, reward, done, _ = step_env(env, selected_action)
+            state = preprocess_state(state, use_cnn=getattr(agent, "use_cnn", False), obs_space=obs_space)
             episode_reward += reward
             total_steps += 1
 
@@ -588,6 +681,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
     total_violations = stats["total_violations"]
     total_modifications = stats["total_modifications"]
     total_steps_eval = stats["total_steps"]
+    env.close()
 
     return {
         "avg_reward": np.mean(total_rewards),
@@ -608,9 +702,9 @@ def run_multiple_evaluations(
         agent_name='dqn',
         env_name='MiniGrid-Empty-5x5-v0',
         use_ram_obs=False,
-        num_runs=3,
+        num_runs=2,
         num_train_episodes=2000,
-        num_eval_episodes=15,
+        num_eval_episodes=100,
         use_shield_post=False,
         use_shield_pre=False,
         use_shield_layer=False,
@@ -639,7 +733,8 @@ def run_multiple_evaluations(
             mode=mode,
             verbose=verbose,
             visualize=visualize,
-            render=render
+            render=render,
+            seed=run+1 # seed is run number (1-indexed)
         )
 
         if hasattr(agent, 'load_weights') and best_weights is not None:
@@ -655,6 +750,7 @@ def run_multiple_evaluations(
             force_disable_shield=force_disable_shield,
             run_dir=run_dir
         )
+        env.close()
 
         # === CSV-Formatted Output for Excel Logging ===
         if force_disable_shield:
@@ -673,7 +769,7 @@ def run_multiple_evaluations(
         csv_line = "\t".join([
             env_name,
             agent_name.upper(),
-            "seaquest_low_oxygen_go_up.cnf", # TODO: make this not hardcoded
+            "cliff_safe.cnf", # TODO: make this not hardcoded
             shield_mode,
             f"{run + 1}",
             f"{results['avg_reward']:.2f}",
@@ -729,8 +825,8 @@ def make_run_dir(base_dir="results", env_name=None, agent_name=None, softness=""
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN, A2C, PPO) with optional shield and environment.")
-    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='ppo',
-                        help='Which agent to use: dqn, ppo, a2c')
+    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c', 'cppo'], default='ppo',
+                        help='Which agent to use: dqn, ppo, a2c, cppo')
     parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--use_shield_pre', action='store_true', help='Enable preemptive constraints during training')
     parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')

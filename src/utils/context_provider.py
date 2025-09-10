@@ -105,7 +105,7 @@ def build_context(env, agent):
 
             # === Oxygen status ===
             oxygen_meter = ram[102]
-            low_oxygen = oxygen_meter < 30
+            low_oxygen = oxygen_meter < 20
 
             # === Player direction ===
             player_direction = ram[86]

@@ -32,20 +32,21 @@ class DQNAgent:
         self.env = env
 
         self.gamma = 0.99
-        self.lr = 8e-5
+        self.lr = 3e-4
         self.batch_size = 64
-        self.buffer_size = 200_000
+        self.buffer_size = 100_000
         self.target_update_freq = 500
-        self.epsilon_start = 1
-        self.epsilon_end = 0.04
-        self.epsilon_decay = 500_000
-        self.hidden_dim = 256
+        self.epsilon_start = 0.5
+        self.epsilon_end = 0.01
+        self.epsilon_decay = 30000
+        self.hidden_dim = 128
+        self.lambda_sem = 0.0
         self.num_layers = 3
         self.use_cnn = use_cnn
-        self.lambda_sem = 0
         self.use_orthogonal_init = True
         self.pretrained_cnn = None
-        # agent_kwargs = {'gamma': 0.999, 'lr': 8e-5, 'batch_size': 128, 'buffer_size': 200000, 'target_update_freq': 1000, 'epsilon_start': 1.0, 'epsilon_end': 0.05, 'epsilon_decay': 1000000, 'hidden_dim': 256, 'num_layers': 3, 'use_cnn': False, 'lambda_sem': 0.0, 'use_orthogonal_init': True, 'pretrained_cnn': None}
+
+    # agent_kwargs = {'gamma': 0.999, 'lr': 8e-5, 'batch_size': 128, 'buffer_size': 200000, 'target_update_freq': 1000, 'epsilon_start': 1.0, 'epsilon_end': 0.05, 'epsilon_decay': 1000000, 'hidden_dim': 256, 'num_layers': 3, 'use_cnn': False, 'lambda_sem': 0.0, 'use_orthogonal_init': True, 'pretrained_cnn': None}
         # print(agent_kwargs)
 
         # === Override from agent_kwargs ===

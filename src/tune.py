@@ -7,7 +7,7 @@ from src.train import train
 
 def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_post=False, use_shield_layer=False, use_ram_obs=False):
     # === Shared hyperparameters ===
-    lr = trial.suggest_float("lr", 1e-5, 1e-3, log=True)
+    lr = trial.suggest_float("lr", 1e-4, 4e-3, log=True)
     gamma = trial.suggest_float("gamma", 0.90, 0.999)
     hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512])
     use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [True, False])  # <--- new param
@@ -28,6 +28,23 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
         epochs = trial.suggest_int("epochs", 1, 10)
         batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
         agent_kwargs.update({
+            "clip_eps": clip_eps,
+            "ent_coef": ent_coef,
+            "epochs": epochs,
+            "batch_size": batch_size,
+        })
+
+    elif agent_type == "cppo":
+        cost_gamma = trial.suggest_float("cost_gamma", 0.90, 0.999)
+        cost_lam = trial.suggest_float("cost_lam", 0.90, 0.999)
+        clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
+        ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
+        epochs = trial.suggest_int("epochs", 1, 10)
+        batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
+
+        agent_kwargs.update({
+            "cost_gamma": cost_gamma,
+            "cost_lam": cost_lam,
             "clip_eps": clip_eps,
             "ent_coef": ent_coef,
             "epochs": epochs,
@@ -62,7 +79,7 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
         use_shield_post=use_shield_post,
         use_shield_layer=use_shield_layer,
         monitor_constraints=False,
-        num_episodes=500,
+        num_episodes=1000,
         verbose=False,
         visualize=False,
         use_ram_obs=use_ram_obs,
@@ -73,7 +90,7 @@ def objective(trial, agent_type="ppo", env_name="ALE/Freeway-v5", use_shield_pos
 
 
 def run_optuna(agent_type, env_name, n_trials=50, use_shield_post=False, use_shield_layer=False, use_ram_obs=False):
-    storage = f"sqlite:///optuna_{agent_type}_{env_name.replace('/', '_')}_2.db"
+    storage = f"sqlite:///optuna_{agent_type}_{env_name.replace('/', '_')}_1.db"
     study = optuna.create_study(
         direction="maximize",
         study_name=f"{agent_type}_{env_name}_tuning",
@@ -104,7 +121,7 @@ def run_optuna(agent_type, env_name, n_trials=50, use_shield_post=False, use_shi
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--agent", choices=["ppo", "dqn", "a2c"], default="ppo")
+    parser.add_argument("--agent", choices=["ppo", "dqn", "a2c", "cppo"], default="ppo")
     parser.add_argument("--env", type=str, default="ALE/Freeway-v5")
     parser.add_argument("--trials", type=int, default=30)
     parser.add_argument("--use_ram_obs", action="store_true", help="Use RAM observations instead of pixels")

@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from random import random
-
+import csv
 import gymnasium as gym
 import numpy as np
 from gymnasium.wrappers import TimeLimit, AtariPreprocessing
@@ -14,6 +14,7 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
+from src.agents.constrained_ppo_agent import ConstrainedPPOAgent
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 import sys
@@ -217,7 +218,15 @@ def step_env(env, action):
 
 
 def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constraints=True, visualize=False,
-                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False):
+                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1):
+    print(f'Run dir: {run_dir}')
+    if run_dir is not None:
+        rewards_log_path = os.path.join(run_dir, f"train_metrics_run{run_id}.csv")
+        with open(rewards_log_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["episode", "reward", "violations", "violation_rate", "modifications", "modification_rate"])
+    else:
+        rewards_log_path = None
     episode_rewards = []
     mod_rate_per_episode = []
     viol_rate_per_episode = []
@@ -308,6 +317,23 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         mod_rate_per_episode.append(episode_mod_rate)
         viol_rate_per_episode.append(episode_viol_rate)
 
+        episode_violations = stats['episode_violations']
+        episode_violation_rate = stats['episode_viol_rate']
+        episode_modifications = stats['episode_modifications']
+        episode_modification_rate = stats['episode_mod_rate']
+
+        if rewards_log_path:
+            with open(rewards_log_path, "a", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    episode,
+                    total_reward,
+                    episode_violations,
+                    episode_violation_rate,
+                    episode_modifications,
+                    episode_modification_rate
+                ])
+
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
             use_ram = 'RAM' if getattr(env, 'use_ram', False) else 'OBS'
@@ -390,10 +416,10 @@ def train(agent='ppo',
           env_name='MiniGrid-Empty-5x5-v0',
           render=False,
           seed=42):
-    rand_seed = np.random.randint(0, 2**32 - 1)
-    print(f'Rand_seed: {rand_seed}')
-    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=rand_seed)
-    set_seed(rand_seed)
+    # rand_seed = np.random.randint(0, 2**32 - 1)
+    # print(f'Rand_seed: {rand_seed}')
+    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
+    set_seed(seed)
     print("Observation space:", env.observation_space)
     obs_space = env.observation_space
     if agent_kwargs is None:
@@ -427,7 +453,7 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/seaquest_low_oxygen_go_up.cnf'
+    requirements_path = 'src/requirements/cliff_safe.cnf'
 
     if agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
@@ -456,6 +482,18 @@ def train(agent='ppo',
                          requirements_path=requirements_path,
                          env=env,
                          use_cnn=use_cnn)
+    elif agent == 'cppo':
+        agent = ConstrainedPPOAgent(
+            input_shape=input_shape,
+            action_dim=action_dim,
+            agent_kwargs=agent_kwargs,
+            monitor_constraints=monitor_constraints,
+            mode=mode,
+            verbose=verbose,
+            requirements_path=requirements_path,
+            env=env,
+            use_cnn=use_cnn
+        )
     elif agent == 'a2c':
         agent = A2CAgent(input_shape=input_shape,
                          action_dim=action_dim,
@@ -481,7 +519,8 @@ def train(agent='ppo',
         visualize=visualize,
         render=render,
         softness=mode,
-        use_cnn=use_cnn
+        use_cnn=use_cnn,
+        run_id=seed
     )
 
     if hasattr(agent_trained, 'load_weights') and best_weights is not None:
@@ -695,7 +734,7 @@ def run_multiple_evaluations(
             verbose=verbose,
             visualize=visualize,
             render=render,
-            seed=run+2 # seed is run number (1-indexed)
+            seed=run+1 # seed is run number (1-indexed)
         )
 
         if hasattr(agent, 'load_weights') and best_weights is not None:
@@ -730,7 +769,7 @@ def run_multiple_evaluations(
         csv_line = "\t".join([
             env_name,
             agent_name.upper(),
-            "seaquest_low_oxygen_go_up.cnf", # TODO: make this not hardcoded
+            "cliff_safe.cnf", # TODO: make this not hardcoded
             shield_mode,
             f"{run + 1}",
             f"{results['avg_reward']:.2f}",
@@ -786,8 +825,8 @@ def make_run_dir(base_dir="results", env_name=None, agent_name=None, softness=""
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN, A2C, PPO) with optional shield and environment.")
-    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='ppo',
-                        help='Which agent to use: dqn, ppo, a2c')
+    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c', 'cppo'], default='ppo',
+                        help='Which agent to use: dqn, ppo, a2c, cppo')
     parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--use_shield_pre', action='store_true', help='Enable preemptive constraints during training')
     parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')
@@ -822,7 +861,7 @@ if __name__ == "__main__":
             agent_name=args.agent,
             env_name=args.env,
             use_ram_obs=args.use_ram_obs,
-            num_runs=3,
+            num_runs=5,
             num_train_episodes=args.num_episodes,
             num_eval_episodes=100,
             use_shield_post=args.use_shield_post,

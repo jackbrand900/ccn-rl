@@ -5,7 +5,7 @@ The framework combines:
 
 - Deep RL agents (DQN, PPO, A2C) implemented in PyTorch.
 
-- CCN+ Requirements Layer, a differentiable neuro-symbolic layer enforcing propositional logic constraints, implemented in Pishield.
+- CCN+ Requirements Layer, a differentiable neuro-symbolic layer enforcing propositional logic constraints, implemented in PiShield.
 
 Shielding is achieved via runtime layers that correct outputs to satisfy rules, during both training and inference.
 

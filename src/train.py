@@ -418,7 +418,8 @@ def train(agent='ppo',
           seed=42,
           use_sb3=False,
           sb3_model_path=None,
-          sb3_train=False):
+          sb3_train=False,
+          sb3_save_path=None):
     # rand_seed = np.random.randint(0, 2**32 - 1)
     # print(f'Rand_seed: {rand_seed}')
     env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
@@ -541,7 +542,17 @@ def train(agent='ppo',
     if use_sb3:
         if sb3_train:
             # SB3 training mode: train with learn(), then collect evaluation metrics
-            print(f"[SB3] Training {agent.agent_type.upper()} agent on {env_name}...")
+            print(f"\n{'='*70}")
+            print(f"[SB3] Training {agent.agent_type.upper()} agent on {env_name}")
+            print(f"{'='*70}")
+            print(f"[SB3] Configuration:")
+            print(f"  - Agent type: {agent.agent_type.upper()}")
+            print(f"  - Environment: {env_name}")
+            print(f"  - Target episodes: {num_episodes}")
+            print(f"  - Using RAM observations: {use_ram_obs}")
+            print(f"  - Observation space: {env.observation_space}")
+            print(f"  - Action space: {env.action_space}")
+            
             # Estimate total timesteps (approximate episodes * avg steps per episode)
             if 'CartPole' in env_name:
                 avg_steps_per_episode = 200
@@ -553,8 +564,20 @@ def train(agent='ppo',
                 avg_steps_per_episode = 200  # Default
             
             total_timesteps = num_episodes * avg_steps_per_episode
+            print(f"  - Estimated steps per episode: {avg_steps_per_episode}")
+            print(f"  - Total timesteps: {total_timesteps:,}")
+            print(f"{'='*70}\n")
+            
             agent.learn(total_timesteps=total_timesteps)
-            print(f"[SB3] Training completed.")
+            
+            # Save model if save path provided
+            if sb3_save_path:
+                print(f"\n[SB3] Saving trained model...")
+                agent.save_model(sb3_save_path)
+                print(f"[SB3] Model saved to: {sb3_save_path}")
+            else:
+                print(f"\n[SB3] No save path provided (--sb3_save_path), model not saved")
+            
             # Episode rewards will be collected during evaluation phase
             agent_trained = agent
             episode_rewards = []
@@ -642,6 +665,11 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
         state = preprocess_state(reset_env(env), use_cnn=getattr(agent, "use_cnn", False), obs_space=obs_space)
         done = False
         episode_reward = 0
+        episode_steps = 0
+
+        # Reset frame buffer for SB3 agents at episode start
+        if hasattr(agent, 'start_new_episode'):
+            agent.start_new_episode()
 
         if hasattr(agent, 'constraint_monitor') and agent.constraint_monitor:
             agent.constraint_monitor.reset()
@@ -657,6 +685,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             state, reward, done, _ = step_env(env, selected_action)
             state = preprocess_state(state, use_cnn=getattr(agent, "use_cnn", False), obs_space=obs_space)
             episode_reward += reward
+            episode_steps += 1
             total_steps += 1
 
             if render:
@@ -665,7 +694,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
         total_rewards.append(episode_reward)
 
         # === Episode stats ===
-        if hasattr(agent, 'constraint_monitor'):
+        if hasattr(agent, 'constraint_monitor') and agent.constraint_monitor:
             stats = agent.constraint_monitor.summary()
             episode_modifications = stats['episode_modifications']
             modification_rate = stats['total_mod_rate']
@@ -675,16 +704,24 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             violation_rate = stats['total_viol_rate']
             violations_per_episode.append(episode_violations)
 
-            # print(
-            #     f"Episode {episode + 1}: "
-            #     f"Reward = {episode_reward:.2f}, "
-            #     f"Episode Modifications = {episode_modifications}, "
-            #     f"Episode Violations = {episode_violations}, "
-            #     f"Total Modifications = {total_modifications}, "
-            #     f"Total Violations = {total_violations}, "
-            #     f"Mod Rate = {modification_rate:.4f}, "
-            #     f"Viol Rate = {violation_rate:.4f}"
-            # )
+            print(
+                f"Episode {episode + 1}/{num_episodes}: "
+                f"Reward = {episode_reward:.2f}, "
+                f"Steps = {episode_steps}, "
+                f"Episode Modifications = {episode_modifications}, "
+                f"Episode Violations = {episode_violations}, "
+                f"Total Modifications = {total_modifications}, "
+                f"Total Violations = {total_violations}, "
+                f"Mod Rate = {modification_rate:.4f}, "
+                f"Viol Rate = {violation_rate:.4f}"
+            )
+        else:
+            # Log basic episode info even without constraint monitor
+            print(
+                f"Episode {episode + 1}/{num_episodes}: "
+                f"Reward = {episode_reward:.2f}, "
+                f"Steps = {episode_steps}"
+            )
 
     if original_epsilon is not None:
         agent.epsilon = original_epsilon
@@ -784,13 +821,17 @@ def run_multiple_evaluations(
         run_dir=None,
         use_sb3=False,
         sb3_model_path=None,
-        sb3_train=False
+        sb3_train=False,
+        sb3_save_path=None
 ):
     all_results = []
 
     for run in range(num_runs):
         print(f"\n=== Run {run + 1}/{num_runs} ===")
 
+        # For SB3 training, only save on the first run to avoid overwriting
+        save_path = sb3_save_path if (sb3_train and run == 0) else None
+        
         agent, episode_rewards, best_weights, best_avg_reward, env = train(
             agent=agent_name,
             env_name=env_name,
@@ -807,7 +848,8 @@ def run_multiple_evaluations(
             seed=run+1, # seed is run number (1-indexed)
             use_sb3=use_sb3,
             sb3_model_path=sb3_model_path,
-            sb3_train=sb3_train
+            sb3_train=sb3_train,
+            sb3_save_path=save_path
         )
 
         if hasattr(agent, 'load_weights') and best_weights is not None:
@@ -916,6 +958,7 @@ if __name__ == "__main__":
     parser.add_argument('--use_sb3', action='store_true', help='Use stable-baselines3 agent instead of custom agent')
     parser.add_argument('--sb3_model_path', type=str, default=None, help='Path to pretrained SB3 model (or HuggingFace model ID)')
     parser.add_argument('--sb3_train', action='store_true', help='Train a new SB3 model instead of loading pretrained')
+    parser.add_argument('--sb3_save_path', type=str, default=None, help='Path to save trained SB3 model (only used with --sb3_train)')
     args = parser.parse_args()
     print(f'parser use shield post: {args.use_shield_post}')
 
@@ -952,5 +995,6 @@ if __name__ == "__main__":
             run_dir=run_dir,
             use_sb3=args.use_sb3,
             sb3_model_path=args.sb3_model_path,
-            sb3_train=args.sb3_train
+            sb3_train=args.sb3_train,
+            sb3_save_path=args.sb3_save_path
         )

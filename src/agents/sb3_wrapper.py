@@ -1,11 +1,12 @@
 """
 Wrapper for stable-baselines3 agents to match the interface of custom agents.
 """
+import os
 import numpy as np
 import torch
 from typing import Tuple, Optional
 from stable_baselines3 import A2C, PPO, DQN
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 from stable_baselines3.common.callbacks import BaseCallback
 from gymnasium import Env
 import src.utils.context_provider as context_provider
@@ -52,7 +53,59 @@ class SB3Wrapper:
         self.trained = not train_new and model_path is not None
         
         # Create VecEnv wrapper (SB3 requires vectorized environments)
+        # For Atari games with CNN policies, SB3 expects frame stacking
         self.vec_env = DummyVecEnv([lambda: env])
+        
+        # Determine policy type based on actual observation space
+        # Check the observation space from the vec_env (after all wrappers)
+        obs_space = self.vec_env.observation_space
+        
+        # Check if using RAM observations (1D vector) or images
+        # RAM observations are 1D, images are 2D or 3D
+        obs_shape = obs_space.shape
+        
+        print(f"[SB3Wrapper] Environment observation space: {obs_space}")
+        print(f"[SB3Wrapper] Observation shape: {obs_shape}")
+        
+        # Determine if we should use CNN policy
+        # CNN policy requires: 2D or 3D observation space that SB3 recognizes as images
+        # For SB3's NatureCNN, it needs either:
+        # - 2D (H, W) grayscale (but SB3 has issues with this)
+        # - 3D (C, H, W) or (H, W, C) with proper channels
+        # - 1D means we should use MlpPolicy
+        if len(obs_shape) == 1:
+            # 1D observation space = RAM or vector observations, use MLP
+            self.use_cnn = False
+            self._needs_frame_stack = False
+            print(f"[SB3Wrapper] Detected 1D observation space (RAM/vector) - will use MlpPolicy")
+        elif len(obs_shape) == 2:
+            # 2D (H, W) grayscale - SB3's CnnPolicy has issues with this format
+            # Check if this is actually a RAM wrapper by checking the shape
+            # RAM wrapper gives (128,) which is 1D, so 2D here likely means grayscale image
+            # But SB3 expects channels-first, so we might need to use MLP or adjust
+            # For now, if it's exactly (84, 84) or similar, try to use CnnPolicy with normalization
+            self.use_cnn = True  # Will try CnnPolicy but may need adjustment
+            self._needs_frame_stack = False  # No frame stacking for 2D
+            print(f"[SB3Wrapper] Detected 2D observation space {obs_shape} (grayscale image) - will use MlpPolicy (flattened)")
+        elif len(obs_shape) == 3:
+            # 3D (C, H, W) or (H, W, C) - can use CNN
+            self.use_cnn = True
+            # Check if this is an Atari environment that needs frame stacking
+            env_name = getattr(env, 'spec', None)
+            env_id = env_name.id if env_name and hasattr(env_name, 'id') else getattr(env, 'env_name', str(env))
+            is_atari = 'ALE' in str(env_id) or 'Atari' in str(env_id) or 'Seaquest' in str(env_id) or 'DemonAttack' in str(env_id) or 'Freeway' in str(env_id)
+            self._needs_frame_stack = is_atari and obs_shape[0] == 1  # Only if single channel
+            print(f"[SB3Wrapper] Detected 3D observation space {obs_shape} - will use CnnPolicy")
+            if self._needs_frame_stack:
+                print(f"[SB3Wrapper] Frame stacking enabled for Atari environment (stacking {self._frame_stack_size} frames)")
+        else:
+            # Unknown format, default to MLP
+            self.use_cnn = False
+            self._needs_frame_stack = False
+            print(f"[SB3Wrapper] Unknown observation format {obs_shape} - defaulting to MlpPolicy")
+        
+        self._frame_stack_size = 4 if self._needs_frame_stack else 1
+        self._frame_buffer = []  # Store last N frames for stacking
         
         # Default hyperparameters (can be overridden by agent_kwargs)
         default_kwargs = {
@@ -93,19 +146,25 @@ class SB3Wrapper:
         # Initialize or load model
         if train_new:
             # Train a new model
+            print(f"[SB3Wrapper] Creating new {self.agent_type.upper()} model for training...")
             self.model = self._create_model(default_kwargs)
             self.trained = False  # Will be trained in run_training
+            print(f"[SB3Wrapper] Model created successfully")
         elif model_path:
             # Load pretrained model
+            print(f"[SB3Wrapper] Loading pretrained model from: {model_path}")
             self.model = self._load_model(model_path, default_kwargs)
             self.trained = True
+            print(f"[SB3Wrapper] Model loaded successfully")
         else:
             # Create model but don't train (for evaluation-only mode)
+            print(f"[SB3Wrapper] Creating {self.agent_type.upper()} model for evaluation...")
             self.model = self._create_model(default_kwargs)
             self.trained = False
+            print(f"[SB3Wrapper] Model created successfully (evaluation mode)")
         
         # Initialize attributes needed for compatibility
-        self.use_cnn = len(input_shape) > 1 and len(input_shape) == 3
+        # (use_cnn already set above)
         self.use_shield_post = False
         self.use_shield_pre = False
         self.use_shield_layer = False
@@ -137,7 +196,26 @@ class SB3Wrapper:
         
     def _create_model(self, kwargs):
         """Create a new SB3 model."""
-        policy = 'CnnPolicy' if self.use_cnn else 'MlpPolicy'
+        # Check observation space again to ensure correct policy selection
+        obs_space = self.vec_env.observation_space
+        obs_shape = obs_space.shape
+        
+        # For 2D grayscale images (H, W), SB3's CnnPolicy has issues
+        # We need to either use MLP or wrap the observation space
+        if len(obs_shape) == 2:
+            # 2D grayscale - SB3 CnnPolicy expects channels-first
+            # Use MLP policy for now (can be changed later if needed)
+            policy = 'MlpPolicy'
+            print(f"[SB3Wrapper] Using MlpPolicy for 2D observation space {obs_shape}")
+        elif len(obs_shape) == 1:
+            # RAM or vector observations
+            policy = 'MlpPolicy'
+        elif len(obs_shape) == 3:
+            # 3D image observations - use CNN
+            policy = 'CnnPolicy'
+        else:
+            # Default to MLP for unknown formats
+            policy = 'MlpPolicy'
         
         if self.agent_type == 'ppo':
             return PPO(policy, self.vec_env, **kwargs)
@@ -357,25 +435,81 @@ class SB3Wrapper:
     
     def _prepare_obs_for_sb3(self, state):
         """Convert preprocessed state back to format SB3 expects."""
-        # If state is already in the right format, return it
-        if isinstance(state, np.ndarray):
-            # Ensure it's the right shape (add batch dimension if needed)
+        # Convert state to numpy array
+        if isinstance(state, torch.Tensor):
+            state = state.detach().cpu().numpy()
+        elif not isinstance(state, np.ndarray):
+            state = np.array(state, dtype=np.float32)
+        
+        # Handle frame stacking for Atari/CNN environments
+        if self._needs_frame_stack and self.use_cnn:
+            # For Atari, SB3 expects (4, 84, 84) - 4 stacked frames
+            # state might be (H, W) or (1, H, W) or (C, H, W) or already processed
+            
+            # Normalize to single frame (H, W) format
+            if state.ndim == 4:
+                # (1, 1, H, W) or (B, C, H, W) -> extract single frame
+                state = state.squeeze()
+                if state.ndim == 3:
+                    state = state[0]  # Take first channel
+                frame = state.squeeze() if state.ndim > 2 else state
+            elif state.ndim == 3:
+                # (C, H, W) or (1, H, W) -> take first channel or squeeze
+                if state.shape[0] == 1:
+                    frame = state.squeeze(0)  # (H, W)
+                else:
+                    frame = state[0]  # Take first channel
+            elif state.ndim == 2:
+                frame = state  # Already (H, W)
+            else:
+                frame = state.squeeze()
+                if frame.ndim != 2:
+                    raise ValueError(f"Cannot process state shape {state.shape} for Atari frame stacking")
+            
+            # Ensure frame is (H, W) with correct dtype
+            if frame.ndim != 2:
+                frame = frame.squeeze()
+                if frame.ndim != 2:
+                    raise ValueError(f"After processing, frame should be (H, W) but got shape {frame.shape}")
+            
+            # Add frame to buffer (copy to avoid reference issues)
+            self._frame_buffer.append(frame.astype(np.float32).copy())
+            
+            # Keep only last N frames
+            if len(self._frame_buffer) > self._frame_stack_size:
+                self._frame_buffer.pop(0)
+            
+            # If we don't have enough frames yet, repeat the first frame
+            while len(self._frame_buffer) < self._frame_stack_size:
+                self._frame_buffer.insert(0, self._frame_buffer[0] if self._frame_buffer else frame.astype(np.float32))
+            
+            # Stack frames: (4, H, W) - this is what SB3 expects
+            stacked = np.stack(self._frame_buffer, axis=0)
+            
+            # Verify shape is correct (4, H, W)
+            if stacked.shape[0] != 4:
+                raise ValueError(f"Expected 4 stacked frames, got {stacked.shape[0]}. Shape: {stacked.shape}")
+            
+            # SB3's predict() will handle the batch dimension automatically
+            # Return (4, 84, 84) without batch dimension
+            return stacked
+        else:
+            # Non-Atari: handle different input shapes
             if state.ndim == 1:
+                # Flatten vector observation
                 return state.reshape(1, -1)
             elif state.ndim == 2:
-                return state.reshape(1, *state.shape)
+                # Already in (batch, features) format or (H, W) - add batch dim if needed
+                if state.shape[0] > 100:  # Likely (H, W) for images
+                    return state.reshape(1, *state.shape)
+                else:
+                    return state.reshape(1, -1) if len(state.shape) == 1 else state
             elif state.ndim == 3:
-                # Image observation (C, H, W) -> need to add batch dimension
-                return state.reshape(1, *state.shape)
+                # Image observation (C, H, W) - return as is, SB3 will handle batch dimension
+                return state
             else:
-                return state.reshape(1, *state.shape)
-        else:
-            # Convert to numpy array
-            obs = np.array(state, dtype=np.float32)
-            if obs.ndim == 1:
-                return obs.reshape(1, -1)
-            else:
-                return obs.reshape(1, *obs.shape)
+                # Remove extra dimensions
+                return state.squeeze() if state.ndim > 3 else state
     
     def store_transition(self, state, action, reward, next_state, context, done):
         """
@@ -408,10 +542,44 @@ class SB3Wrapper:
             print("[SB3Wrapper] Model is already trained (pretrained). Skipping training.")
             return
         
-        print(f"[SB3Wrapper] Training {self.agent_type.upper()} model for {total_timesteps} timesteps...")
-        self.model.learn(total_timesteps=total_timesteps, reset_num_timesteps=False)
-        self.trained = True
-        self.learn_step_counter += total_timesteps
+        print(f"\n[SB3Wrapper] Starting training...")
+        print(f"[SB3Wrapper] Agent type: {self.agent_type.upper()}")
+        print(f"[SB3Wrapper] Total timesteps: {total_timesteps:,}")
+        print(f"[SB3Wrapper] Estimated episodes: ~{total_timesteps // 1000}")
+        print(f"[SB3Wrapper] Observation space: {self.vec_env.observation_space}")
+        print(f"[SB3Wrapper] Action space: {self.vec_env.action_space}")
+        
+        try:
+            import time
+            start_time = time.time()
+            print(f"[SB3Wrapper] Training started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"[SB3Wrapper] Progress will be shown below...\n")
+            
+            # SB3's learn() will handle all the training internally
+            # It will print progress automatically if verbose=1
+            self.model.learn(total_timesteps=total_timesteps, reset_num_timesteps=False, progress_bar=True)
+            
+            elapsed_time = time.time() - start_time
+            hours = int(elapsed_time // 3600)
+            minutes = int((elapsed_time % 3600) // 60)
+            seconds = int(elapsed_time % 60)
+            
+            print(f"\n[SB3Wrapper] Training completed successfully!")
+            print(f"[SB3Wrapper] Total training time: {hours}h {minutes}m {seconds}s")
+            print(f"[SB3Wrapper] Timesteps trained: {total_timesteps:,}")
+            
+            self.trained = True
+            self.learn_step_counter += total_timesteps
+        except KeyboardInterrupt:
+            print(f"\n[SB3Wrapper] Training interrupted by user")
+            self.trained = False
+            raise
+        except Exception as e:
+            print(f"\n[SB3Wrapper] Training failed with error: {e}")
+            import traceback
+            traceback.print_exc()
+            self.trained = False
+            raise
     
     def get_weights(self):
         """Get model weights (for checkpointing)."""
@@ -431,5 +599,32 @@ class SB3Wrapper:
     
     def start_new_episode(self):
         """Start a new episode (for compatibility with some agents)."""
-        pass
+        # Reset frame buffer at start of episode
+        self._frame_buffer = []
+    
+    def save_model(self, save_path: str):
+        """Save the SB3 model to disk."""
+        if self.model is None:
+            raise ValueError("No model to save. Train or load a model first.")
+        
+        # Ensure directory exists
+        save_dir = os.path.dirname(save_path) if os.path.dirname(save_path) else '.'
+        os.makedirs(save_dir, exist_ok=True)
+        
+        print(f"\n[SB3Wrapper] Saving model to: {save_path}")
+        try:
+            self.model.save(save_path)
+            # Check if file was created
+            if os.path.exists(save_path):
+                file_size = os.path.getsize(save_path) / (1024 * 1024)  # Size in MB
+                print(f"[SB3Wrapper] ✓ Model saved successfully!")
+                print(f"[SB3Wrapper]   File: {save_path}")
+                print(f"[SB3Wrapper]   Size: {file_size:.2f} MB")
+            else:
+                print(f"[SB3Wrapper] ⚠ Warning: Model save completed but file not found at {save_path}")
+        except Exception as e:
+            print(f"[SB3Wrapper] ✗ Error saving model: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 

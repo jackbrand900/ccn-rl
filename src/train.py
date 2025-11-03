@@ -15,6 +15,7 @@ from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
 from src.agents.constrained_ppo_agent import ConstrainedPPOAgent
+from src.agents.sb3_wrapper import SB3Wrapper
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 import sys
@@ -218,8 +219,7 @@ def step_env(env, action):
 
 
 def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constraints=True, visualize=False,
-                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1):
-    print(f'Run dir: {run_dir}')
+                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1, run_dir=None):
     if run_dir is not None:
         rewards_log_path = os.path.join(run_dir, f"train_metrics_run{run_id}.csv")
         with open(rewards_log_path, "w", newline="") as f:
@@ -415,7 +415,10 @@ def train(agent='ppo',
           agent_kwargs=None,
           env_name='MiniGrid-Empty-5x5-v0',
           render=False,
-          seed=42):
+          seed=42,
+          use_sb3=False,
+          sb3_model_path=None,
+          sb3_train=False):
     # rand_seed = np.random.randint(0, 2**32 - 1)
     # print(f'Rand_seed: {rand_seed}')
     env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
@@ -455,7 +458,32 @@ def train(agent='ppo',
 
     requirements_path = 'src/requirements/cliff_safe.cnf'
 
-    if agent == 'dqn':
+    # Handle SB3 agents
+    if use_sb3:
+        if agent not in ['dqn', 'ppo', 'a2c']:
+            raise ValueError(f"SB3 wrapper only supports 'dqn', 'ppo', 'a2c', not '{agent}'")
+        
+        agent = SB3Wrapper(
+            agent_type=agent,
+            env=env,
+            input_shape=input_shape,
+            action_dim=action_dim,
+            agent_kwargs=agent_kwargs,
+            model_path=sb3_model_path,
+            train_new=sb3_train,
+            num_episodes=num_episodes,
+            verbose=verbose
+        )
+        
+        # For SB3 agents in training mode, use SB3's learn() method
+        # Training will happen in train() function after agent creation
+        if sb3_train:
+            print(f"[SB3] Will train {agent.agent_type.upper()} agent on {env_name}")
+        elif sb3_model_path:
+            print(f"[SB3] Using pretrained {agent.agent_type.upper()} agent on {env_name}")
+        else:
+            print(f"[SB3] Created {agent.agent_type.upper()} agent on {env_name} (evaluation only)")
+    elif agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
@@ -509,19 +537,58 @@ def train(agent='ppo',
     else:
         raise ValueError("Unsupported agent type.")
 
-    print(f"Training {agent.__class__.__name__} agent on {env_name} with shield post: {use_shield_post} "
-          f"with shield layer: {use_shield_layer} with shield pre: {use_shield_pre}")
-
-    agent_trained, episode_rewards, best_weights, best_avg_reward = run_training(
-        agent, env,
-        verbose=verbose,
-        num_episodes=num_episodes,
-        visualize=visualize,
-        render=render,
-        softness=mode,
-        use_cnn=use_cnn,
-        run_id=seed
-    )
+    # For SB3 agents, handle training differently
+    if use_sb3:
+        if sb3_train:
+            # SB3 training mode: train with learn(), then collect evaluation metrics
+            print(f"[SB3] Training {agent.agent_type.upper()} agent on {env_name}...")
+            # Estimate total timesteps (approximate episodes * avg steps per episode)
+            if 'CartPole' in env_name:
+                avg_steps_per_episode = 200
+            elif 'CliffWalking' in env_name:
+                avg_steps_per_episode = 50
+            elif 'ALE' in env_name or 'Atari' in env_name:
+                avg_steps_per_episode = 1000
+            else:
+                avg_steps_per_episode = 200  # Default
+            
+            total_timesteps = num_episodes * avg_steps_per_episode
+            agent.learn(total_timesteps=total_timesteps)
+            print(f"[SB3] Training completed.")
+            # Episode rewards will be collected during evaluation phase
+            agent_trained = agent
+            episode_rewards = []
+            best_weights = agent.get_weights()
+            best_avg_reward = 0.0
+        elif sb3_model_path:
+            # Pretrained SB3 model - skip training, just prepare for evaluation
+            print(f"[SB3] Using pretrained {agent.agent_type.upper()} agent on {env_name}")
+            agent_trained = agent
+            episode_rewards = []
+            best_weights = agent.get_weights()
+            best_avg_reward = 0.0
+        else:
+            # SB3 agent created but no training specified - evaluate only
+            print(f"[SB3] Using {agent.agent_type.upper()} agent on {env_name} (evaluation only)")
+            agent_trained = agent
+            episode_rewards = []
+            best_weights = agent.get_weights()
+            best_avg_reward = 0.0
+    else:
+        print(f"Training {agent.__class__.__name__} agent on {env_name} with shield post: {use_shield_post} "
+              f"with shield layer: {use_shield_layer} with shield pre: {use_shield_pre}")
+        # Regular training path for custom agents
+        agent_trained, episode_rewards, best_weights, best_avg_reward = run_training(
+            agent, env,
+            verbose=verbose,
+            num_episodes=num_episodes,
+            visualize=visualize,
+            render=render,
+            softness=mode,
+            use_cnn=use_cnn,
+            run_id=seed,
+            run_dir=None
+        )
 
     if hasattr(agent_trained, 'load_weights') and best_weights is not None:
         print(f"\n[Post-Training] Loading best weights with avg reward: {best_avg_reward:.2f}")
@@ -714,7 +781,10 @@ def run_multiple_evaluations(
         visualize=False,
         render=False,
         force_disable_shield=False,
-        run_dir=None
+        run_dir=None,
+        use_sb3=False,
+        sb3_model_path=None,
+        sb3_train=False
 ):
     all_results = []
 
@@ -734,7 +804,10 @@ def run_multiple_evaluations(
             verbose=verbose,
             visualize=visualize,
             render=render,
-            seed=run+1 # seed is run number (1-indexed)
+            seed=run+1, # seed is run number (1-indexed)
+            use_sb3=use_sb3,
+            sb3_model_path=sb3_model_path,
+            sb3_train=sb3_train
         )
 
         if hasattr(agent, 'load_weights') and best_weights is not None:
@@ -840,6 +913,9 @@ if __name__ == "__main__":
     parser.add_argument('--monitor_constraints', action='store_true', help='Enable constraint monitor')
     parser.add_argument('--no_eval', action='store_true', help='Do not run eval')
     parser.add_argument('--use_ram_obs', action='store_true', help='Use RAM for observation space')
+    parser.add_argument('--use_sb3', action='store_true', help='Use stable-baselines3 agent instead of custom agent')
+    parser.add_argument('--sb3_model_path', type=str, default=None, help='Path to pretrained SB3 model (or HuggingFace model ID)')
+    parser.add_argument('--sb3_train', action='store_true', help='Train a new SB3 model instead of loading pretrained')
     args = parser.parse_args()
     print(f'parser use shield post: {args.use_shield_post}')
 
@@ -873,5 +949,8 @@ if __name__ == "__main__":
             visualize=args.visualize,
             render=args.render,
             force_disable_shield=args.force_disable_shield,
-            run_dir=run_dir
+            run_dir=run_dir,
+            use_sb3=args.use_sb3,
+            sb3_model_path=args.sb3_model_path,
+            sb3_train=args.sb3_train
         )

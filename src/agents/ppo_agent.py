@@ -39,6 +39,7 @@ class PPOAgent:
 
         self.lambda_sem = lambda_sem
         self.lambda_consistency = lambda_consistency
+        self.lambda_penalty = 0.0  # Reward shaping penalty coefficient (set via agent_kwargs)
         self.use_shield_post = use_shield_post
         self.use_shield_pre = use_shield_pre
         self.use_shield_layer = use_shield_layer
@@ -58,6 +59,7 @@ class PPOAgent:
             self.batch_size = agent_kwargs.get("batch_size", batch_size)
             self.epochs = agent_kwargs.get("epochs", epochs)
             self.num_layers = agent_kwargs.get("num_layers", 2)
+            self.lambda_penalty = agent_kwargs.get("lambda_penalty", 0.0)  # Reward shaping penalty
         else:
             self.lr = lr
             self.gamma = gamma
@@ -67,6 +69,7 @@ class PPOAgent:
             self.epochs = epochs
             self.use_orthogonal_init = use_orthogonal_init
             self.hidden_dim = hidden_dim
+            self.lambda_penalty = 0.0  # Default: no reward shaping
             self.num_layers = 2
 
         self.use_cnn = use_cnn

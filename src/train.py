@@ -304,10 +304,28 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
             done = terminated or truncated
 
+            # Reward shaping: add penalty for constraint violations
+            # Check if we should apply reward shaping (via agent_kwargs or lambda_penalty)
+            if hasattr(agent, 'lambda_penalty') and agent.lambda_penalty > 0:
+                # Check if unshielded action would violate constraints
+                if hasattr(agent, 'constraint_monitor') and hasattr(agent, 'shield_controller'):
+                    would_violate = agent.constraint_monitor.would_violate(
+                        a_unshielded, context, agent.shield_controller
+                    )
+                    if would_violate:
+                        reward = reward - agent.lambda_penalty  # Penalty for violation
+
             agent.store_transition(state, action_for_training, reward, next_state, context, done)
             agent.update()
             state = next_state
             total_reward += reward
+            
+            # Periodic memory cleanup for very long episodes (e.g., Seaquest)
+            if step_count % 1000 == 0:
+                import gc
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
         constraint_monitor = agent.constraint_monitor
         stats = constraint_monitor.summary()
@@ -399,6 +417,13 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             run_dir=run_dir
         )
     env.close()
+    
+    # Final memory cleanup
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     return agent, episode_rewards, best_weights, best_avg_reward
 
 
@@ -419,7 +444,8 @@ def train(agent='ppo',
           use_sb3=False,
           sb3_model_path=None,
           sb3_train=False,
-          sb3_save_path=None):
+          sb3_save_path=None,
+          run_dir=None):
     # rand_seed = np.random.randint(0, 2**32 - 1)
     # print(f'Rand_seed: {rand_seed}')
     env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
@@ -457,7 +483,18 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/cliff_safe.cnf'
+    # Select requirements file based on environment
+    env_to_requirements = {
+        'CartPole-v1': 'src/requirements/emergency_cartpole.cnf',
+        'CliffWalking-v1': 'src/requirements/cliff_safe.cnf',
+        'MiniGrid-DoorKey-5x5-v0': 'src/requirements/pickup_on_key.cnf',
+        'MiniGrid-DoorKey-6x6-v0': 'src/requirements/pickup_on_key.cnf',
+        'ALE/Seaquest-v5': 'src/requirements/seaquest_low_oxygen_go_up.cnf',
+        'ALE/DemonAttack-v5': 'src/requirements/demon_attack_defensive.cnf',
+        'ALE/Freeway-v5': 'src/requirements/freeway_go_up_when_safe.cnf',
+        'CarRacingWithTrafficLights-v0': 'src/requirements/red_light_stop.cnf',
+    }
+    requirements_path = env_to_requirements.get(env_name, 'src/requirements/cliff_safe.cnf')
 
     # Handle SB3 agents
     if use_sb3:
@@ -513,6 +550,19 @@ def train(agent='ppo',
                          use_cnn=use_cnn)
     elif agent == 'cppo':
         agent = ConstrainedPPOAgent(
+            input_shape=input_shape,
+            action_dim=action_dim,
+            agent_kwargs=agent_kwargs,
+            monitor_constraints=monitor_constraints,
+            mode=mode,
+            verbose=verbose,
+            requirements_path=requirements_path,
+            env=env,
+            use_cnn=use_cnn
+        )
+    elif agent == 'cpo':
+        from src.agents.cpo_agent import CPOAgent
+        agent = CPOAgent(
             input_shape=input_shape,
             action_dim=action_dim,
             agent_kwargs=agent_kwargs,
@@ -610,7 +660,7 @@ def train(agent='ppo',
             softness=mode,
             use_cnn=use_cnn,
             run_id=seed,
-            run_dir=None
+            run_dir=run_dir
         )
 
     if hasattr(agent_trained, 'load_weights') and best_weights is not None:

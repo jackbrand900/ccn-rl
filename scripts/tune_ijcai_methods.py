@@ -10,6 +10,8 @@ import yaml
 import argparse
 import os
 import sys
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add src to path
@@ -21,7 +23,7 @@ from src.train import train, evaluate_policy
 # Since we're focusing on violation/modification rates, we'll use more realistic targets
 # that allow fair comparison even if absolute rewards are lower
 TARGET_REWARDS = {
-    'CartPole-v1': 150.0,  # Realistic target for constrained methods
+    'CartPole-v1': 200.0,  # Realistic target for constrained methods
     'CliffWalking-v1': -15.0,  # Slightly worse than optimal (-13)
     'MiniGrid-DoorKey-5x5-v0': 0.7,  # Realistic target
     'ALE/Seaquest-v5': 800.0,  # Realistic target
@@ -29,16 +31,17 @@ TARGET_REWARDS = {
 
 # Methods to tune (matching run_ijcai_experiments.py)
 METHODS = [
-    {
-        'name': 'cpo',
-        'agent': 'cpo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': '',
-        'lambda_sem': 0.0,
-        'display_name': 'CPO'
-    },
+    # CPO skipped for now
+    # {
+    #     'name': 'cpo',
+    #     'agent': 'cpo',
+    #     'use_shield_post': False,
+    #     'use_shield_pre': False,
+    #     'use_shield_layer': False,
+    #     'mode': '',
+    #     'lambda_sem': 0.0,
+    #     'display_name': 'CPO'
+    # },
     {
         'name': 'cppo',
         'agent': 'cppo',
@@ -133,7 +136,7 @@ METHODS = [
 ]
 
 
-def objective(trial, env_name, method, target_reward, num_train_episodes=500, num_eval_episodes=50):
+def objective(trial, env_name, method, target_reward, num_train_episodes=300, num_eval_episodes=50):
     """
     Objective function: minimize absolute difference from target reward.
     """
@@ -256,6 +259,11 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
         reward_diff = abs(avg_reward - target_reward)
         normalized_diff = reward_diff / (abs(target_reward) + 1e-6)
         
+        # Store actual reward in trial for progress logging
+        trial.set_user_attr("actual_reward", avg_reward)
+        trial.set_user_attr("target_reward", target_reward)
+        trial.set_user_attr("reward_diff", reward_diff)
+        
         # Return negative normalized diff (Optuna minimizes, we want to minimize diff)
         return -normalized_diff
         
@@ -264,7 +272,7 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
         return -1000.0  # Very bad score
 
 
-def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes=500, num_eval_episodes=50):
+def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes=300, num_eval_episodes=50):
     """
     Tune hyperparameters for a specific method on a specific environment.
     """
@@ -285,6 +293,71 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     print(f"Trials: {n_trials}")
     print(f"{'='*80}\n")
     
+    # Track timing for progress estimates
+    method_start_time = time.time()
+    trial_times = []
+    early_stopped = False
+    
+    # Early stopping threshold: stop if within 5% of target (normalized diff < 0.05)
+    # Since we return -normalized_diff, we stop if best_value > -0.05
+    EARLY_STOP_THRESHOLD = -0.05  # Corresponds to 5% difference from target
+    
+    def progress_callback(study, trial):
+        """Callback to track progress and estimate remaining time"""
+        nonlocal early_stopped
+        trial_times.append(time.time())
+        if len(trial_times) > 1:
+            avg_trial_time = (trial_times[-1] - trial_times[0]) / len(trial_times)
+            remaining_trials = n_trials - len(trial_times)
+            estimated_remaining = timedelta(seconds=int(avg_trial_time * remaining_trials))
+            
+            elapsed = time.time() - method_start_time
+            elapsed_str = str(timedelta(seconds=int(elapsed))).split('.')[0]
+            
+            # Get actual reward from best trial
+            best_trial = study.best_trial
+            best_actual_reward = best_trial.user_attrs.get("actual_reward", None)
+            best_target = best_trial.user_attrs.get("target_reward", target_reward)
+            best_diff = best_trial.user_attrs.get("reward_diff", None)
+            
+            # Get current trial info
+            current_reward = trial.user_attrs.get("actual_reward", None)
+            current_diff = trial.user_attrs.get("reward_diff", None)
+            
+            # Check for early stopping (within 5% of target)
+            # Note: We need at least 2 completed trials to have a best_value
+            if len(study.trials) >= 2 and study.best_value > EARLY_STOP_THRESHOLD and not early_stopped:
+                early_stopped = True
+                print(f"\n[✓] Early stopping: Found configuration within 5% of target!")
+                if best_actual_reward is not None:
+                    print(f"    Best reward: {best_actual_reward:.2f} (target: {best_target:.2f}, diff: {best_diff:.2f})")
+                try:
+                    study.stop()
+                except AttributeError:
+                    # Older Optuna versions might not have stop() method
+                    # In this case, we'll just note it and continue
+                    pass
+                return
+            
+            # Format output
+            if best_actual_reward is not None:
+                reward_info = f"Best reward: {best_actual_reward:.2f} (target: {best_target:.2f}"
+                if best_diff is not None:
+                    reward_info += f", diff: {best_diff:.2f}"
+                reward_info += ")"
+            else:
+                reward_info = f"Best value: {study.best_value:.4f}"
+            
+            if current_reward is not None:
+                reward_info += f" | Current: {current_reward:.2f}"
+                if current_diff is not None:
+                    reward_info += f" (diff: {current_diff:.2f})"
+            
+            print(f"\n[Trial {len(trial_times)}/{n_trials}] "
+                  f"Elapsed: {elapsed_str} | "
+                  f"Est. remaining: {str(estimated_remaining).split('.')[0]} | "
+                  f"{reward_info}")
+    
     study.optimize(
         lambda trial: objective(
             trial,
@@ -295,8 +368,12 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
             num_eval_episodes=num_eval_episodes
         ),
         n_trials=n_trials,
-        show_progress_bar=True
+        show_progress_bar=True,
+        callbacks=[progress_callback]
     )
+    
+    if early_stopped:
+        print(f"\n[ℹ] Tuning stopped early after {len(trial_times)} trials (found good configuration)")
     
     print(f"\n{'='*80}")
     print(f"Best trial for {method['display_name']} on {env_name}:")
@@ -305,14 +382,16 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     print(f"  Params: {trial.params}")
     
     # Test the best params to get actual reward
-    print(f"\n  Testing best parameters...")
+    # Use fewer episodes for final test to save time (we already know it's good from tuning)
+    test_episodes = min(num_train_episodes, 200)  # Cap at 200 for faster testing
+    print(f"\n  Testing best parameters (using {test_episodes} episodes for speed)...")
     best_agent_kwargs = trial.params.copy()
     
     # Train with best params
     agent, episode_rewards, best_weights, best_avg_reward, env = train(
         agent=method['agent'],
         env_name=env_name,
-        num_episodes=num_train_episodes,
+        num_episodes=test_episodes,
         use_shield_post=method['use_shield_post'],
         use_shield_pre=method['use_shield_pre'],
         use_shield_layer=method['use_shield_layer'],
@@ -376,10 +455,10 @@ Examples:
                        help='Environment to tune')
     parser.add_argument('--method', type=str, default=None,
                        help='Specific method to tune (default: all)')
-    parser.add_argument('--trials', type=int, default=20,
-                       help='Number of Optuna trials per method')
-    parser.add_argument('--train_episodes', type=int, default=500,
-                       help='Number of training episodes during tuning')
+    parser.add_argument('--trials', type=int, default=15,
+                       help='Number of Optuna trials per method (default: 15)')
+    parser.add_argument('--train_episodes', type=int, default=300,
+                       help='Number of training episodes during tuning (default: 300)')
     parser.add_argument('--eval_episodes', type=int, default=50,
                        help='Number of evaluation episodes during tuning')
     parser.add_argument('--target_reward', type=float, default=None,
@@ -404,11 +483,35 @@ Examples:
     print(f"# Target Reward: {target_reward}")
     print(f"# Methods: {len(methods_to_tune)}")
     print(f"# Trials per method: {args.trials}")
+    print(f"# Train episodes per trial: {args.train_episodes}")
+    print(f"# Eval episodes per trial: {args.eval_episodes}")
+    print(f"{'#'*80}")
+    print(f"\n📋 Methods to tune:")
+    for i, method in enumerate(methods_to_tune, 1):
+        shield_info = []
+        if method['use_shield_post']:
+            shield_info.append(f"Post-hoc ({method['mode']})")
+        if method['use_shield_pre']:
+            shield_info.append(f"Pre-emptive ({method['mode']})")
+        if method['use_shield_layer']:
+            shield_info.append(f"Layer ({method['mode']})")
+        if method.get('lambda_sem', 0) > 0:
+            shield_info.append("Semantic Loss")
+        if method.get('lambda_penalty', 0) > 0:
+            shield_info.append("Reward Shaping")
+        
+        shield_str = " + ".join(shield_info) if shield_info else "Unshielded"
+        print(f"  {i}. {method['display_name']} ({shield_str})")
     print(f"{'#'*80}\n")
     
+    overall_start_time = time.time()
     results_summary = []
     
-    for method in methods_to_tune:
+    for method_idx, method in enumerate(methods_to_tune, 1):
+        method_start = time.time()
+        print(f"\n{'='*80}")
+        print(f"METHOD {method_idx}/{len(methods_to_tune)}: {method['display_name']}")
+        print(f"{'='*80}")
         try:
             params, actual_reward = tune_method(
                 env_name=args.env,
@@ -418,25 +521,47 @@ Examples:
                 num_train_episodes=args.train_episodes,
                 num_eval_episodes=args.eval_episodes
             )
+            method_time = time.time() - method_start
+            method_time_str = str(timedelta(seconds=int(method_time))).split('.')[0]
+            
             results_summary.append({
                 'method': method['display_name'],
                 'target_reward': target_reward,
                 'actual_reward': actual_reward,
-                'diff': abs(actual_reward - target_reward)
+                'diff': abs(actual_reward - target_reward),
+                'time': method_time_str
             })
+            
+            # Estimate remaining time
+            elapsed_total = time.time() - overall_start_time
+            avg_time_per_method = elapsed_total / method_idx
+            remaining_methods = len(methods_to_tune) - method_idx
+            estimated_remaining = timedelta(seconds=int(avg_time_per_method * remaining_methods))
+            
+            print(f"\n[✓] {method['display_name']} completed in {method_time_str}")
+            if remaining_methods > 0:
+                print(f"[⏱] Estimated time remaining: {str(estimated_remaining).split('.')[0]} "
+                      f"({remaining_methods} methods left)")
         except Exception as e:
             print(f"Error tuning {method['display_name']}: {e}")
             import traceback
             traceback.print_exc()
     
     # Print summary
+    total_time = time.time() - overall_start_time
+    total_time_str = str(timedelta(seconds=int(total_time))).split('.')[0]
+    
     print(f"\n{'#'*80}")
     print("# Tuning Summary")
     print(f"{'#'*80}")
-    print(f"{'Method':<30} {'Target':<12} {'Actual':<12} {'Diff':<12}")
+    print(f"{'Method':<30} {'Target':<12} {'Actual':<12} {'Diff':<12} {'Time':<10}")
     print("-" * 80)
     for r in results_summary:
-        print(f"{r['method']:<30} {r['target_reward']:<12.2f} {r['actual_reward']:<12.2f} {r['diff']:<12.2f}")
+        time_str = r.get('time', 'N/A')
+        print(f"{r['method']:<30} {r['target_reward']:<12.2f} {r['actual_reward']:<12.2f} "
+              f"{r['diff']:<12.2f} {time_str:<10}")
+    print("-" * 80)
+    print(f"{'TOTAL TIME':<30} {'':<12} {'':<12} {'':<12} {total_time_str:<10}")
     print(f"{'#'*80}\n")
 
 

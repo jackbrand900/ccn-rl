@@ -1,0 +1,548 @@
+/opt/anaconda3/envs/thesis_env/lib/python3.11/site-packages/pygame/pkgdata.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_stream, resource_exists
+/opt/anaconda3/envs/thesis_env/lib/python3.11/site-packages/gym/envs/registration.py:307: DeprecationWarning: The package name gym_minigrid has been deprecated in favor of minigrid. Please uninstall gym_minigrid and install minigrid with `pip install minigrid`. Future releases will be maintained under the new package name minigrid.
+  fn()
+Gym has been unmaintained since 2022 and does not support NumPy 2.0 amongst other critical functionality.
+Please upgrade to Gymnasium, the maintained drop-in replacement of Gym, or contact the authors of your software and request that they upgrade.
+Users of this version of Gym should be able to simply replace 'import gym' with 'import gymnasium as gym' in the vast majority of cases.
+See the migration guide at https://gymnasium.farama.org/introduction/migration_guide/ for additional information.
+[I 2025-12-26 15:12:44,424] A new study created in RDB with name: ijcai_cpo_CliffWalking-v1
+
+################################################################################
+# Hyperparameter Tuning for IJCAI Experiments
+# Environment: CliffWalking-v1
+# Target Reward: -15.0
+# Methods: 10
+# Trials per method: 20
+################################################################################
+
+
+================================================================================
+Tuning: CPO on CliffWalking-v1
+Target reward: -15.0
+Trials: 20
+================================================================================
+
+  0%|          | 0/20 [00:00<?, ?it/s]                                        0%|          | 0/20 [00:01<?, ?it/s]Best trial: 0. Best value: -1000:   0%|          | 0/20 [00:01<?, ?it/s]Best trial: 0. Best value: -1000:   5%|▌         | 1/20 [00:01<00:19,  1.03s/it]                                                                                Best trial: 0. Best value: -1000:   5%|▌         | 1/20 [00:01<00:19,  1.03s/it]Best trial: 0. Best value: -1000:   5%|▌         | 1/20 [00:01<00:19,  1.03s/it]Best trial: 0. Best value: -1000:  10%|█         | 2/20 [00:01<00:11,  1.59it/s]                                                                                Best trial: 0. Best value: -1000:  10%|█         | 2/20 [00:01<00:11,  1.59it/s]Best trial: 0. Best value: -1000:  10%|█         | 2/20 [00:01<00:11,  1.59it/s]Best trial: 0. Best value: -1000:  15%|█▌        | 3/20 [00:01<00:08,  1.98it/s][Seed set to 42]
+Observation space: Discrete(48)
+[DEBUG] use_cnn: False
+[DEBUG] Gym observation shape: ()
+[DEBUG] Input shape passed to ModularNetwork: ()
+[DEBUG] Using benchmark
+requirements file: src/requirements/cliff_safe.cnf
+num vars: 6, num flags: 2
+Shield ordering: 5,4,3,2,1,0
+[] [<pishield.propositional_requirements.constraint.Constraint object at 0x1752fbf90>, <pishield.propositional_requirements.constraint.Constraint object at 0x175308110>]
+head 0 with old rules 2
+head 0 with new rules 3
+[<pishield.propositional_requirements.constraint.Constraint object at 0x1753086d0>] []
+head n1 with old rules 1
+head n1 with new rules 1
+[<pishield.propositional_requirements.constraint.Constraint object at 0x175308a10>] []
+head n2 with old rules 1
+head n2 with new rules 1
+Generated 2 strata of constraints with [5 4 3 2 1 0] centrality
+Training CPOAgent agent on CliffWalking-v1 with shield post: False with shield layer: False with shield pre: False
+Error in trial: One of the differentiated Tensors appears to not have been used in the graph. Set allow_unused=True if this is the desired behavior.
+[I 2025-12-26 15:12:45,465] Trial 0 finished with value: -1000.0 and parameters: {'lr': 0.00023027175847367996, 'gamma': 0.9585624181837661, 'hidden_dim': 128, 'use_orthogonal_init': True, 'num_layers': 4, 'cost_gamma': 0.9959735465343053, 'cost_lam': 0.9611478355705066, 'clip_eps': 0.13686002123673385, 'ent_coef': 0.015806518448515824, 'epochs': 4, 'batch_size': 128, 'budget': 0.12246402123322746, 'max_kl': 0.010775795103914285}. Best is trial 0 with value: -1000.0.
+[Seed set to 42]
+Observation space: Discrete(48)
+[DEBUG] use_cnn: False
+[DEBUG] Gym observation shape: ()
+[DEBUG] Input shape passed to ModularNetwork: ()
+[DEBUG] Using benchmark
+requirements file: src/requirements/cliff_safe.cnf
+num vars: 6, num flags: 2
+Shield ordering: 5,4,3,2,1,0
+[] [<pishield.propositional_requirements.constraint.Constraint object at 0x1755d77d0>, <pishield.propositional_requirements.constraint.Constraint object at 0x1755d78d0>]
+head 0 with old rules 2
+head 0 with new rules 3
+[<pishield.propositional_requirements.constraint.Constraint object at 0x1755d7fd0>] []
+head n1 with old rules 1
+head n1 with new rules 1
+[<pishield.propositional_requirements.constraint.Constraint object at 0x1755f8310>] []
+head n2 with old rules 1
+head n2 with new rules 1
+Generated 2 strata of constraints with [5 4 3 2 1 0] centrality
+Training CPOAgent agent on CliffWalking-v1 with shield post: False with shield layer: False with shield pre: False
+Error in trial: One of the differentiated Tensors appears to not have been used in the graph. Set allow_unused=True if this is the desired behavior.
+[I 2025-12-26 15:12:45,817] Trial 1 finished with value: -1000.0 and parameters: {'lr': 0.0037153163347614163, 'gamma': 0.9101607352775115, 'hidden_dim': 512, 'use_orthogonal_init': True, 'num_layers': 3, 'cost_gamma': 0.9214918406050738, 'cost_lam': 0.937383066817206, 'clip_eps': 0.15203976673883218, 'ent_coef': 0.04280285115523909, 'epochs': 5, 'batch_size': 64, 'budget': 0.2185517263684617, 'max_kl': 0.019237610296266923}. Best is trial 0 with value: -1000.0.
+[Seed set to 42]
+Observation space: Discrete(48)
+[DEBUG] use_cnn: False
+[DEBUG] Gym observation shape: ()
+[DEBUG] Input shape passed to ModularNetwork: ()
+[DEBUG] Using benchmark
+requirements file: src/requirements/cliff_safe.cnf
+num vars: 6, num flags: 2
+Shield ordering: 5,4,3,2,1,0
+[] [<pishield.propositional_requirements.constraint.Constraint object at 0x30bad05d0>, <pishield.propositional_requirements.constraint.Constraint object at 0x30bad2190>]
+head 0 with old rules 2
+head 0 with new rules 3
+[<pishield.propositional_requirements.constraint.Constraint object at 0x30baf8290>] []
+head n1 with old rules 1
+head n1 with new rules 1
+[<pishield.propositional_requirements.constraint.Constraint object at 0x30bb03410>] []
+head n2 with old rules 1
+head n2 with new rules 1
+Generated 2 strata of constraints with [5 4 3 2 1 0] centrality
+Training CPOAgent agent on CliffWalking-v1 with shield post: False with shield layer: False with shield pre: False
+Error in trial: One of the differentiated Tensors appears to not have been used in the graph. Set allow_unused=True if this is the desired behavior.
+[I 2025-12-26 15:12:46,174] Trial 2 finished with value: -1000.0 and parameters: {'lr': 0.0007277602495047448, 'gamma': 0.924179240702747, 'hidden_dim': 512, 'use_orthogonal_init': True, 'num_layers': 3, 'cost_gamma': 0.9465760607720488, 'cost_lam': 0.9882300664936124, 'clip_eps': 0.21983588688986777, 'ent_coef': 0.02901340384003211, 'epochs': 4, 'batch_size': 128, 'budget': 0.06207214495979481, 'max_kl': 0.009549513966032916}. Best is trial 0 with value: -1000.0.
+[Seed set to 42]
+Observation space: Discrete(48)
+[DEBUG] use_cnn: False
+[DEBUG] Gym observation shape: ()
+[DEBUG] Input shape passed to ModularNetwork: ()
+[DEBUG] Using benchmark
+requirements file: src/requirements/cliff_safe.cnf
+num vars: 6, num flags: 2
+Shield ordering: 5,4,3,2,1,0
+[] [<pishield.propositional_requirements.constraint.Constraint object at 0x1752f8210>, <pishield.propositional_requirements.constraint.Constraint object at 0x1752f8e50>]
+head 0 with old rules 2
+head 0 with new rules 3
+[<pishield.propositional_requirements.constraint.Constraint object at 0x1752eb2d0>] []
+head n1 with old rules 1
+head n1 with new rules 1
+[<pishield.propositional_requirements.constraint.Constraint object at 0x30bb41890>] []
+head n2 with old rules 1
+head n2 with new rules 1
+Generated 2 strata of constraints with [5 4 3 2 1 0] centrality
+Training CPOAgent agent on CliffWalking-v1 with shield post: False with shield layer: False with shield pre: False
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 10, Avg Reward (10): -445.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 171, Viol Rate:  0.038
+[Checkpoint] New best avg reward: -445.90 at episode 10
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 20, Avg Reward (10): -573.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 413, Viol Rate:  0.041
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 30, Avg Reward (10): -617.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 654, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 40, Avg Reward (10): -507.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 829, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 50, Avg Reward (10): -460.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1017, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 60, Avg Reward (10): -506.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1234, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 70, Avg Reward (10): -426.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1395, Viol Rate:  0.039
+[Checkpoint] New best avg reward: -426.50 at episode 70
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 80, Avg Reward (10): -645.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1658, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 90, Avg Reward (10): -535.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1866, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 100, Avg Reward (10): -621.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2099, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 110, Avg Reward (10): -471.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2276, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 120, Avg Reward (10): -391.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2457, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -391.20 at episode 120
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 130, Avg Reward (10): -483.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2626, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 140, Avg Reward (10): -431.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2796, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 150, Avg Reward (10): -584.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3024, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 160, Avg Reward (10): -388.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3205, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -388.60 at episode 160
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 170, Avg Reward (10): -569.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3433, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 180, Avg Reward (10): -644.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3669, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 190, Avg Reward (10): -501.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3876, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 200, Avg Reward (10): -544.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4106, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 210, Avg Reward (10): -558.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4313, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 220, Avg Reward (10): -509.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4537, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 230, Avg Reward (10): -401.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4701, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 240, Avg Reward (10): -542.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4899, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 250, Avg Reward (10): -487.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5103, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 260, Avg Reward (10): -449.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5297, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 270, Avg Reward (10): -408.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5454, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 280, Avg Reward (10): -598.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5695, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 290, Avg Reward (10): -526.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5899, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 300, Avg Reward (10): -399.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6033, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 310, Avg Reward (10): -519.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6225, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 320, Avg Reward (10): -514.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6441, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 330, Avg Reward (10): -673.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6724, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 340, Avg Reward (10): -602.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6971, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 350, Avg Reward (10): -493.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7183, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 360, Avg Reward (10): -493.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7388, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 370, Avg Reward (10): -358.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7526, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -358.90 at episode 370
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 380, Avg Reward (10): -300.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7665, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -300.90 at episode 380
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 390, Avg Reward (10): -561.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7899, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 400, Avg Reward (10): -231.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8001, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -231.70 at episode 400
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 410, Avg Reward (10): -428.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8160, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 420, Avg Reward (10): -534.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8367, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 430, Avg Reward (10): -352.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8493, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 440, Avg Reward (10): -636.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8745, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 450, Avg Reward (10): -578.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8964, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 460, Avg Reward (10): -455.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9156, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 470, Avg Reward (10): -605.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9389, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 480, Avg Reward (10): -553.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9624, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 490, Avg Reward (10): -476.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9838, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 500, Avg Reward (10): -378.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9985, Viol Rate:  0.040
+
+[Post-Training] Loading best weights with avg reward: -231.70
+
+[Evaluation] Evaluating CPOAgent for 50 episodes (Shield Layer: False, Shield Post: False)
+Episode 1/50: Reward = -56.00, Steps = 56, Episode Modifications = 0, Episode Violations = 3, Total Modifications = 0, Total Violations = 3, Mod Rate = 0.0000, Viol Rate = 0.0536
+Episode 2/50: Reward = -298.00, Steps = 298, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 20, Mod Rate = 0.0000, Viol Rate = 0.0565
+Episode 3/50: Reward = -203.00, Steps = 203, Episode Modifications = 0, Episode Violations = 8, Total Modifications = 0, Total Violations = 28, Mod Rate = 0.0000, Viol Rate = 0.0503
+Episode 4/50: Reward = -126.00, Steps = 126, Episode Modifications = 0, Episode Violations = 5, Total Modifications = 0, Total Violations = 33, Mod Rate = 0.0000, Viol Rate = 0.0483
+Episode 5/50: Reward = -510.00, Steps = 510, Episode Modifications = 0, Episode Violations = 18, Total Modifications = 0, Total Violations = 51, Mod Rate = 0.0000, Viol Rate = 0.0427
+Episode 6/50: Reward = -536.00, Steps = 536, Episode Modifications = 0, Episode Violations = 27, Total Modifications = 0, Total Violations = 78, Mod Rate = 0.0000, Viol Rate = 0.0451
+Episode 7/50: Reward = -133.00, Steps = 133, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 84, Mod Rate = 0.0000, Viol Rate = 0.0451
+Episode 8/50: Reward = -735.00, Steps = 735, Episode Modifications = 0, Episode Violations = 31, Total Modifications = 0, Total Violations = 115, Mod Rate = 0.0000, Viol Rate = 0.0443
+Episode 9/50: Reward = -576.00, Steps = 576, Episode Modifications = 0, Episode Violations = 15, Total Modifications = 0, Total Violations = 130, Mod Rate = 0.0000, Viol Rate = 0.0410
+Episode 10/50: Reward = -360.00, Steps = 360, Episode Modifications = 0, Episode Violations = 21, Total Modifications = 0, Total Violations = 151, Mod Rate = 0.0000, Viol Rate = 0.0427
+Episode 11/50: Reward = -735.00, Steps = 735, Episode Modifications = 0, Episode Violations = 22, Total Modifications = 0, Total Violations = 173, Mod Rate = 0.0000, Viol Rate = 0.0405
+Episode 12/50: Reward = -635.00, Steps = 635, Episode Modifications = 0, Episode Violations = 27, Total Modifications = 0, Total Violations = 200, Mod Rate = 0.0000, Viol Rate = 0.0408                                                                                Best trial: 0. Best value: -1000:  15%|█▌        | 3/20 [11:06<00:08,  1.98it/s]Best trial: 3. Best value: -26.5853:  15%|█▌        | 3/20 [11:06<00:08,  1.98it/s]Best trial: 3. Best value: -26.5853:  20%|██        | 4/20 [11:06<1:10:00, 262.56s/it]
+Episode 13/50: Reward = -345.00, Steps = 345, Episode Modifications = 0, Episode Violations = 10, Total Modifications = 0, Total Violations = 210, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 14/50: Reward = -933.00, Steps = 933, Episode Modifications = 0, Episode Violations = 44, Total Modifications = 0, Total Violations = 254, Mod Rate = 0.0000, Viol Rate = 0.0411
+Episode 15/50: Reward = -334.00, Steps = 334, Episode Modifications = 0, Episode Violations = 12, Total Modifications = 0, Total Violations = 266, Mod Rate = 0.0000, Viol Rate = 0.0408
+Episode 16/50: Reward = -216.00, Steps = 216, Episode Modifications = 0, Episode Violations = 3, Total Modifications = 0, Total Violations = 269, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 17/50: Reward = -208.00, Steps = 208, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 275, Mod Rate = 0.0000, Viol Rate = 0.0396
+Episode 18/50: Reward = -703.00, Steps = 703, Episode Modifications = 0, Episode Violations = 20, Total Modifications = 0, Total Violations = 295, Mod Rate = 0.0000, Viol Rate = 0.0386
+Episode 19/50: Reward = -358.00, Steps = 358, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 312, Mod Rate = 0.0000, Viol Rate = 0.0390
+Episode 20/50: Reward = -437.00, Steps = 437, Episode Modifications = 0, Episode Violations = 21, Total Modifications = 0, Total Violations = 333, Mod Rate = 0.0000, Viol Rate = 0.0395
+Episode 21/50: Reward = -115.00, Steps = 115, Episode Modifications = 0, Episode Violations = 8, Total Modifications = 0, Total Violations = 341, Mod Rate = 0.0000, Viol Rate = 0.0399
+Episode 22/50: Reward = -619.00, Steps = 619, Episode Modifications = 0, Episode Violations = 22, Total Modifications = 0, Total Violations = 363, Mod Rate = 0.0000, Viol Rate = 0.0396
+Episode 23/50: Reward = -553.00, Steps = 553, Episode Modifications = 0, Episode Violations = 26, Total Modifications = 0, Total Violations = 389, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 24/50: Reward = -128.00, Steps = 128, Episode Modifications = 0, Episode Violations = 2, Total Modifications = 0, Total Violations = 391, Mod Rate = 0.0000, Viol Rate = 0.0397
+Episode 25/50: Reward = -561.00, Steps = 561, Episode Modifications = 0, Episode Violations = 19, Total Modifications = 0, Total Violations = 410, Mod Rate = 0.0000, Viol Rate = 0.0394
+Episode 26/50: Reward = -526.00, Steps = 526, Episode Modifications = 0, Episode Violations = 25, Total Modifications = 0, Total Violations = 435, Mod Rate = 0.0000, Viol Rate = 0.0398
+Episode 27/50: Reward = -230.00, Steps = 230, Episode Modifications = 0, Episode Violations = 13, Total Modifications = 0, Total Violations = 448, Mod Rate = 0.0000, Viol Rate = 0.0401
+Episode 28/50: Reward = -98.00, Steps = 98, Episode Modifications = 0, Episode Violations = 2, Total Modifications = 0, Total Violations = 450, Mod Rate = 0.0000, Viol Rate = 0.0399
+Episode 29/50: Reward = -679.00, Steps = 679, Episode Modifications = 0, Episode Violations = 15, Total Modifications = 0, Total Violations = 465, Mod Rate = 0.0000, Viol Rate = 0.0389
+Episode 30/50: Reward = -100.00, Steps = 100, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 471, Mod Rate = 0.0000, Viol Rate = 0.0391
+Episode 31/50: Reward = -141.00, Steps = 141, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 477, Mod Rate = 0.0000, Viol Rate = 0.0391
+Episode 32/50: Reward = -311.00, Steps = 311, Episode Modifications = 0, Episode Violations = 15, Total Modifications = 0, Total Violations = 492, Mod Rate = 0.0000, Viol Rate = 0.0394
+Episode 33/50: Reward = -226.00, Steps = 226, Episode Modifications = 0, Episode Violations = 8, Total Modifications = 0, Total Violations = 500, Mod Rate = 0.0000, Viol Rate = 0.0393
+Episode 34/50: Reward = -1000.00, Steps = 1000, Episode Modifications = 0, Episode Violations = 40, Total Modifications = 0, Total Violations = 540, Mod Rate = 0.0000, Viol Rate = 0.0393
+Episode 35/50: Reward = -348.00, Steps = 348, Episode Modifications = 0, Episode Violations = 7, Total Modifications = 0, Total Violations = 547, Mod Rate = 0.0000, Viol Rate = 0.0389
+Episode 36/50: Reward = -489.00, Steps = 489, Episode Modifications = 0, Episode Violations = 29, Total Modifications = 0, Total Violations = 576, Mod Rate = 0.0000, Viol Rate = 0.0396
+Episode 37/50: Reward = -1000.00, Steps = 1000, Episode Modifications = 0, Episode Violations = 49, Total Modifications = 0, Total Violations = 625, Mod Rate = 0.0000, Viol Rate = 0.0402
+Episode 38/50: Reward = -150.00, Steps = 150, Episode Modifications = 0, Episode Violations = 9, Total Modifications = 0, Total Violations = 634, Mod Rate = 0.0000, Viol Rate = 0.0404
+Episode 39/50: Reward = -370.00, Steps = 370, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 651, Mod Rate = 0.0000, Viol Rate = 0.0405
+Episode 40/50: Reward = -511.00, Steps = 511, Episode Modifications = 0, Episode Violations = 18, Total Modifications = 0, Total Violations = 669, Mod Rate = 0.0000, Viol Rate = 0.0403
+Episode 41/50: Reward = -1000.00, Steps = 1000, Episode Modifications = 0, Episode Violations = 33, Total Modifications = 0, Total Violations = 702, Mod Rate = 0.0000, Viol Rate = 0.0399
+Episode 42/50: Reward = -339.00, Steps = 339, Episode Modifications = 0, Episode Violations = 16, Total Modifications = 0, Total Violations = 718, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 43/50: Reward = -1000.00, Steps = 1000, Episode Modifications = 0, Episode Violations = 37, Total Modifications = 0, Total Violations = 755, Mod Rate = 0.0000, Viol Rate = 0.0399
+Episode 44/50: Reward = -163.00, Steps = 163, Episode Modifications = 0, Episode Violations = 7, Total Modifications = 0, Total Violations = 762, Mod Rate = 0.0000, Viol Rate = 0.0399
+Episode 45/50: Reward = -300.00, Steps = 300, Episode Modifications = 0, Episode Violations = 14, Total Modifications = 0, Total Violations = 776, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 46/50: Reward = -334.00, Steps = 334, Episode Modifications = 0, Episode Violations = 22, Total Modifications = 0, Total Violations = 798, Mod Rate = 0.0000, Viol Rate = 0.0405
+Episode 47/50: Reward = -459.00, Steps = 459, Episode Modifications = 0, Episode Violations = 21, Total Modifications = 0, Total Violations = 819, Mod Rate = 0.0000, Viol Rate = 0.0406
+Episode 48/50: Reward = -129.00, Steps = 129, Episode Modifications = 0, Episode Violations = 10, Total Modifications = 0, Total Violations = 829, Mod Rate = 0.0000, Viol Rate = 0.0408
+Episode 49/50: Reward = -204.00, Steps = 204, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 835, Mod Rate = 0.0000, Viol Rate = 0.0407
+Episode 50/50: Reward = -169.00, Steps = 169, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 841, Mod Rate = 0.0000, Viol Rate = 0.0406
+
+Evaluation Summary:
+Average Reward: -413.78
+Standard Deviation: 265.91
+Avg Shield Modifications per Step: 0.0000
+Total Constraint Violations: 841
+Avg Constraint Violations per Step: 0.0406
+[I 2025-12-26 15:23:50,463] Trial 3 finished with value: -26.585331560977895 and parameters: {'lr': 0.0001726632718621958, 'gamma': 0.9538217354900821, 'hidden_dim': 512, 'use_orthogonal_init': False, 'num_layers': 2, 'cost_gamma': 0.9808853989622278, 'cost_lam': 0.92430865235443, 'clip_eps': 0.29209793856800953, 'ent_coef': 0.020569205217780873, 'epochs': 10, 'batch_size': 128, 'budget': 0.14653828709181244, 'max_kl': 0.014747977108357362}. Best is trial 3 with value: -26.585331560977895.
+[Seed set to 42]
+Observation space: Discrete(48)
+[DEBUG] use_cnn: False
+[DEBUG] Gym observation shape: ()
+[DEBUG] Input shape passed to ModularNetwork: ()
+[DEBUG] Using benchmark
+requirements file: src/requirements/cliff_safe.cnf
+num vars: 6, num flags: 2
+Shield ordering: 5,4,3,2,1,0
+[] [<pishield.propositional_requirements.constraint.Constraint object at 0x30bd53d50>, <pishield.propositional_requirements.constraint.Constraint object at 0x30b9f9250>]
+head 0 with old rules 2
+head                                                                                      Best trial: 3. Best value: -26.5853:  20%|██        | 4/20 [11:06<1:10:00, 262.56s/it]Best trial: 3. Best value: -26.5853:  20%|██        | 4/20 [11:06<1:10:00, 262.56s/it]Best trial: 3. Best value: -26.5853:  25%|██▌       | 5/20 [11:06<41:59, 167.97s/it]   0 with new rules 3
+[<pishield.propositional_requirements.constraint.Constraint object at 0x175416750>] []
+head n1 with old rules 1
+head n1 with new rules 1
+[<pishield.propositional_requirements.constraint.Constraint object at 0x16962d9d0>] []
+head n2 with old rules 1
+head n2 with new rules 1
+Generated 2 strata of constraints with [5 4 3 2 1 0] centrality
+Training CPOAgent agent on CliffWalking-v1 with shield post: False with shield layer: False with shield pre: False
+Error in trial: One of the differentiated Tensors appears to not have been used in the graph. Set allow_unused=True if this is the desired behavior.
+[I 2025-12-26 15:23:50,715] Trial 4 finished with value: -1000.0 and parameters: {'lr': 0.0008385483583905334, 'gamma': 0.9743393374099131, 'hidden_dim': 512, 'use_orthogonal_init': True, 'num_layers': 2, 'cost_gamma': 0.979869093438652, 'cost_lam': 0.9376140214021186, 'clip_eps': 0.10798106420010666, 'ent_coef': 0.04924682111815251, 'epochs': 2, 'batch_size': 64, 'budget': 0.051490520427860384, 'max_kl': 0.019362108716527437}. Best is trial 3 with value: -26.585331560977895.
+[Seed set to 42]
+Observation space: Discrete(48)
+[DEBUG] use_cnn: False
+[DEBUG] Gym observation shape: ()
+[DEBUG] Input shape passed to ModularNetwork: ()
+[DEBUG] Using benchmark
+requirements file: src/requirements/cliff_safe.cnf
+num vars: 6, num flags: 2
+Shield ordering: 5,4,3,2,1,0
+[] [<pishield.propositional_requirements.constraint.Constraint object at 0x30ba7fc10>, <pishield.propositional_requirements.constraint.Constraint object at 0x11e3a8790>]
+head 0 with old rules 2
+head 0 with new rules 3
+[<pishield.propositional_requirements.constraint.Constraint object at 0x1754d2dd0>] []
+head n1 with old rules 1
+head n1 with new rules 1
+[<pishield.propositional_requirements.constraint.Constraint object at 0x3ee7c5f50>] []
+head n2 with old rules 1
+head n2 with new rules 1
+Generated 2 strata of constraints with [5 4 3 2 1 0] centrality
+Training CPOAgent agent on CliffWalking-v1 with shield post: False with shield layer: False with shield pre: False
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 10, Avg Reward (10): -367.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 173, Viol Rate:  0.047
+[Checkpoint] New best avg reward: -367.10 at episode 10
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 20, Avg Reward (10): -470.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 377, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 30, Avg Reward (10): -426.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 581, Viol Rate:  0.046
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 40, Avg Reward (10): -506.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 796, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 50, Avg Reward (10): -383.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 986, Viol Rate:  0.046
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 60, Avg Reward (10): -383.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1141, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 70, Avg Reward (10): -432.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1348, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 80, Avg Reward (10): -392.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1535, Viol Rate:  0.046
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 90, Avg Reward (10): -373.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1693, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 100, Avg Reward (10): -317.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1829, Viol Rate:  0.045
+[Checkpoint] New best avg reward: -317.00 at episode 100
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 110, Avg Reward (10): -498.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2057, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 120, Avg Reward (10): -359.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2225, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 130, Avg Reward (10): -447.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2415, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 140, Avg Reward (10): -399.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2587, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 150, Avg Reward (10): -343.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2741, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 160, Avg Reward (10): -247.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2853, Viol Rate:  0.045
+[Checkpoint] New best avg reward: -247.20 at episode 160
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 170, Avg Reward (10): -259.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2950, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 180, Avg Reward (10): -410.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3125, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 190, Avg Reward (10): -340.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3279, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 200, Avg Reward (10): -467.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3501, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 210, Avg Reward (10): -368.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3690, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 220, Avg Reward (10): -505.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3934, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 230, Avg Reward (10): -313.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4074, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 240, Avg Reward (10): -432.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4258, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 250, Avg Reward (10): -331.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4425, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 260, Avg Reward (10): -420.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4618, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 270, Avg Reward (10): -374.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4808, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 280, Avg Reward (10): -271.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4933, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 290, Avg Reward (10): -463.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5152, Viol Rate:  0.046
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 300, Avg Reward (10): -349.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5314, Viol Rate:  0.046
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 310, Avg Reward (10): -394.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5498, Viol Rate:  0.046
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 320, Avg Reward (10): -451.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5670, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 330, Avg Reward (10): -340.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5825, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 340, Avg Reward (10): -326.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5971, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 350, Avg Reward (10): -367.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6147, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 360, Avg Reward (10): -312.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6285, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 370, Avg Reward (10): -473.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6482, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 380, Avg Reward (10): -489.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6715, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 390, Avg Reward (10): -415.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6876, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 400, Avg Reward (10): -405.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7051, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 410, Avg Reward (10): -397.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7206, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 420, Avg Reward (10): -347.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7371, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 430, Avg Reward (10): -262.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7490, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 440, Avg Reward (10): -347.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7652, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 450, Avg Reward (10): -546.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7887, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 460, Avg Reward (10): -366.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8038, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 470, Avg Reward (10): -385.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8224, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 480, Avg Reward (10): -314.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8387, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 490, Avg Reward (10): -305.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8498, Viol Rate:  0.045
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 500, Avg Reward (10): -273.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8617, Viol Rate:  0.045
+
+[Post-Training] Loading best weights with avg reward: -247.20
+
+[Evaluation] Evaluating CPOAgent for 50 episodes (Shield Layer: False, Shield Post: False)
+Episode 1/50: Reward = -139.00, Steps = 139, Episode Modifications = 0, Episode Violations = 11, Total Modifications = 0, Total Violations = 11, Mod Rate = 0.0000, Viol Rate = 0.0791
+Episode 2/50: Reward = -840.00, Steps = 840, Episode Modifications = 0, Episode Violations = 41, Total Modifications = 0, Total Violations = 52, Mod Rate = 0.0000, Viol Rate = 0.0531
+Episode 3/50: Reward = -336.00, Steps = 336, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 69, Mod Rate = 0.0000, Viol Rate = 0.0525
+Episode 4/50: Reward = -100.00, Steps = 100, Episode Modifications = 0, Episode Violations = 3, Total Modifications = 0, Total Violations = 72, Mod Rate = 0.0000, Viol Rate = 0.0509
+Episode 5/50: Reward = -116.00, Steps = 116, Episode Modifications = 0, Episode Violations = 5, Total Modifications = 0, Total Violations = 77, Mod Rate = 0.0000, Viol Rate = 0.0503
+Episode 6/50: Reward = -508.00, Steps = 508, Episode Modifications = 0, Episode Violations = 23, Total Modifications = 0, Total Violations = 100, Mod Rate = 0.0000, Viol Rate = 0.0490
+Episode 7/50: Reward = -133.00, Steps = 133, Episode Modifications = 0, Episode Violations = 11, Total Modifications = 0, Total Violations = 111, Mod Rate = 0.0000, Viol Rate = 0.0511
+Episode 8/50: Reward = -177.00, Steps = 177, Episode Modifications = 0, Episode Violations = 9, Total Modifications = 0, Total Violations = 120, Mod Rate = 0.0000, Viol Rate = 0.0511
+Episode 9/50: Reward = -137.00, Steps = 137, Episode Modifications = 0, Episode Violations = 10, Total Modifications = 0, Total Violations = 130, Mod Rate = 0.0000, Viol Rate = 0.0523
+Episode 10/50: Reward = -567.00, Steps = 567, Episode Modifications = 0, Episode Violations = 19, Total Modifications = 0, Total Violations = 149, Mod Rate = 0.0000, Viol Rate = 0.0488
+Episode 11/50: Reward = -171.00, Steps = 171, Episode Modifications = 0, Episode Violations = 5, Total Modifications = 0, Total Violations = 154, Mod Rate = 0.0000, Viol Rate = 0.0478
+Episode 12/50: Reward = -94.00, Steps = 94, Episode Modifications = 0, Episode Violations = 7, Total Modifications = 0, Total Violations = 161, Mod Rate = 0.0000, Viol Rate = 0.0485
+Episode 13/50: Reward = -57.00, Steps = 57, Episode Modifications = 0, Episode Violations = 0, Total Modifications = 0, Total Violations = 161, Mod Rate = 0.0000, Viol Rate = 0.0477
+Episode 14/50: Reward = -1000.00, Steps = 1000, Episode Modifications = 0, Episode Violations = 49, Total Modifications = 0, Total Violations = 210, Mod Rate = 0.0000, Viol Rate = 0.0480
+Episode 15/50: Reward = -225.00, Steps = 225, Episode Modifications = 0, Episode Violations = 14, Total Modifications = 0, Total Violations = 224, Mod Rate = 0.0000, Viol Rate = 0.0487
+Episode 16/50: Reward = -355.00, Steps = 355, Episode Modifications = 0, Episode Violations = 14, Total Modifications = 0, Total Violations = 238, Mod Rate = 0.0000, Viol Rate = 0.0480
+Episode 17/50: Reward = -342.00, Steps = 342, Episode Modifications = 0, Episode Violations = 16, Total Modifications = 0, Total Violations = 254, Mod Rate = 0.0000, Viol Rate = 0.0480
+Episode 18/50: Reward = -77.00, Steps = 77, Episode Modifications = 0, Episode Violations = 2, Total Modifications = 0, Total Violations = 256, Mod Rate = 0.0000, Viol Rate = 0.0476
+Episode 19/50: Reward = -243.00, Steps = 243, Episode Modifications = 0, Episode Violations = 12, Total Modifications = 0, Total Violations = 268, Mod Rate = 0.0000, Viol Rate = 0.0477
+Episode 20/50: Reward = -651.00, Steps = 651, Episode Modifications = 0, Episode Violations = 30, Total Modifications = 0, Total Violations = 298, Mod Rate = 0.0000, Viol Rate = 0.0475
+Episode 21/50: Reward = -218.00, Steps = 218, Episode Modifications = 0, Episode Violations = 14, Total Modifications = 0, Total Violations = 312, Mod Rate = 0.0000, Viol Rate = 0.0481
+Episode 22/50: Reward = -243.00, Steps = 243, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 329, Mod Rate = 0.0000, Viol Rate = 0.0489
+Episode 23/50: Reward = -203.00, Steps = 203, Episode Modifications = 0, Episode Violations = 11, Total Modifications = 0, Total Violations = 340, Mod Rate = 0.0000, Viol Rate = 0.0490
+Episode 24/50: Reward = -394.00, Steps = 394, Episode Modifications = 0, Episode Violations = 24, Total Modifications = 0, Total Violations = 364, Mod Rate = 0.0000, Viol Rate = 0.0497
+Episode 25/50: Reward = -780.00, Steps = 780, Episode Modifications = 0, Episode Violations = 30, Total Modifications = 0, Total Violations = 394, Mod Rate = 0.0000, Viol Rate = 0.0486
+Episode 26/50: Reward = -463.00, Steps = 463, Episode Modifications = 0, Episode Violations = 30, Total Modifications = 0, Total Violations = 424, Mod Rate = 0.0000, Viol Rate = 0.0495
+Episode 27/50: Reward = -79.00, Steps = 79, Episode Modifications = 0, Episode Violations = 4, Total Modifications = 0, Total Violations = 428, Mod Rate = 0.0000, Viol Rate = 0.0495
+Episode 28/50: Reward = -128.00, Steps = 128, Episode Modifications = 0, Episode Violations = 7, Total Modifications = 0, Total Violations = 435, Mod Rate = 0.0000, Viol Rate = 0.0496
+Episode 29/50: Reward = -273.00, Steps = 273, Episode Modifications = 0, Episode Violations = 12, Total Modifications = 0, Total Violations = 447, Mod Rate = 0.0000, Viol Rate = 0.0494
+Episode 30/50: Reward = -125.00, Steps = 125, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 453, Mod Rate = 0.0000, Viol Rate = 0.0494
+Episode 31/50: Reward = -229.00, Steps = 229, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 470, Mod Rate = 0.0000, Viol Rate = 0.0500
+Episode 32/50: Reward = -86.00, Steps = 86, Episode Modifications = 0, Episode Violations = 4, Total Modifications = 0, Total Violations = 474, Mod Rate = 0.0000, Viol Rate = 0.0500
+Episode 33/50: Reward = -338.00, Steps = 338, Episode Modifications = 0, Episode Violations = 14, Total Modifications = 0, Total Violations = 488, Mod Rate = 0.0000, Viol Rate = 0.0497                                                                                    Best trial: 3. Best value: -26.5853:  25%|██▌       | 5/20 [39:37<41:59, 167.97s/it]Best trial: 5. Best value: -19.7453:  25%|██▌       | 5/20 [39:37<41:59, 167.97s/it]Best trial: 5. Best value: -19.7453:  30%|███       | 6/20 [39:37<2:41:36, 692.64s/it]                                                                                      Best trial: 5. Best value: -19.7453:  30%|███       | 6/20 [39:38<2:41:36, 692.64s/it]Best trial: 5. Best value: -19.7453:  30%|███       | 6/20 [39:38<2:41:36, 692.64s/it]Best trial: 5. Best value: -19.7453:  35%|███▌      | 7/20 [39:38<1:41:06, 466.67s/it]
+Episode 34/50: Reward = -174.00, Steps = 174, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 494, Mod Rate = 0.0000, Viol Rate = 0.0494
+Episode 35/50: Reward = -240.00, Steps = 240, Episode Modifications = 0, Episode Violations = 7, Total Modifications = 0, Total Violations = 501, Mod Rate = 0.0000, Viol Rate = 0.0489
+Episode 36/50: Reward = -182.00, Steps = 182, Episode Modifications = 0, Episode Violations = 9, Total Modifications = 0, Total Violations = 510, Mod Rate = 0.0000, Viol Rate = 0.0489
+Episode 37/50: Reward = -250.00, Steps = 250, Episode Modifications = 0, Episode Violations = 18, Total Modifications = 0, Total Violations = 528, Mod Rate = 0.0000, Viol Rate = 0.0495
+Episode 38/50: Reward = -563.00, Steps = 563, Episode Modifications = 0, Episode Violations = 22, Total Modifications = 0, Total Violations = 550, Mod Rate = 0.0000, Viol Rate = 0.0489
+Episode 39/50: Reward = -79.00, Steps = 79, Episode Modifications = 0, Episode Violations = 2, Total Modifications = 0, Total Violations = 552, Mod Rate = 0.0000, Viol Rate = 0.0488
+Episode 40/50: Reward = -319.00, Steps = 319, Episode Modifications = 0, Episode Violations = 15, Total Modifications = 0, Total Violations = 567, Mod Rate = 0.0000, Viol Rate = 0.0487
+Episode 41/50: Reward = -526.00, Steps = 526, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 584, Mod Rate = 0.0000, Viol Rate = 0.0480
+Episode 42/50: Reward = -580.00, Steps = 580, Episode Modifications = 0, Episode Violations = 26, Total Modifications = 0, Total Violations = 610, Mod Rate = 0.0000, Viol Rate = 0.0479
+Episode 43/50: Reward = -473.00, Steps = 473, Episode Modifications = 0, Episode Violations = 21, Total Modifications = 0, Total Violations = 631, Mod Rate = 0.0000, Viol Rate = 0.0478
+Episode 44/50: Reward = -183.00, Steps = 183, Episode Modifications = 0, Episode Violations = 7, Total Modifications = 0, Total Violations = 638, Mod Rate = 0.0000, Viol Rate = 0.0476
+Episode 45/50: Reward = -315.00, Steps = 315, Episode Modifications = 0, Episode Violations = 13, Total Modifications = 0, Total Violations = 651, Mod Rate = 0.0000, Viol Rate = 0.0475
+Episode 46/50: Reward = -699.00, Steps = 699, Episode Modifications = 0, Episode Violations = 43, Total Modifications = 0, Total Violations = 694, Mod Rate = 0.0000, Viol Rate = 0.0482
+Episode 47/50: Reward = -297.00, Steps = 297, Episode Modifications = 0, Episode Violations = 12, Total Modifications = 0, Total Violations = 706, Mod Rate = 0.0000, Viol Rate = 0.0480
+Episode 48/50: Reward = -51.00, Steps = 51, Episode Modifications = 0, Episode Violations = 3, Total Modifications = 0, Total Violations = 709, Mod Rate = 0.0000, Viol Rate = 0.0480
+Episode 49/50: Reward = -91.00, Steps = 91, Episode Modifications = 0, Episode Violations = 10, Total Modifications = 0, Total Violations = 719, Mod Rate = 0.0000, Viol Rate = 0.0484
+Episode 50/50: Reward = -710.00, Steps = 710, Episode Modifications = 0, Episode Violations = 32, Total Modifications = 0, Total Violations = 751, Mod Rate = 0.0000, Viol Rate = 0.0483
+
+Evaluation Summary:
+Average Reward: -311.18
+Standard Deviation: 226.85
+Avg Shield Modifications per Step: 0.0000
+Total Constraint Violations: 751
+Avg Constraint Violations per Step: 0.0483
+[I 2025-12-26 15:52:21,831] Trial 5 finished with value: -19.745332016977866 and parameters: {'lr': 0.00043372253976815405, 'gamma': 0.985847943678893, 'hidden_dim': 256, 'use_orthogonal_init': False, 'num_layers': 3, 'cost_gamma': 0.9283103506448824, 'cost_lam': 0.9834336572302745, 'clip_eps': 0.299007273153671, 'ent_coef': 0.01987289003967312, 'epochs': 1, 'batch_size': 64, 'budget': 0.09594324164859154, 'max_kl': 0.01619859001074671}. Best is trial 5 with value: -19.745332016977866.
+[Seed set to 42]
+Observation space: Discrete(48)
+[DEBUG] use_cnn: False
+[DEBUG] Gym observation shape: ()
+[DEBUG] Input shape passed to ModularNetwork: ()
+[DEBUG] Using benchmark
+requirements file: src/requirements/cliff_safe.cnf
+num vars: 6, num flags: 2
+Shield ordering: 5,4,3,2,1,0
+[] [<pishield.propositional_requirements.constraint.Constraint object at 0x4941ab710>, <pishield.propositional_requirements.constraint.Constraint object at 0x4944704d0>]
+head 0 with old rules 2
+head 0 with new rules 3
+[<pishield.propositional_requirements.constraint.Constraint object at 0x49449e650>] []
+head n1 with old rules 1
+head n1 with new rules 1
+[<pishield.propositional_requirements.constraint.Constraint object at 0x497b4c9d0>] []
+head n2 with old rules 1
+head n2 with new rules 1
+Generated 2 strata of constraints with [5 4 3 2 1 0] centrality
+Training CPOAgent agent on CliffWalking-v1 with shield post: False with shield layer: False with shield pre: False
+Error in trial: One of the differentiated Tensors appears to not have been used in the graph. Set allow_unused=True if this is the desired behavior.
+[I 2025-12-26 15:52:23,282] Trial 6 finished with value: -1000.0 and parameters: {'lr': 0.00010793486158297192, 'gamma': 0.9285143939866909, 'hidden_dim': 512, 'use_orthogonal_init': True, 'num_layers': 4, 'cost_gamma': 0.9604227386981207, 'cost_lam': 0.9963346910070543, 'clip_eps': 0.20964817030488309, 'ent_coef': 0.027301874826156865, 'epochs': 3, 'batch_size': 128, 'budget': 0.1861964041770135, 'max_kl': 0.010657983945398618}. Best is trial 5 with value: -19.745332016977866.
+[Seed set to 42]
+Observation space: Discrete(48)
+[DEBUG] use_cnn: False
+[DEBUG] Gym observation shape: ()
+[DEBUG] Input shape passed to ModularNetwork: ()
+[DEBUG] Using benchmark
+requirements file: src/requirements/cliff_safe.cnf
+num vars: 6, num flags: 2
+Shield ordering: 5,4,3,2,1,0
+[] [<pishield.propositional_requirements.constraint.Constraint object at 0x4952ee490>, <pishield.propositional_requirements.constraint.Constraint object at 0x11e3a3a90>]
+head 0 with old rules 2
+head 0 with new rules 3
+[<pishield.propositional_requirements.constraint.Constraint object at 0x42087dad0>] []
+head n1 with old rules 1
+head n1 with new rules 1
+[<pishield.propositional_requirements.constraint.Constraint object at 0x30ba09510>] []
+head n2 with old rules 1
+head n2 with new rules 1
+Generated 2 strata of constraints with [5 4 3 2 1 0] centrality
+Training CPOAgent agent on CliffWalking-v1 with shield post: False with shield layer: False with shield pre: False
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 10, Avg Reward (10): -445.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 171, Viol Rate:  0.038
+[Checkpoint] New best avg reward: -445.90 at episode 10
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 20, Avg Reward (10): -573.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 413, Viol Rate:  0.041
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 30, Avg Reward (10): -617.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 654, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 40, Avg Reward (10): -507.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 830, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 50, Avg Reward (10): -460.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1019, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 60, Avg Reward (10): -506.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1236, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 70, Avg Reward (10): -426.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1397, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -426.50 at episode 70
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 80, Avg Reward (10): -645.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1660, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 90, Avg Reward (10): -535.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 1868, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 100, Avg Reward (10): -621.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2101, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 110, Avg Reward (10): -471.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2278, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 120, Avg Reward (10): -391.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2459, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -391.20 at episode 120
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 130, Avg Reward (10): -483.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2628, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 140, Avg Reward (10): -431.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 2798, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 150, Avg Reward (10): -584.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3026, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 160, Avg Reward (10): -388.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3207, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -388.60 at episode 160
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 170, Avg Reward (10): -569.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3434, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 180, Avg Reward (10): -644.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3670, Viol Rate:  0.039
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 190, Avg Reward (10): -501.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 3877, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 200, Avg Reward (10): -544.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4107, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 210, Avg Reward (10): -558.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4314, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 220, Avg Reward (10): -485.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4538, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 230, Avg Reward (10): -414.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4697, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 240, Avg Reward (10): -509.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 4878, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 250, Avg Reward (10): -478.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5080, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 260, Avg Reward (10): -469.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5282, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 270, Avg Reward (10): -409.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5444, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 280, Avg Reward (10): -570.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5679, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 290, Avg Reward (10): -486.70, Total Mods: 0, Mod Rate: 0.000, Total Violations: 5867, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 300, Avg Reward (10): -472.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6031, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 310, Avg Reward (10): -446.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6192, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 320, Avg Reward (10): -592.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6442, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 330, Avg Reward (10): -595.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6689, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 340, Avg Reward (10): -650.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 6966, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 350, Avg Reward (10): -535.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7182, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 360, Avg Reward (10): -408.60, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7361, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 370, Avg Reward (10): -428.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7522, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 380, Avg Reward (10): -321.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7673, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -321.40 at episode 380
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 390, Avg Reward (10): -488.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 7876, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 400, Avg Reward (10): -291.50, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8004, Viol Rate:  0.040
+[Checkpoint] New best avg reward: -291.50 at episode 400
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 410, Avg Reward (10): -416.90, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8163, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 420, Avg Reward (10): -464.20, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8336, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 430, Avg Reward (10): -413.30, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8490, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 440, Avg Reward (10): -633.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8726, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 450, Avg Reward (10): -606.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 8966, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 460, Avg Reward (10): -459.00, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9152, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 470, Avg Reward (10): -603.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9384, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 480, Avg Reward (10): -523.40, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9606, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 490, Avg Reward (10): -504.80, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9832, Viol Rate:  0.040
+[CliffWalking-v1] [CPOAgent] [Unshielded] [] [OBS], Episode 500, Avg Reward (10): -394.10, Total Mods: 0, Mod Rate: 0.000, Total Violations: 9982, Viol Rate:  0.040
+
+[Post-Training] Loading best weights with avg reward: -291.50
+
+[Evaluation] Evaluating CPOAgent for 50 episodes (Shield Layer: False, Shield Post: False)
+Episode 1/50: Reward = -56.00, Steps = 56, Episode Modifications = 0, Episode Violations = 3, Total Modifications = 0, Total Violations = 3, Mod Rate = 0.0000, Viol Rate = 0.0536
+Episode 2/50: Reward = -298.00, Steps = 298, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 20, Mod Rate = 0.0000, Viol Rate = 0.0565
+Episode 3/50: Reward = -203.00, Steps = 203, Episode Modifications = 0, Episode Violations = 8, Total Modifications = 0, Total Violations = 28, Mod Rate = 0.0000, Viol Rate = 0.0503
+Episode 4/50: Reward = -126.00, Steps = 126, Episode Modifications = 0, Episode Violations = 5, Total Modifications = 0, Total Violations = 33, Mod Rate = 0.0000, Viol Rate = 0.0483
+Episode 5/50: Reward = -510.00, Steps = 510, Episode Modifications = 0, Episode Violations = 18, Total Modifications = 0, Total Violations = 51, Mod Rate = 0.0000, Viol Rate = 0.0427
+Episode 6/50: Reward = -536.00, Steps = 536, Episode Modifications = 0, Episode Violations = 27, Total Modifications = 0, Total Violations = 78, Mod Rate = 0.0000, Viol Rate = 0.0451
+Episode 7/50: Reward = -133.00, Steps = 133, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 84, Mod Rate = 0.0000, Viol Rate = 0.0451
+Episode 8/50: Reward = -735.00, Steps = 735, Episode Modifications = 0, Episode Violations = 31, Total Modifications = 0, Total Violations = 115, Mod Rate = 0.0000, Viol Rate = 0.0443                                                                                      
+Episode 9/50: Reward = -576.00, Steps = 576, Episode Modifications = 0, Episode Violations = 16, Total Modifications = 0, Total Violations = 131, Mod Rate = 0.0000, Viol Rate = 0.0413
+Episode 10/50: Reward = -360.00, Steps = 360, Episode Modifications = 0, Episode Violations = 21, Total Modifications = 0, Total Violations = 152, Mod Rate = 0.0000, Viol Rate = 0.0430
+Episode 11/50: Reward = -735.00, Steps = 735, Episode Modifications = 0, Episode Violations = 22, Total Modifications = 0, Total Violations = 174, Mod Rate = 0.0000, Viol Rate = 0.0408
+Episode 12/50: Reward = -635.00, Steps = 635, Episode Modifications = 0, Episode Violations = 27, Total Modifications = 0, Total Violations = 201, Mod Rate = 0.0000, Viol Rate = 0.0410
+Episode 13/50: Reward = -345.00, Steps = 345, Episode Modifications = 0, Episode Violations = 10, Total Modifications = 0, Total Violations = 211, Mod Rate = 0.0000, Viol Rate = 0.0402
+Episode 14/50: Reward = -933.00, Steps = 933, Episode Modifications = 0, Episode Violations = 44, Total Modifications = 0, Total Violations = 255, Mod Rate = 0.0000, Viol Rate = 0.0413
+Episode 15/50: Reward = -334.00, Steps = 334, Episode Modifications = 0, Episode Violations = 12, Total Modifications = 0, Total Violations = 267, Mod Rate = 0.0000, Viol Rate = 0.0410
+Episode 16/50: Reward = -216.00, Steps = 216, Episode Modifications = 0, Episode Violations = 3, Total Modifications = 0, Total Violations = 270, Mod Rate = 0.0000, Viol Rate = 0.0401
+Episode 17/50: Reward = -208.00, Steps = 208, Episode Modifications = 0, Episode Violations = 5, Total Modifications = 0, Total Violations = 275, Mod Rate = 0.0000, Viol Rate = 0.0396
+Episode 18/50: Reward = -703.00, Steps = 703, Episode Modifications = 0, Episode Violations = 20, Total Modifications = 0, Total Violations = 295, Mod Rate = 0.0000, Viol Rate = 0.0386
+Episode 19/50: Reward = -358.00, Steps = 358, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 312, Mod Rate = 0.0000, Viol Rate = 0.0390
+Episode 20/50: Reward = -437.00, Steps = 437, Episode Modifications = 0, Episode Violations = 21, Total Modifications = 0, Total Violations = 333, Mod Rate = 0.0000, Viol Rate = 0.0395
+Episode 21/50: Reward = -115.00, Steps = 115, Episode Modifications = 0, Episode Violations = 8, Total Modifications = 0, Total Violations = 341, Mod Rate = 0.0000, Viol Rate = 0.0399
+Episode 22/50: Reward = -619.00, Steps = 619, Episode Modifications = 0, Episode Violations = 22, Total Modifications = 0, Total Violations = 363, Mod Rate = 0.0000, Viol Rate = 0.0396
+Episode 23/50: Reward = -553.00, Steps = 553, Episode Modifications = 0, Episode Violations = 26, Total Modifications = 0, Total Violations = 389, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 24/50: Reward = -128.00, Steps = 128, Episode Modifications = 0, Episode Violations = 2, Total Modifications = 0, Total Violations = 391, Mod Rate = 0.0000, Viol Rate = 0.0397
+Episode 25/50: Reward = -561.00, Steps = 561, Episode Modifications = 0, Episode Violations = 19, Total Modifications = 0, Total Violations = 410, Mod Rate = 0.0000, Viol Rate = 0.0394
+Episode 26/50: Reward = -526.00, Steps = 526, Episode Modifications = 0, Episode Violations = 26, Total Modifications = 0, Total Violations = 436, Mod Rate = 0.0000, Viol Rate = 0.0399
+Episode 27/50: Reward = -230.00, Steps = 230, Episode Modifications = 0, Episode Violations = 13, Total Modifications = 0, Total Violations = 449, Mod Rate = 0.0000, Viol Rate = 0.0402
+Episode 28/50: Reward = -98.00, Steps = 98, Episode Modifications = 0, Episode Violations = 2, Total Modifications = 0, Total Violations = 451, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 29/50: Reward = -679.00, Steps = 679, Episode Modifications = 0, Episode Violations = 15, Total Modifications = 0, Total Violations = 466, Mod Rate = 0.0000, Viol Rate = 0.0390
+Episode 30/50: Reward = -100.00, Steps = 100, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 472, Mod Rate = 0.0000, Viol Rate = 0.0392
+Episode 31/50: Reward = -141.00, Steps = 141, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 478, Mod Rate = 0.0000, Viol Rate = 0.0392
+Episode 32/50: Reward = -311.00, Steps = 311, Episode Modifications = 0, Episode Violations = 15, Total Modifications = 0, Total Violations = 493, Mod Rate = 0.0000, Viol Rate = 0.0394
+Episode 33/50: Reward = -226.00, Steps = 226, Episode Modifications = 0, Episode Violations = 8, Total Modifications = 0, Total Violations = 501, Mod Rate = 0.0000, Viol Rate = 0.0394
+Episode 34/50: Reward = -1000.00, Steps = 1000, Episode Modifications = 0, Episode Violations = 40, Total Modifications = 0, Total Violations = 541, Mod Rate = 0.0000, Viol Rate = 0.0394
+Episode 35/50: Reward = -348.00, Steps = 348, Episode Modifications = 0, Episode Violations = 7, Total Modifications = 0, Total Violations = 548, Mod Rate = 0.0000, Viol Rate = 0.0389
+Episode 36/50: Reward = -489.00, Steps = 489, Episode Modifications = 0, Episode Violations = 29, Total Modifications = 0, Total Violations = 577, Mod Rate = 0.0000, Viol Rate = 0.0396
+Episode 37/50: Reward = -1000.00, Steps = 1000, Episode Modifications = 0, Episode Violations = 49, Total Modifications = 0, Total Violations = 626, Mod Rate = 0.0000, Viol Rate = 0.0402
+Episode 38/50: Reward = -150.00, Steps = 150, Episode Modifications = 0, Episode Violations = 9, Total Modifications = 0, Total Violations = 635, Mod Rate = 0.0000, Viol Rate = 0.0404
+Episode 39/50: Reward = -370.00, Steps = 370, Episode Modifications = 0, Episode Violations = 17, Total Modifications = 0, Total Violations = 652, Mod Rate = 0.0000, Viol Rate = 0.0405
+Episode 40/50: Reward = -511.00, Steps = 511, Episode Modifications = 0, Episode Violations = 18, Total Modifications = 0, Total Violations = 670, Mod Rate = 0.0000, Viol Rate = 0.0404
+Episode 41/50: Reward = -1000.00, Steps = 1000, Episode Modifications = 0, Episode Violations = 33, Total Modifications = 0, Total Violations = 703, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 42/50: Reward = -339.00, Steps = 339, Episode Modifications = 0, Episode Violations = 16, Total Modifications = 0, Total Violations = 719, Mod Rate = 0.0000, Viol Rate = 0.0401
+Episode 43/50: Reward = -1000.00, Steps = 1000, Episode Modifications = 0, Episode Violations = 37, Total Modifications = 0, Total Violations = 756, Mod Rate = 0.0000, Viol Rate = 0.0399
+Episode 44/50: Reward = -163.00, Steps = 163, Episode Modifications = 0, Episode Violations = 7, Total Modifications = 0, Total Violations = 763, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 45/50: Reward = -300.00, Steps = 300, Episode Modifications = 0, Episode Violations = 13, Total Modifications = 0, Total Violations = 776, Mod Rate = 0.0000, Viol Rate = 0.0400
+Episode 46/50: Reward = -334.00, Steps = 334, Episode Modifications = 0, Episode Violations = 22, Total Modifications = 0, Total Violations = 798, Mod Rate = 0.0000, Viol Rate = 0.0405
+Episode 47/50: Reward = -459.00, Steps = 459, Episode Modifications = 0, Episode Violations = 21, Total Modifications = 0, Total Violations = 819, Mod Rate = 0.0000, Viol Rate = 0.0406
+Episode 48/50: Reward = -129.00, Steps = 129, Episode Modifications = 0, Episode Violations = 10, Total Modifications = 0, Total Violations = 829, Mod Rate = 0.0000, Viol Rate = 0.0408
+Episode 49/50: Reward = -204.00, Steps = 204, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 835, Mod Rate = 0.0000, Viol Rate = 0.0407
+Episode 50/50: Reward = -169.00, Steps = 169, Episode Modifications = 0, Episode Violations = 6, Total Modifications = 0, Total Violations = 841, Mod Rate = 0.0000, Viol Rate = 0.0406
+
+Evaluation Summary:
+Average Reward: -413.78
+Standard Deviation: 265.91
+Avg Shield Modifications per Step: 0.0000
+Total Constraint Violations: 841
+Avg Constraint Violations per Step: 0.0406
+[I 2025-12-26 18:37:57,421] Trial 7 finished with value: -26.585331560977895 and parameters: {'lr': 0.00045919512949990046, 'gamma': 0.9620907476248831, 'hidden_dim': 512, 'use_orthogonal_init': False, 'num_layers': 3, 'cost_gamma': 0.9127281304759669, 'cost_lam': 0.987840429121204, 'clip_eps': 0.18081527107914705, 'ent_coef': 0.03251715562350577, 'epochs': 7, 'batch_size': 64, 'budget': 0.2675518476393952, 'max_kl': 0.019106458302335382}. Best is trial 5 with value: -19.745332016977866.Best trial: 5. Best value: -19.7453:  35%|███▌      | 7/20 [3:25:12<1:41:06, 466.67s/it]Best trial: 5. Best value: -19.7453:  35%|███▌      | 7/20 [3:25:12<1:41:06, 466.67s/it]Best trial: 5. Best value: -19.7453:  40%|████      | 8/20 [3:25:12<11:36:07, 3480.66s/it]                                                                                          Best trial: 5. Best value: -19.7453:  40%|████      | 8/20 [3:25:13<11:36:07, 3480.66s/it]Best trial: 5. Best value: -19.7453:  40%|████      | 8/20 [3:25:13<11:36:07, 3480.66s/it]Best trial: 5. Best value: -19.7453:  45%|████▌     | 9/20 [3:25:13<7:18:40, 2392.74s/it]                                                                                          Best trial: 5. Best value: -19.7453:  45%|████▌     | 9/20 [3:25:14<7:18:40, 2392.74s/it]Best trial: 5. Best value: -19.7453:  45%|████▌     | 9/20 [3:25:14<7:18:40, 2392.74s/it]Best trial: 5. Best value: -19.7453:  50%|█████     | 10/20 [3:25:14<4:35:41, 1654.20s/it]/opt/anaconda3/envs/thesis_env/lib/python3.11/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

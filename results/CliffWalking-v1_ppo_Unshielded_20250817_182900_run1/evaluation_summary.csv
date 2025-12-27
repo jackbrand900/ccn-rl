@@ -1,0 +1,5 @@
+CliffWalking-v1	PPO	cliff_safe.cnf	Unshielded	1	-23.44	5.37	0	0.0000	0	0.0000
+CliffWalking-v1	PPO	cliff_safe.cnf	Unshielded	2	-25.46	13.06	0	0.0000	1	0.0004
+CliffWalking-v1	PPO	cliff_safe.cnf	Unshielded	3	-36.94	38.59	0	0.0000	13	0.0054
+CliffWalking-v1	PPO	cliff_safe.cnf	Unshielded	4	-51.84	40.22	0	0.0000	14	0.0037
+CliffWalking-v1	PPO	cliff_safe.cnf	Unshielded	5	-38.04	28.70	0	0.0000	6	0.0019

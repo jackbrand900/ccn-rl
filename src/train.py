@@ -820,7 +820,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             xlabel="Episode",
             ylabel="Reward",
             rolling_window=5,
-            run_dir=run_dir,
+            run_dir=run_dir if visualize else None,  # Only save graphs if visualize=True
             show=False,
         )
 

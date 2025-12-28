@@ -23,8 +23,8 @@ def main():
                        help='Environment to tune')
     parser.add_argument('--trials', type=int, default=15,
                        help='Number of Optuna trials per method (default: 15)')
-    parser.add_argument('--train_episodes', type=int, default=300,
-                       help='Number of training episodes during tuning (default: 300)')
+    parser.add_argument('--train_episodes', type=int, default=500,
+                       help='Number of training episodes during tuning (default: 500)')
     parser.add_argument('--eval_episodes', type=int, default=50,
                        help='Number of evaluation episodes during tuning')
     parser.add_argument('--target_reward', type=float, default=None,

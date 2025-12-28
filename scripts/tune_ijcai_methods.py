@@ -23,7 +23,7 @@ from src.train import train, evaluate_policy
 # Since we're focusing on violation/modification rates, we'll use more realistic targets
 # that allow fair comparison even if absolute rewards are lower
 TARGET_REWARDS = {
-    'CartPole-v1': 200.0,  # Realistic target for constrained methods
+    'CartPole-v1': 300.0,  # Realistic target for constrained methods
     'CliffWalking-v1': -15.0,  # Slightly worse than optimal (-13)
     'MiniGrid-DoorKey-5x5-v0': 0.7,  # Realistic target
     'ALE/Seaquest-v5': 800.0,  # Realistic target
@@ -52,26 +52,27 @@ METHODS = [
         'lambda_sem': 0.0,
         'display_name': 'CMDP'
     },
-    {
-        'name': 'ppo_postshield_hard',
-        'agent': 'ppo',
-        'use_shield_post': True,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': 'hard',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Post-hoc (Hard)'
-    },
-    {
-        'name': 'ppo_postshield_soft',
-        'agent': 'ppo',
-        'use_shield_post': True,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': 'soft',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Post-hoc (Soft)'
-    },
+    # Post-hoc methods skipped per user request
+    # {
+    #     'name': 'ppo_postshield_hard',
+    #     'agent': 'ppo',
+    #     'use_shield_post': True,
+    #     'use_shield_pre': False,
+    #     'use_shield_layer': False,
+    #     'mode': 'hard',
+    #     'lambda_sem': 0.0,
+    #     'display_name': 'PPO + Post-hoc (Hard)'
+    # },
+    # {
+    #     'name': 'ppo_postshield_soft',
+    #     'agent': 'ppo',
+    #     'use_shield_post': True,
+    #     'use_shield_pre': False,
+    #     'use_shield_layer': False,
+    #     'mode': 'soft',
+    #     'lambda_sem': 0.0,
+    #     'display_name': 'PPO + Post-hoc (Soft)'
+    # },
     {
         'name': 'ppo_preshield_hard',
         'agent': 'ppo',
@@ -136,7 +137,7 @@ METHODS = [
 ]
 
 
-def objective(trial, env_name, method, target_reward, num_train_episodes=300, num_eval_episodes=50):
+def objective(trial, env_name, method, target_reward, num_train_episodes=500, num_eval_episodes=50):
     """
     Objective function: minimize absolute difference from target reward.
     """
@@ -272,7 +273,7 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=300, nu
         return -1000.0  # Very bad score
 
 
-def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes=300, num_eval_episodes=50):
+def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes=500, num_eval_episodes=50):
     """
     Tune hyperparameters for a specific method on a specific environment.
     """
@@ -302,10 +303,73 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     # Since we return -normalized_diff, we stop if best_value > -0.05
     EARLY_STOP_THRESHOLD = -0.05  # Corresponds to 5% difference from target
     
+    # Check if we already have a good result from previous runs
+    # IMPORTANT: Re-evaluate against the NEW target, not the old stored target
+    completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+    if len(completed_trials) >= 1:
+        best_trial = study.best_trial
+        best_actual_reward = best_trial.user_attrs.get("actual_reward", None)
+        
+        # Re-calculate diff against the NEW target (not the old stored target)
+        if best_actual_reward is not None:
+            reward_diff = abs(best_actual_reward - target_reward)
+            normalized_diff = reward_diff / (abs(target_reward) + 1e-6)
+            # Check if within 5% of NEW target
+            if normalized_diff < 0.05:
+                best_target_old = best_trial.user_attrs.get("target_reward", target_reward)
+                print(f"\n[✓] Found existing trial within 5% of NEW target ({target_reward:.1f})!")
+                print(f"    Best reward: {best_actual_reward:.2f} (new target: {target_reward:.2f}, diff: {reward_diff:.2f})")
+                if best_target_old != target_reward:
+                    print(f"    Note: This trial was originally tuned for target {best_target_old:.2f}")
+                print(f"    Skipping new trials. Use existing best parameters.\n")
+                early_stopped = True
+    
     def progress_callback(study, trial):
         """Callback to track progress and estimate remaining time"""
         nonlocal early_stopped
+        
+        # Only process completed trials
+        if trial.state != optuna.trial.TrialState.COMPLETE:
+            return
+            
         trial_times.append(time.time())
+        
+        # Get actual reward from best trial
+        completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+        if len(completed_trials) < 1:
+            return
+            
+        best_trial = study.best_trial
+        best_actual_reward = best_trial.user_attrs.get("actual_reward", None)
+        
+        # Get current trial info
+        current_reward = trial.user_attrs.get("actual_reward", None)
+        current_diff = trial.user_attrs.get("reward_diff", None)
+        
+        # Check for early stopping (within 5% of NEW target)
+        # Re-calculate normalized diff against the NEW target, not the old stored target
+        if len(completed_trials) >= 2 and best_actual_reward is not None and not early_stopped:
+            reward_diff = abs(best_actual_reward - target_reward)
+            normalized_diff = reward_diff / (abs(target_reward) + 1e-6)
+            # Check if within 5% of NEW target (normalized_diff < 0.05)
+            # Since we return -normalized_diff, we check if -normalized_diff > -0.05
+            if normalized_diff < 0.05:
+                early_stopped = True
+                print(f"\n[✓] Early stopping: Found configuration within 5% of target ({target_reward:.1f})!")
+                print(f"    Best reward: {best_actual_reward:.2f} (target: {target_reward:.2f}, diff: {reward_diff:.2f})")
+                try:
+                    study.stop()
+                except (AttributeError, RuntimeError):
+                    # Older Optuna versions might not have stop() method
+                    # Or study might already be stopped
+                    pass
+                return
+        
+        # For display, use stored values but show current target
+        best_target_old = best_trial.user_attrs.get("target_reward", target_reward)
+        best_diff_old = best_trial.user_attrs.get("reward_diff", None)
+        
+        # Only show progress for completed trials in this run
         if len(trial_times) > 1:
             avg_trial_time = (trial_times[-1] - trial_times[0]) / len(trial_times)
             remaining_trials = n_trials - len(trial_times)
@@ -314,37 +378,11 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
             elapsed = time.time() - method_start_time
             elapsed_str = str(timedelta(seconds=int(elapsed))).split('.')[0]
             
-            # Get actual reward from best trial
-            best_trial = study.best_trial
-            best_actual_reward = best_trial.user_attrs.get("actual_reward", None)
-            best_target = best_trial.user_attrs.get("target_reward", target_reward)
-            best_diff = best_trial.user_attrs.get("reward_diff", None)
-            
-            # Get current trial info
-            current_reward = trial.user_attrs.get("actual_reward", None)
-            current_diff = trial.user_attrs.get("reward_diff", None)
-            
-            # Check for early stopping (within 5% of target)
-            # Note: We need at least 2 completed trials to have a best_value
-            if len(study.trials) >= 2 and study.best_value > EARLY_STOP_THRESHOLD and not early_stopped:
-                early_stopped = True
-                print(f"\n[✓] Early stopping: Found configuration within 5% of target!")
-                if best_actual_reward is not None:
-                    print(f"    Best reward: {best_actual_reward:.2f} (target: {best_target:.2f}, diff: {best_diff:.2f})")
-                try:
-                    study.stop()
-                except AttributeError:
-                    # Older Optuna versions might not have stop() method
-                    # In this case, we'll just note it and continue
-                    pass
-                return
-            
-            # Format output
+            # Format output - show current target, not old stored target
             if best_actual_reward is not None:
-                reward_info = f"Best reward: {best_actual_reward:.2f} (target: {best_target:.2f}"
-                if best_diff is not None:
-                    reward_info += f", diff: {best_diff:.2f}"
-                reward_info += ")"
+                # Calculate diff against current target
+                current_diff_from_target = abs(best_actual_reward - target_reward)
+                reward_info = f"Best reward: {best_actual_reward:.2f} (target: {target_reward:.2f}, diff: {current_diff_from_target:.2f})"
             else:
                 reward_info = f"Best value: {study.best_value:.4f}"
             
@@ -457,8 +495,8 @@ Examples:
                        help='Specific method to tune (default: all)')
     parser.add_argument('--trials', type=int, default=15,
                        help='Number of Optuna trials per method (default: 15)')
-    parser.add_argument('--train_episodes', type=int, default=300,
-                       help='Number of training episodes during tuning (default: 300)')
+    parser.add_argument('--train_episodes', type=int, default=500,
+                       help='Number of training episodes during tuning (default: 500)')
     parser.add_argument('--eval_episodes', type=int, default=50,
                        help='Number of evaluation episodes during tuning')
     parser.add_argument('--target_reward', type=float, default=None,

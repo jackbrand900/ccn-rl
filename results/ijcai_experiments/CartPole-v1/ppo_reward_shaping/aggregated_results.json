@@ -1,58 +1,9 @@
 {
-  "total_violations": {
-    "mean": 466.2,
-    "std": 188.29699944502568,
-    "min": 181.0,
-    "max": 688.0
-  },
-  "avg_violations_per_step": {
-    "mean": 0.013197908630699964,
-    "std": 0.006700309432075073,
-    "min": 0.006572887884116219,
-    "max": 0.02548714529154627
-  },
-  "avg_violations_per_episode": {
-    "mean": 4.662,
-    "std": 1.8829699944502567,
-    "min": 1.81,
-    "max": 6.88
-  },
-  "avg_modifications_per_episode": {
-    "mean": 0.0,
-    "std": 0.0,
-    "min": 0.0,
-    "max": 0.0
-  },
-  "final_reward": {
-    "mean": 289.2,
-    "std": 100.38007770469198,
-    "min": 103.0,
-    "max": 367.0
-  },
-  "env": "CartPole-v1",
-  "total_steps": {
-    "mean": 37164.8,
-    "std": 9991.798624872301,
-    "min": 23282.0,
-    "max": 47772.0
-  },
   "total_modifications": {
     "mean": 0.0,
     "std": 0.0,
     "min": 0.0,
     "max": 0.0
-  },
-  "std_reward": {
-    "mean": 87.83013872018299,
-    "std": 35.37064958964441,
-    "min": 27.16666339468283,
-    "max": 125.55985186356347
-  },
-  "best_avg_reward": {
-    "mean": 425.35999999999996,
-    "std": 50.749092602725426,
-    "min": 335.5,
-    "max": 486.1
   },
   "seed": {
     "mean": 484.2,
@@ -60,23 +11,29 @@
     "min": 42.0,
     "max": 1011.0
   },
-  "train_episodes": {
-    "mean": 500.0,
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
     "std": 0.0,
-    "min": 500.0,
-    "max": 500.0
+    "min": 0.0,
+    "max": 0.0
   },
-  "max_reward": {
-    "mean": 461.2,
-    "std": 77.6,
-    "min": 306.0,
-    "max": 500.0
+  "best_avg_reward": {
+    "mean": 464.38,
+    "std": 39.94948810685815,
+    "min": 385.7,
+    "max": 497.0
+  },
+  "std_reward": {
+    "mean": 104.23688706349753,
+    "std": 22.07372816974193,
+    "min": 69.4627806814556,
+    "max": 136.89667636579057
   },
   "min_reward": {
-    "mean": 109.0,
-    "std": 41.1242021199196,
-    "min": 57.0,
-    "max": 173.0
+    "mean": 111.2,
+    "std": 34.07286310247497,
+    "min": 59.0,
+    "max": 159.0
   },
   "avg_shield_mod_rate": {
     "mean": 0.0,
@@ -84,11 +41,54 @@
     "min": 0.0,
     "max": 0.0
   },
-  "method": "ppo_reward_shaping",
+  "final_reward": {
+    "mean": 413.2,
+    "std": 131.14480546327405,
+    "min": 153.0,
+    "max": 500.0
+  },
+  "env": "CartPole-v1",
   "avg_reward": {
-    "mean": 371.648,
-    "std": 99.91798624872301,
-    "min": 232.82,
-    "max": 477.72
+    "mean": 408.838,
+    "std": 67.72522171244624,
+    "min": 281.0,
+    "max": 476.39
+  },
+  "avg_violations_per_episode": {
+    "mean": 5.38,
+    "std": 2.106266839695294,
+    "min": 2.43,
+    "max": 8.05
+  },
+  "total_violations": {
+    "mean": 538.0,
+    "std": 210.62668396952935,
+    "min": 243.0,
+    "max": 805.0
+  },
+  "max_reward": {
+    "mean": 500.0,
+    "std": 0.0,
+    "min": 500.0,
+    "max": 500.0
+  },
+  "avg_violations_per_step": {
+    "mean": 0.014095601674883168,
+    "std": 0.006761014545465866,
+    "min": 0.005100862738512563,
+    "max": 0.023131672597864767
+  },
+  "train_episodes": {
+    "mean": 500.0,
+    "std": 0.0,
+    "min": 500.0,
+    "max": 500.0
+  },
+  "method": "ppo_reward_shaping",
+  "total_steps": {
+    "mean": 40883.8,
+    "std": 6772.522171244625,
+    "min": 28100.0,
+    "max": 47639.0
   }
 }

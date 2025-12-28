@@ -218,7 +218,7 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constraints=True, visualize=False,
+def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_window=50, monitor_constraints=True, visualize=False,
                  softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1, run_dir=None):
     if run_dir is not None:
         rewards_log_path = os.path.join(run_dir, f"train_metrics_run{run_id}.csv")
@@ -352,6 +352,21 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                     episode_modification_rate
                 ])
 
+        # Checkpointing: use larger window for more stable performance measurement
+        if checkpoint_window and episode >= checkpoint_window and episode % print_interval == 0:
+            checkpoint_avg_reward = np.mean(episode_rewards[-checkpoint_window:])
+            if checkpoint_avg_reward > best_avg_reward:
+                best_avg_reward = checkpoint_avg_reward
+                best_weights = copy.deepcopy(agent.get_weights())
+                no_improve_counter = 0
+                print(f"[Checkpoint] New best avg reward ({checkpoint_window} episodes): {best_avg_reward:.2f} at episode {episode}")
+            else:
+                no_improve_counter += print_interval
+                if no_improve_counter >= early_stop_patience:
+                    print(f"[Early Stopping] No improvement for {early_stop_patience} episodes. Stopping training.")
+                    break
+        
+        # Logging: use smaller window for more frequent updates
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
             use_ram = 'RAM' if getattr(env, 'use_ram', False) else 'OBS'
@@ -381,17 +396,6 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             if hasattr(agent, "epsilon"):
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
             print(log_msg)
-
-            if avg_reward > best_avg_reward:
-                best_avg_reward = avg_reward
-                best_weights = copy.deepcopy(agent.get_weights())
-                no_improve_counter = 0
-                print(f"[Checkpoint] New best avg reward: {best_avg_reward:.2f} at episode {episode}")
-            else:
-                no_improve_counter += print_interval
-                if no_improve_counter >= early_stop_patience:
-                    print(f"[Early Stopping] No improvement for {early_stop_patience} episodes. Stopping training.")
-                    break
 
 
     if visualize:

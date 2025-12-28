@@ -420,16 +420,15 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     print(f"  Params: {trial.params}")
     
     # Test the best params to get actual reward
-    # Use fewer episodes for final test to save time (we already know it's good from tuning)
-    test_episodes = min(num_train_episodes, 200)  # Cap at 200 for faster testing
-    print(f"\n  Testing best parameters (using {test_episodes} episodes for speed)...")
+    # Use the same number of episodes as tuning for fair comparison
+    print(f"\n  Testing best parameters (using {num_train_episodes} episodes, same as tuning)...")
     best_agent_kwargs = trial.params.copy()
     
     # Train with best params
     agent, episode_rewards, best_weights, best_avg_reward, env = train(
         agent=method['agent'],
         env_name=env_name,
-        num_episodes=test_episodes,
+        num_episodes=num_train_episodes,
         use_shield_post=method['use_shield_post'],
         use_shield_pre=method['use_shield_pre'],
         use_shield_layer=method['use_shield_layer'],
@@ -445,6 +444,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     if hasattr(agent, 'load_weights') and best_weights is not None:
         agent.load_weights(best_weights)
     
+    # Evaluate - this is the true performance metric (deterministic, no exploration)
     results = evaluate_policy(
         agent,
         env,
@@ -456,7 +456,8 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     )
     
     actual_reward = results['avg_reward']
-    print(f"  Actual reward: {actual_reward:.2f} (target: {target_reward:.2f}, diff: {abs(actual_reward - target_reward):.2f})")
+    print(f"  Evaluation reward: {actual_reward:.2f} (target: {target_reward:.2f}, diff: {abs(actual_reward - target_reward):.2f})")
+    print(f"  Note: Training reward ({best_avg_reward:.2f}) may be higher due to exploration during training.")
     print(f"{'='*80}\n")
     
     # Save to YAML

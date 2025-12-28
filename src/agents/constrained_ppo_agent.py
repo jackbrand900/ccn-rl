@@ -300,7 +300,12 @@ class ConstrainedPPOAgent:
                 value_out = self.value_net(batch_states)
                 if isinstance(value_out, tuple):
                     value_out = value_out[0]
-                value_preds = value_out.squeeze()
+                value_preds = value_out.squeeze(-1)  # Only squeeze last dimension to preserve batch dimension
+                # Ensure shapes match (handle edge case of batch_size=1)
+                if value_preds.dim() == 0:
+                    value_preds = value_preds.unsqueeze(0)
+                if batch_returns.dim() == 0:
+                    batch_returns = batch_returns.unsqueeze(0)
                 value_loss = nn.MSELoss()(value_preds, batch_returns)
                 self.optimizer.zero_grad()
                 value_loss.backward()
@@ -311,7 +316,12 @@ class ConstrainedPPOAgent:
                 cost_out = self.cost_value_net(batch_states)
                 if isinstance(cost_out, tuple):
                     cost_out = cost_out[0]
-                cost_value_preds = cost_out.squeeze()
+                cost_value_preds = cost_out.squeeze(-1)  # Only squeeze last dimension to preserve batch dimension
+                # Ensure shapes match (handle edge case of batch_size=1)
+                if cost_value_preds.dim() == 0:
+                    cost_value_preds = cost_value_preds.unsqueeze(0)
+                if batch_cost_returns.dim() == 0:
+                    batch_cost_returns = batch_cost_returns.unsqueeze(0)
                 cost_value_loss = nn.MSELoss()(cost_value_preds, batch_cost_returns)
                 self.cost_optimizer.zero_grad()
                 cost_value_loss.backward()

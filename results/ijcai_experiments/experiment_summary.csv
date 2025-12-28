@@ -1,0 +1,6 @@
+avg_reward,std_reward,max_reward,min_reward,avg_shield_mod_rate,avg_violations_per_step,avg_violations_per_episode,avg_modifications_per_episode,total_violations,total_modifications,total_steps,train_episodes,best_avg_reward,final_reward,seed,method,env
+60.8,41.28389516506406,163.0,16.0,0.0,0.06085526315789474,3.7,0.0,37,0,608,50,100.6,39.0,42,cppo,CartPole-v1
+24.7,22.662965384079815,90.0,9.0,0.0,0.12955465587044535,3.2,0.0,32,0,247,50,35.1,14.0,123,cppo,CartPole-v1
+73.0,51.710733895391584,177.0,13.0,0.0,0.10410958904109589,7.6,0.0,76,0,730,50,59.8,90.0,456,cppo,CartPole-v1
+51.4,33.39221466150456,119.0,12.0,0.0,0.1264591439688716,6.5,0.0,65,0,514,50,42.8,40.0,789,cppo,CartPole-v1
+25.0,21.05231578710523,82.0,11.0,0.0,0.084,2.1,0.0,21,0,250,50,41.5,15.0,1011,cppo,CartPole-v1

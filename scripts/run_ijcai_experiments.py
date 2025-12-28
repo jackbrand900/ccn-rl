@@ -21,11 +21,15 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
+import matplotlib.pyplot as plt
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.train import train, evaluate_policy, make_run_dir
+from src.utils import graphing
 
 # Fixed seeds for reproducibility (5 runs per configuration)
 SEEDS = [42, 123, 456, 789, 1011]
@@ -38,18 +42,27 @@ ENVIRONMENTS = [
     'ALE/Seaquest-v5',
 ]
 
-# Methods to compare (8 total)
+# Human-friendly display names for environments (for paper/graphs)
+ENV_DISPLAY_NAMES = {
+    'CliffWalking-v1': 'Cliff Walking',
+    'CartPole-v1': 'Cart Pole',
+    'MiniGrid-DoorKey-5x5-v0': 'Door Key',
+    'ALE/Seaquest-v5': 'Seaquest',
+}
+
+# Methods to compare (9 total, CPO skipped for now)
 METHODS = [
-    {
-        'name': 'cpo',
-        'agent': 'cpo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': '',
-        'lambda_sem': 0.0,
-        'display_name': 'CPO'
-    },
+    # CPO skipped for now as requested
+    # {
+    #     'name': 'cpo',
+    #     'agent': 'cpo',
+    #     'use_shield_post': False,
+    #     'use_shield_pre': False,
+    #     'use_shield_layer': False,
+    #     'mode': '',
+    #     'lambda_sem': 0.0,
+    #     'display_name': 'CPO'
+    # },
     {
         'name': 'cppo',
         'agent': 'cppo',
@@ -440,6 +453,205 @@ def aggregate_results(all_results):
     return aggregated
 
 
+def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
+    """
+    Generate graphs for violation and modification rates over time for all methods.
+    Aggregates across 5 runs and creates publication-quality plots.
+    """
+    import glob
+    
+    for env_name in envs_to_run:
+        env_safe = env_name.replace('/', '_')
+        env_dir = os.path.join(base_dir, env_safe)
+        
+        if not os.path.exists(env_dir):
+            continue
+        
+        # Get human-friendly display name
+        env_display = ENV_DISPLAY_NAMES.get(env_name, env_name)
+        
+        print(f"\nGenerating graphs for {env_display} ({env_name})...")
+        
+        # Collect data for all methods
+        all_method_data = {}
+        
+        for method in methods_to_run:
+            method_dir = os.path.join(env_dir, method['name'])
+            if not os.path.exists(method_dir):
+                continue
+            
+            # Load all training CSV files for this method
+            # CSV files are in subdirectories like run_42/, run_123/, etc.
+            csv_files = glob.glob(os.path.join(method_dir, "**/train_metrics_run*.csv"), recursive=True)
+            # Also check directly in method_dir (in case structure is different)
+            if not csv_files:
+                csv_files = glob.glob(os.path.join(method_dir, "train_metrics_run*.csv"))
+            
+            if not csv_files:
+                continue
+            
+            # Load and aggregate across runs
+            dfs = []
+            for csv_file in csv_files:
+                try:
+                    df = pd.read_csv(csv_file)
+                    dfs.append(df)
+                except Exception as e:
+                    print(f"  Warning: Could not load {csv_file}: {e}")
+                    continue
+            
+            if not dfs:
+                continue
+            
+            # Combine all runs
+            combined = pd.concat(dfs, ignore_index=True)
+            
+            # Group by episode and compute mean/std
+            grouped = combined.groupby('episode').agg({
+                'violation_rate': ['mean', 'std'],
+                'modification_rate': ['mean', 'std'],
+                'reward': ['mean', 'std']
+            }).reset_index()
+            
+            # Flatten column names
+            grouped.columns = ['episode', 'viol_mean', 'viol_std', 'mod_mean', 'mod_std', 'reward_mean', 'reward_std']
+            
+            all_method_data[method['display_name']] = grouped
+        
+        if not all_method_data:
+            print(f"  No data found for {env_name}")
+            continue
+        
+        # Create plots directory
+        plots_dir = os.path.join(env_dir, 'plots')
+        os.makedirs(plots_dir, exist_ok=True)
+        
+        # Plot 1: Violation rates over time (all methods comparison)
+        fig, ax = plt.subplots(figsize=(12, 7))
+        colors = plt.cm.tab10(np.linspace(0, 1, len(all_method_data)))
+        
+        for (method_name, data), color in zip(all_method_data.items(), colors):
+            episodes = data['episode'].values
+            viol_mean = data['viol_mean'].values
+            viol_std = data['viol_std'].values
+            
+            ax.plot(episodes, viol_mean, label=method_name, color=color, linewidth=2)
+            ax.fill_between(episodes, viol_mean - viol_std, viol_mean + viol_std, 
+                          color=color, alpha=0.2)
+        
+        ax.set_xlabel('Episode', fontsize=12)
+        ax.set_ylabel('Violation Rate (per step)', fontsize=12)
+        ax.set_title(f'{env_display} - Violation Rates Over Time (Mean ± Std across 5 runs)', fontsize=14)
+        ax.legend(loc='best', fontsize=9)
+        ax.grid(alpha=0.3)
+        
+        plt.tight_layout()
+        viol_plot_path = os.path.join(plots_dir, f'{env_safe}_violation_rates_over_time.png')
+        plt.savefig(viol_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✓ Saved: {viol_plot_path}")
+        
+        # Plot 2: Modification rates over time (all methods comparison)
+        fig, ax = plt.subplots(figsize=(12, 7))
+        
+        for (method_name, data), color in zip(all_method_data.items(), colors):
+            episodes = data['episode'].values
+            mod_mean = data['mod_mean'].values
+            mod_std = data['mod_std'].values
+            
+            ax.plot(episodes, mod_mean, label=method_name, color=color, linewidth=2)
+            ax.fill_between(episodes, mod_mean - mod_std, mod_mean + mod_std, 
+                          color=color, alpha=0.2)
+        
+        ax.set_xlabel('Episode', fontsize=12)
+        ax.set_ylabel('Modification Rate (per step)', fontsize=12)
+        ax.set_title(f'{env_display} - Modification Rates Over Time (Mean ± Std across 5 runs)', fontsize=14)
+        ax.legend(loc='best', fontsize=9)
+        ax.grid(alpha=0.3)
+        
+        plt.tight_layout()
+        mod_plot_path = os.path.join(plots_dir, f'{env_safe}_modification_rates_over_time.png')
+        plt.savefig(mod_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✓ Saved: {mod_plot_path}")
+        
+        # Plot 3: Combined plot (violations and modifications on same plot, different axes)
+        fig, ax1 = plt.subplots(figsize=(12, 7))
+        
+        # Left axis for violations
+        for (method_name, data), color in zip(all_method_data.items(), colors):
+            episodes = data['episode'].values
+            viol_mean = data['viol_mean'].values
+            ax1.plot(episodes, viol_mean, label=f'{method_name} (Violations)', 
+                    color=color, linewidth=2, linestyle='-')
+        
+        ax1.set_xlabel('Episode', fontsize=12)
+        ax1.set_ylabel('Violation Rate (per step)', fontsize=12, color='red')
+        ax1.tick_params(axis='y', labelcolor='red')
+        ax1.grid(alpha=0.3)
+        
+        # Right axis for modifications
+        ax2 = ax1.twinx()
+        for (method_name, data), color in zip(all_method_data.items(), colors):
+            episodes = data['episode'].values
+            mod_mean = data['mod_mean'].values
+            ax2.plot(episodes, mod_mean, label=f'{method_name} (Modifications)', 
+                    color=color, linewidth=2, linestyle='--')
+        
+        ax2.set_ylabel('Modification Rate (per step)', fontsize=12, color='orange')
+        ax2.tick_params(axis='y', labelcolor='orange')
+        
+        # Combined legend
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='best', fontsize=8)
+        
+        ax1.set_title(f'{env_display} - Violation and Modification Rates Over Time', fontsize=14)
+        
+        plt.tight_layout()
+        combined_plot_path = os.path.join(plots_dir, f'{env_safe}_combined_rates_over_time.png')
+        plt.savefig(combined_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✓ Saved: {combined_plot_path}")
+        
+        # Plot 4: Individual method plots (violation + modification on same plot)
+        for method_name, data in all_method_data.items():
+            method_safe = method_name.replace(' ', '_').replace('+', '').replace('(', '').replace(')', '').replace('-', '_')
+            
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            episodes = data['episode'].values
+            viol_mean = data['viol_mean'].values
+            viol_std = data['viol_std'].values
+            mod_mean = data['mod_mean'].values
+            mod_std = data['mod_std'].values
+            
+            # Plot violations
+            ax.plot(episodes, viol_mean, label='Violation Rate', color='red', linewidth=2)
+            ax.fill_between(episodes, viol_mean - viol_std, viol_mean + viol_std, 
+                          color='red', alpha=0.2)
+            
+            # Plot modifications
+            ax.plot(episodes, mod_mean, label='Modification Rate', color='orange', linewidth=2)
+            ax.fill_between(episodes, mod_mean - mod_std, mod_mean + mod_std, 
+                          color='orange', alpha=0.2)
+            
+            ax.set_xlabel('Episode', fontsize=12)
+            ax.set_ylabel('Rate (per step)', fontsize=12)
+            ax.set_title(f'{env_display} - {method_name}\nViolation and Modification Rates (Mean ± Std)', fontsize=14)
+            ax.legend(loc='best')
+            ax.grid(alpha=0.3)
+            
+            plt.tight_layout()
+            method_plot_path = os.path.join(plots_dir, f'{env_safe}_{method_safe}_rates.png')
+            plt.savefig(method_plot_path, dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        print(f"  ✓ Generated individual method plots")
+    
+    print(f"\n✓ All graphs generated!")
+
+
 def run_all_experiments(
     num_train_episodes=2000,
     num_eval_episodes=100,
@@ -571,6 +783,12 @@ def run_all_experiments(
     print(f"  - Summary CSV: {os.path.join(base_dir, 'summary_table.csv')}")
     print(f"  - Detailed CSV: {summary_path}")
     print(f"{'='*80}")
+    
+    # Generate graphs for violation and modification rates over time
+    print(f"\n{'='*80}")
+    print("Generating graphs for violation and modification rates...")
+    print(f"{'='*80}")
+    generate_experiment_graphs(base_dir, envs_to_run, methods_to_run)
 
 
 if __name__ == "__main__":
@@ -612,12 +830,21 @@ Examples:
                        help='Skip configurations that already have aggregated results')
     parser.add_argument('--show_summary', action='store_true',
                        help='Show summary table and exit (do not run experiments)')
+    parser.add_argument('--generate_graphs', action='store_true',
+                       help='Generate graphs from existing data and exit (do not run experiments)')
     
     args = parser.parse_args()
     
     # If just showing summary, do that and exit
     if args.show_summary:
         print_summary_table(args.base_dir)
+        sys.exit(0)
+    
+    # If just generating graphs, do that and exit
+    if args.generate_graphs:
+        envs_to_run = args.env if args.env else ENVIRONMENTS
+        methods_to_run = [m for m in METHODS if args.method is None or m['name'] in args.method]
+        generate_experiment_graphs(args.base_dir, envs_to_run, methods_to_run)
         sys.exit(0)
     
     if args.test:

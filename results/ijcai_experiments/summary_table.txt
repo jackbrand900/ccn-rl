@@ -16,8 +16,8 @@ CliffWalking-v1     PPO + Reward Shaping             Pending         Pending    
     CartPole-v1    PPO + Post-hoc (Soft)        29.94 ± 4.81 0.0769 ± 0.0054 0.0614 ± 0.0050  229.4 ± 34.4  183.6 ± 31.3
     CartPole-v1 PPO + Pre-emptive (Hard)     162.52 ± 168.31 0.0646 ± 0.0534 0.0646 ± 0.0534 276.4 ± 228.3 276.4 ± 228.3
     CartPole-v1 PPO + Pre-emptive (Soft)      225.01 ± 90.99 0.0218 ± 0.0180 0.0178 ± 0.0147 341.6 ± 132.7 279.6 ± 108.8
-    CartPole-v1       PPO + Layer (Hard)             Pending         Pending         Pending       Pending       Pending
-    CartPole-v1       PPO + Layer (Soft)             Pending         Pending         Pending       Pending       Pending
-    CartPole-v1      PPO + Semantic Loss             Pending         Pending         Pending       Pending       Pending
-    CartPole-v1     PPO + Reward Shaping             Pending         Pending         Pending       Pending       Pending
+    CartPole-v1       PPO + Layer (Hard)      231.02 ± 93.90 0.0261 ± 0.0320 0.0261 ± 0.0320 471.4 ± 545.3 471.4 ± 545.3
+    CartPole-v1       PPO + Layer (Soft)      183.97 ± 52.29 0.0255 ± 0.0108 0.0202 ± 0.0088 495.8 ± 309.8 393.6 ± 251.3
+    CartPole-v1      PPO + Semantic Loss      186.85 ± 50.25 0.0281 ± 0.0143 0.0000 ± 0.0000 493.6 ± 242.2     0.0 ± 0.0
+    CartPole-v1     PPO + Reward Shaping      371.65 ± 99.92 0.0132 ± 0.0067 0.0000 ± 0.0000 466.2 ± 188.3     0.0 ± 0.0
 ========================================================================================================================

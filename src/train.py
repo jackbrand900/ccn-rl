@@ -218,7 +218,7 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_window=50, monitor_constraints=True, visualize=False,
+def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_window=None, monitor_constraints=True, visualize=False,
                  softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1, run_dir=None):
     if run_dir is not None:
         rewards_log_path = os.path.join(run_dir, f"train_metrics_run{run_id}.csv")
@@ -234,6 +234,11 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
     best_weights = None
     no_improve_counter = 0  # Early stopping counter
     early_stop_patience = 1000 # Stop if no improvement after 500 episodes
+    
+    # Make checkpoint window adaptive: 5% of total episodes, with bounds (20-40 episodes)
+    # For 500 episodes: 5% = 25 episodes
+    if checkpoint_window is None:
+        checkpoint_window = max(20, min(40, int(num_episodes * 0.05)))
 
     if not softness:
         softness = ""
@@ -370,6 +375,13 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
             use_ram = 'RAM' if getattr(env, 'use_ram', False) else 'OBS'
+            
+            # Also show checkpoint window average if we have enough episodes
+            checkpoint_avg_str = ""
+            if checkpoint_window and episode >= checkpoint_window:
+                checkpoint_avg = np.mean(episode_rewards[-checkpoint_window:])
+                checkpoint_avg_str = f", Checkpoint Avg ({checkpoint_window}): {checkpoint_avg:.2f}"
+            
             log_msg = (
                 f"[{env.env_name}] "
                 f"[{str(type(agent)).split('.')[-1][:-2]}] "
@@ -377,7 +389,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
                 f"[{softness.capitalize()}] "
                 f"[{use_ram}], "
                 f"Episode {episode}, "
-                f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
+                f"Avg Reward ({print_interval}): {avg_reward:.2f}{checkpoint_avg_str}, "
             )
             if monitor_constraints:
                 constraint_monitor = agent.constraint_monitor

@@ -29,100 +29,20 @@ TARGET_REWARDS = {
     'ALE/Seaquest-v5': 800.0,  # Realistic target
 }
 
-# Methods to tune (matching run_ijcai_experiments.py)
+# Methods to tune (ordered from lightest to heaviest for memory efficiency)
 METHODS = [
-    # CPO skipped for now
-    # {
-    #     'name': 'cpo',
-    #     'agent': 'cpo',
-    #     'use_shield_post': False,
-    #     'use_shield_pre': False,
-    #     'use_shield_layer': False,
-    #     'mode': '',
-    #     'lambda_sem': 0.0,
-    #     'display_name': 'CPO'
-    # },
+    # Lightest: Baseline (no modifications)
     {
-        'name': 'cppo',
-        'agent': 'cppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': '',
-        'lambda_sem': 0.0,
-        'display_name': 'CMDP'
-    },
-    # Post-hoc methods skipped per user request
-    # {
-    #     'name': 'ppo_postshield_hard',
-    #     'agent': 'ppo',
-    #     'use_shield_post': True,
-    #     'use_shield_pre': False,
-    #     'use_shield_layer': False,
-    #     'mode': 'hard',
-    #     'lambda_sem': 0.0,
-    #     'display_name': 'PPO + Post-hoc (Hard)'
-    # },
-    # {
-    #     'name': 'ppo_postshield_soft',
-    #     'agent': 'ppo',
-    #     'use_shield_post': True,
-    #     'use_shield_pre': False,
-    #     'use_shield_layer': False,
-    #     'mode': 'soft',
-    #     'lambda_sem': 0.0,
-    #     'display_name': 'PPO + Post-hoc (Soft)'
-    # },
-    {
-        'name': 'ppo_preshield_hard',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': True,
-        'use_shield_layer': False,
-        'mode': 'hard',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Pre-emptive (Hard)'
-    },
-    {
-        'name': 'ppo_preshield_soft',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': True,
-        'use_shield_layer': False,
-        'mode': 'soft',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Pre-emptive (Soft)'
-    },
-    {
-        'name': 'ppo_layer_hard',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': True,
-        'mode': 'hard',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Layer (Hard)'
-    },
-    {
-        'name': 'ppo_layer_soft',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': True,
-        'mode': 'soft',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Layer (Soft)'
-    },
-    {
-        'name': 'ppo_semantic_loss',
+        'name': 'ppo_unshielded',
         'agent': 'ppo',
         'use_shield_post': False,
         'use_shield_pre': False,
         'use_shield_layer': False,
         'mode': '',
-        'lambda_sem': 1.0,
-        'display_name': 'PPO + Semantic Loss'
+        'lambda_sem': 0.0,
+        'display_name': 'PPO (Unshielded)'
     },
+    # Light: Simple reward/loss modifications (no shield integration)
     {
         'name': 'ppo_reward_shaping',
         'agent': 'ppo',
@@ -134,6 +54,71 @@ METHODS = [
         'lambda_penalty': 1.0,
         'display_name': 'PPO + Reward Shaping'
     },
+    {
+        'name': 'ppo_semantic_loss',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'mode': '',
+        'lambda_sem': 1.0,
+        'display_name': 'PPO + Semantic Loss'
+    },
+    # Medium: Pre-emptive shield (action modification before execution)
+    {
+        'name': 'ppo_preshield_soft',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': True,
+        'use_shield_layer': False,
+        'mode': 'soft',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Pre-emptive (Soft)'
+    },
+    {
+        'name': 'ppo_preshield_hard',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': True,
+        'use_shield_layer': False,
+        'mode': 'hard',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Pre-emptive (Hard)'
+    },
+    # Heavier: Shield layer (integrated into network)
+    {
+        'name': 'ppo_layer_soft',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': True,
+        'mode': 'soft',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Layer (Soft)'
+    },
+    {
+        'name': 'ppo_layer_hard',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': True,
+        'mode': 'hard',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Layer (Hard)'
+    },
+    # Heaviest: Constrained optimization (CMDP with Lagrangian multipliers)
+    {
+        'name': 'cppo',
+        'agent': 'cppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'mode': '',
+        'lambda_sem': 0.0,
+        'display_name': 'CMDP'
+    },
+    # Post-hoc methods skipped per user request
+    # CPO skipped for now
 ]
 
 
@@ -221,6 +206,8 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
         })
     
     # === Train ===
+    agent = None
+    env = None
     try:
         agent, episode_rewards, best_weights, best_avg_reward, env = train(
             agent=method['agent'],
@@ -266,12 +253,41 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
         trial.set_user_attr("target_reward", target_reward)
         trial.set_user_attr("reward_diff", reward_diff)
         
-        # Return negative normalized diff (Optuna minimizes, we want to minimize diff)
-        return -normalized_diff
+        result = -normalized_diff
         
     except Exception as e:
         print(f"Error in trial: {e}")
-        return -1000.0  # Very bad score
+        result = -1000.0  # Very bad score
+    
+    finally:
+        # Explicit cleanup to prevent memory accumulation
+        if agent is not None:
+            # Clear agent memory buffers
+            if hasattr(agent, 'memory'):
+                agent.memory.clear()
+            if hasattr(agent, 'constraint_monitor'):
+                agent.constraint_monitor.reset_all()
+            # Delete agent
+            del agent
+        
+        if env is not None:
+            env.close()
+            del env
+        
+        # Clear episode_rewards and best_weights if they exist
+        if 'episode_rewards' in locals():
+            del episode_rewards
+        if 'best_weights' in locals():
+            del best_weights
+        
+        # Force garbage collection and clear CUDA cache
+        import gc
+        import torch
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    
+    return result
 
 
 def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes=500, num_eval_episodes=50):
@@ -397,6 +413,15 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
                   f"Est. remaining: {str(estimated_remaining).split('.')[0]} | "
                   f"{reward_info}")
     
+    # Add callback to clean up memory after each trial
+    def cleanup_callback(study, trial):
+        if trial.state == optuna.trial.TrialState.COMPLETE or trial.state == optuna.trial.TrialState.FAIL:
+            import gc
+            import torch
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+    
     study.optimize(
         lambda trial: objective(
             trial,
@@ -408,7 +433,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
         ),
         n_trials=n_trials,
         show_progress_bar=True,
-        callbacks=[progress_callback]
+        callbacks=[progress_callback, cleanup_callback]
     )
     
     if early_stopped:
@@ -426,41 +451,65 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     best_agent_kwargs = trial.params.copy()
     
     # Train with best params
-    agent, episode_rewards, best_weights, best_avg_reward, env = train(
-        agent=method['agent'],
-        env_name=env_name,
-        num_episodes=num_train_episodes,
-        use_shield_post=method['use_shield_post'],
-        use_shield_pre=method['use_shield_pre'],
-        use_shield_layer=method['use_shield_layer'],
-        monitor_constraints=True,
-        mode=method['mode'],
-        verbose=False,
-        visualize=False,
-        render=False,
-        seed=42,
-        agent_kwargs=best_agent_kwargs,
-        early_stop_patience=100  # Stop training if no improvement after 100 episodes
-    )
-    
-    if hasattr(agent, 'load_weights') and best_weights is not None:
-        agent.load_weights(best_weights)
-    
-    # Evaluate - this is the true performance metric (deterministic, no exploration)
-    results = evaluate_policy(
-        agent,
-        env,
-        num_episodes=num_eval_episodes,
-        visualize=False,
-        render=False,
-        force_disable_shield=False,
-        softness=method['mode']
-    )
-    
-    actual_reward = results['avg_reward']
-    print(f"  Evaluation reward: {actual_reward:.2f} (target: {target_reward:.2f}, diff: {abs(actual_reward - target_reward):.2f})")
-    print(f"  Note: Training reward ({best_avg_reward:.2f}) may be higher due to exploration during training.")
-    print(f"{'='*80}\n")
+    test_agent = None
+    test_env = None
+    try:
+        test_agent, episode_rewards, best_weights, best_avg_reward, test_env = train(
+            agent=method['agent'],
+            env_name=env_name,
+            num_episodes=num_train_episodes,
+            use_shield_post=method['use_shield_post'],
+            use_shield_pre=method['use_shield_pre'],
+            use_shield_layer=method['use_shield_layer'],
+            monitor_constraints=True,
+            mode=method['mode'],
+            verbose=False,
+            visualize=False,
+            render=False,
+            seed=42,
+            agent_kwargs=best_agent_kwargs,
+            early_stop_patience=100  # Stop training if no improvement after 100 episodes
+        )
+        
+        if hasattr(test_agent, 'load_weights') and best_weights is not None:
+            test_agent.load_weights(best_weights)
+        
+        # Evaluate - this is the true performance metric (deterministic, no exploration)
+        results = evaluate_policy(
+            test_agent,
+            test_env,
+            num_episodes=num_eval_episodes,
+            visualize=False,
+            render=False,
+            force_disable_shield=False,
+            softness=method['mode']
+        )
+        
+        actual_reward = results['avg_reward']
+        print(f"  Evaluation reward: {actual_reward:.2f} (target: {target_reward:.2f}, diff: {abs(actual_reward - target_reward):.2f})")
+        print(f"  Note: Training reward ({best_avg_reward:.2f}) may be higher due to exploration during training.")
+        print(f"{'='*80}\n")
+    finally:
+        # Cleanup after test run
+        if test_agent is not None:
+            if hasattr(test_agent, 'memory'):
+                test_agent.memory.clear()
+            if hasattr(test_agent, 'constraint_monitor'):
+                test_agent.constraint_monitor.reset_all()
+            del test_agent
+        if test_env is not None:
+            test_env.close()
+            del test_env
+        if 'episode_rewards' in locals():
+            del episode_rewards
+        if 'best_weights' in locals():
+            del best_weights
+        
+        import gc
+        import torch
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
     
     # Save to YAML
     config_dir = Path("config/ijcai_tuned")

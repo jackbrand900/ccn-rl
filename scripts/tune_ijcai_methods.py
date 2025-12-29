@@ -29,7 +29,8 @@ TARGET_REWARDS = {
     'ALE/Seaquest-v5': 800.0,  # Realistic target
 }
 
-# Methods to tune (matching run_ijcai_experiments.py)
+# Methods to tune (ordered from lightest to heaviest computationally)
+# Computational complexity: Vanilla < Reward Shaping < Semantic Loss < Pre-emptive < Layer < CMDP
 METHODS = [
     # CPO skipped for now
     # {
@@ -42,6 +43,77 @@ METHODS = [
     #     'lambda_sem': 0.0,
     #     'display_name': 'CPO'
     # },
+    {
+        'name': 'ppo_vanilla',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'mode': '',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO (Vanilla)'
+    },
+    {
+        'name': 'ppo_reward_shaping',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'mode': '',
+        'lambda_sem': 0.0,
+        'lambda_penalty': 1.0,
+        'display_name': 'PPO + Reward Shaping'
+    },
+    {
+        'name': 'ppo_semantic_loss',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'mode': '',
+        'lambda_sem': 1.0,
+        'display_name': 'PPO + Semantic Loss'
+    },
+    {
+        'name': 'ppo_preshield_soft',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': True,
+        'use_shield_layer': False,
+        'mode': 'soft',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Pre-emptive (Soft)'
+    },
+    {
+        'name': 'ppo_preshield_hard',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': True,
+        'use_shield_layer': False,
+        'mode': 'hard',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Pre-emptive (Hard)'
+    },
+    {
+        'name': 'ppo_layer_soft',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': True,
+        'mode': 'soft',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Layer (Soft)'
+    },
+    {
+        'name': 'ppo_layer_hard',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': True,
+        'mode': 'hard',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Layer (Hard)'
+    },
     {
         'name': 'cppo',
         'agent': 'cppo',
@@ -73,67 +145,6 @@ METHODS = [
     #     'lambda_sem': 0.0,
     #     'display_name': 'PPO + Post-hoc (Soft)'
     # },
-    {
-        'name': 'ppo_preshield_hard',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': True,
-        'use_shield_layer': False,
-        'mode': 'hard',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Pre-emptive (Hard)'
-    },
-    {
-        'name': 'ppo_preshield_soft',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': True,
-        'use_shield_layer': False,
-        'mode': 'soft',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Pre-emptive (Soft)'
-    },
-    {
-        'name': 'ppo_layer_hard',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': True,
-        'mode': 'hard',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Layer (Hard)'
-    },
-    {
-        'name': 'ppo_layer_soft',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': True,
-        'mode': 'soft',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Layer (Soft)'
-    },
-    {
-        'name': 'ppo_semantic_loss',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': '',
-        'lambda_sem': 1.0,
-        'display_name': 'PPO + Semantic Loss'
-    },
-    {
-        'name': 'ppo_reward_shaping',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': '',
-        'lambda_sem': 0.0,
-        'lambda_penalty': 1.0,
-        'display_name': 'PPO + Reward Shaping'
-    },
 ]
 
 

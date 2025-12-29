@@ -8,6 +8,7 @@ import subprocess
 import sys
 import argparse
 import time
+import gc
 from pathlib import Path
 
 # Add src to path
@@ -106,8 +107,22 @@ def main():
             print(f"Completed {i-1}/{len(methods_to_run)} methods")
             sys.exit(1)
         
-        # Small delay to ensure process cleanup
-        time.sleep(2)
+        # Aggressive memory cleanup between methods
+        gc.collect()
+        # Longer delay to ensure process cleanup and memory release
+        time.sleep(5)
+        
+        # Force Python to release memory
+        import os
+        if hasattr(os, 'system'):
+            # Try to hint to OS to release memory (works on Linux/Mac)
+            try:
+                import ctypes
+                if sys.platform == 'darwin':  # macOS
+                    libc = ctypes.CDLL('libc.dylib')
+                    libc.malloc_trim(0)
+            except:
+                pass
     
     # Final summary
     total_time = time.time() - start_time

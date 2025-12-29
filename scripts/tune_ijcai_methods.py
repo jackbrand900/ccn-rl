@@ -29,7 +29,8 @@ TARGET_REWARDS = {
     'ALE/Seaquest-v5': 800.0,  # Realistic target
 }
 
-# Methods to tune (ordered from lightest to heaviest for memory efficiency)
+# Methods to tune (ordered from lightest to heaviest for memory/computational efficiency)
+# Complexity: Vanilla < Reward Shaping < Semantic Loss < Pre-emptive < Layer < CMDP
 METHODS = [
     # Lightest: Baseline (no modifications)
     {
@@ -118,7 +119,6 @@ METHODS = [
         'display_name': 'CMDP'
     },
     # Post-hoc methods skipped per user request
-    # CPO skipped for now
 ]
 
 

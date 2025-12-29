@@ -235,7 +235,8 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             visualize=False,
             render=False,
             seed=42,  # Fixed seed for tuning
-            agent_kwargs=agent_kwargs
+            agent_kwargs=agent_kwargs,
+            early_stop_patience=100  # Stop training if no improvement after 100 episodes
         )
         
         # Load best weights
@@ -438,7 +439,8 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
         visualize=False,
         render=False,
         seed=42,
-        agent_kwargs=best_agent_kwargs
+        agent_kwargs=best_agent_kwargs,
+        early_stop_patience=100  # Stop training if no improvement after 100 episodes
     )
     
     if hasattr(agent, 'load_weights') and best_weights is not None:

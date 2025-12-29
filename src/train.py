@@ -219,7 +219,7 @@ def step_env(env, action):
 
 
 def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_window=None, monitor_constraints=True, visualize=False,
-                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1, run_dir=None):
+                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1, run_dir=None, early_stop_patience=None):
     if run_dir is not None:
         rewards_log_path = os.path.join(run_dir, f"train_metrics_run{run_id}.csv")
         with open(rewards_log_path, "w", newline="") as f:
@@ -232,8 +232,9 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
     viol_rate_per_episode = []
     best_avg_reward = float('-inf')
     best_weights = None
-    no_improve_counter = 0  # Early stopping counter
-    early_stop_patience = 1000 # Stop if no improvement after 500 episodes
+    last_improvement_episode = 0  # Track episode where last improvement occurred
+    if early_stop_patience is None:
+        early_stop_patience = 1000  # Default: Stop if no improvement after 1000 episodes
     
     # Make checkpoint window adaptive: 5% of total episodes, with bounds (20-40 episodes)
     # For 500 episodes: 5% = 25 episodes
@@ -363,12 +364,13 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
             if checkpoint_avg_reward > best_avg_reward:
                 best_avg_reward = checkpoint_avg_reward
                 best_weights = copy.deepcopy(agent.get_weights())
-                no_improve_counter = 0
+                last_improvement_episode = episode
                 print(f"[Checkpoint] New best avg reward ({checkpoint_window} episodes): {best_avg_reward:.2f} at episode {episode}")
             else:
-                no_improve_counter += print_interval
-                if no_improve_counter >= early_stop_patience:
-                    print(f"[Early Stopping] No improvement for {early_stop_patience} episodes. Stopping training.")
+                # Check if we've gone long enough without improvement
+                episodes_since_improvement = episode - last_improvement_episode
+                if episodes_since_improvement >= early_stop_patience:
+                    print(f"[Early Stopping] No improvement for {episodes_since_improvement} episodes (since episode {last_improvement_episode}). Stopping training at episode {episode}.")
                     break
         
         # Logging: use smaller window for more frequent updates
@@ -461,7 +463,8 @@ def train(agent='ppo',
           sb3_model_path=None,
           sb3_train=False,
           sb3_save_path=None,
-          run_dir=None):
+          run_dir=None,
+          early_stop_patience=None):
     # rand_seed = np.random.randint(0, 2**32 - 1)
     # print(f'Rand_seed: {rand_seed}')
     env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
@@ -676,7 +679,8 @@ def train(agent='ppo',
             softness=mode,
             use_cnn=use_cnn,
             run_id=seed,
-            run_dir=run_dir
+            run_dir=run_dir,
+            early_stop_patience=early_stop_patience
         )
 
     if hasattr(agent_trained, 'load_weights') and best_weights is not None:

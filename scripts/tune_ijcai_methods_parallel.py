@@ -30,11 +30,60 @@ def main():
                        help='Number of evaluation episodes during tuning')
     parser.add_argument('--target_reward', type=float, default=None,
                        help='Target reward (default: use predefined)')
+    parser.add_argument('--start_from', type=str, default=None,
+                       help='Start from this method (skip previous methods)')
+    parser.add_argument('--skip_completed', action='store_true',
+                       help='Skip methods that already have config files')
+    parser.add_argument('--method', type=str, default=None,
+                       help='Tune only this specific method (default: all)')
     
     args = parser.parse_args()
     
     # Filter out CPO (commented out)
     methods_to_run = [m for m in METHODS if m['name'] != 'cpo']
+    
+    # Filter to specific method if requested
+    if args.method:
+        methods_to_run = [m for m in methods_to_run if m['name'] == args.method]
+        if not methods_to_run:
+            print(f"Error: Method '{args.method}' not found")
+            print("Available methods:")
+            for m in METHODS:
+                if m['name'] != 'cpo':
+                    print(f"  - {m['name']} ({m['display_name']})")
+            sys.exit(1)
+    
+    # Skip completed methods if requested
+    if args.skip_completed:
+        config_dir = Path("config/ijcai_tuned")
+        completed_methods = set()
+        if config_dir.exists():
+            for config_file in config_dir.glob(f"*_{args.env.replace('/', '_')}_params.yaml"):
+                method_name = config_file.stem.replace(f"_{args.env.replace('/', '_')}_params", "")
+                completed_methods.add(method_name)
+        
+        original_count = len(methods_to_run)
+        methods_to_run = [m for m in methods_to_run if m['name'] not in completed_methods]
+        skipped_count = original_count - len(methods_to_run)
+        if skipped_count > 0:
+            print(f"Skipping {skipped_count} already-completed method(s)")
+    
+    # Start from a specific method if requested
+    if args.start_from:
+        start_index = None
+        for i, method in enumerate(methods_to_run):
+            if method['name'] == args.start_from:
+                start_index = i
+                break
+        
+        if start_index is None:
+            print(f"Warning: Method '{args.start_from}' not found. Available methods:")
+            for m in methods_to_run:
+                print(f"  - {m['name']} ({m['display_name']})")
+            sys.exit(1)
+        
+        methods_to_run = methods_to_run[start_index:]
+        print(f"Starting from method: {methods_to_run[0]['display_name']}")
     
     print(f"\n{'='*80}")
     print(f"Running Tuning for {args.env}")

@@ -191,7 +191,8 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
         ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
         epochs = trial.suggest_int("epochs", 1, 10)
         batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
-        budget = trial.suggest_float("budget", 0.05, 0.30)  # Tune budget
+        # Increased budget range - allow more violations to achieve higher rewards
+        budget = trial.suggest_float("budget", 0.10, 0.50)  # Increased from 0.05-0.30 to 0.10-0.50
         nu_lr = trial.suggest_float("nu_lr", 1e-4, 1e-2, log=True)  # Tune nu learning rate
         
         agent_kwargs.update({
@@ -298,12 +299,58 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     env_safe = env_name.replace('/', '_')
     
     storage = f"sqlite:///optuna_ijcai_{method_name}_{env_safe}.db"
-    study = optuna.create_study(
-        direction="maximize",  # We maximize negative diff (minimize diff)
-        study_name=f"ijcai_{method_name}_{env_safe}",
-        storage=storage,
-        load_if_exists=True
-    )
+    
+    # Check if database file exists and is writable
+    db_path = f"optuna_ijcai_{method_name}_{env_safe}.db"
+    if os.path.exists(db_path):
+        if not os.access(db_path, os.W_OK):
+            print(f"Warning: Database file {db_path} is not writable. Attempting to fix permissions...")
+            try:
+                os.chmod(db_path, 0o644)
+            except Exception as e:
+                print(f"Could not fix permissions: {e}")
+                print(f"Please manually fix permissions or delete {db_path} and restart.")
+                raise
+        
+        # Test if we can actually write to the database
+        try:
+            import sqlite3
+            test_conn = sqlite3.connect(db_path, timeout=1.0)
+            test_conn.execute("PRAGMA quick_check;")
+            test_conn.close()
+        except sqlite3.OperationalError as e:
+            if "readonly" in str(e).lower() or "locked" in str(e).lower():
+                print(f"Warning: Database {db_path} appears to be locked or readonly.")
+                print(f"Backing up and recreating database...")
+                backup_path = f"{db_path}.backup_{int(time.time())}"
+                try:
+                    import shutil
+                    shutil.move(db_path, backup_path)
+                    print(f"Backed up to {backup_path}")
+                except Exception as backup_e:
+                    print(f"Could not backup database: {backup_e}")
+                    print(f"Please manually delete {db_path} and restart.")
+                    raise
+            else:
+                print(f"Database check failed: {e}")
+    
+    try:
+        study = optuna.create_study(
+            direction="maximize",  # We maximize negative diff (minimize diff)
+            study_name=f"ijcai_{method_name}_{env_safe}",
+            storage=storage,
+            load_if_exists=True
+        )
+    except Exception as e:
+        print(f"Error creating/loading study: {e}")
+        print("Attempting to create new study (will overwrite existing)...")
+        # Try creating without load_if_exists
+        study = optuna.create_study(
+            direction="maximize",
+            study_name=f"ijcai_{method_name}_{env_safe}",
+            storage=storage,
+            load_if_exists=False
+        )
     
     print(f"\n{'='*80}")
     print(f"Tuning: {method['display_name']} on {env_name}")
@@ -422,19 +469,31 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
     
-    study.optimize(
-        lambda trial: objective(
-            trial,
-            env_name=env_name,
-            method=method,
-            target_reward=target_reward,
-            num_train_episodes=num_train_episodes,
-            num_eval_episodes=num_eval_episodes
-        ),
-        n_trials=n_trials,
-        show_progress_bar=True,
-        callbacks=[progress_callback, cleanup_callback]
-    )
+    try:
+        study.optimize(
+            lambda trial: objective(
+                trial,
+                env_name=env_name,
+                method=method,
+                target_reward=target_reward,
+                num_train_episodes=num_train_episodes,
+                num_eval_episodes=num_eval_episodes
+            ),
+            n_trials=n_trials,
+            show_progress_bar=True,
+            callbacks=[progress_callback, cleanup_callback]
+        )
+    except optuna.exceptions.StorageInternalError as e:
+        print(f"\n[ERROR] Database storage error: {e}")
+        print("This usually happens when the database file is locked or corrupted.")
+        print(f"Try deleting the database file: {db_path}")
+        print("Or check if another process is using it.")
+        raise
+    except Exception as e:
+        print(f"\n[ERROR] Unexpected error during optimization: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
     
     if early_stopped:
         print(f"\n[ℹ] Tuning stopped early after {len(trial_times)} trials (found good configuration)")
@@ -446,8 +505,9 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     print(f"  Params: {trial.params}")
     
     # Test the best params to get actual reward
-    # Use the same number of episodes as tuning for fair comparison
-    print(f"\n  Testing best parameters (using {num_train_episodes} episodes, same as tuning)...")
+    # Use same number of episodes as tuning for consistency with data generation
+    test_episodes = num_train_episodes
+    print(f"\n  Testing best parameters (using {test_episodes} episodes)...")
     best_agent_kwargs = trial.params.copy()
     
     # Train with best params
@@ -457,7 +517,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
         test_agent, episode_rewards, best_weights, best_avg_reward, test_env = train(
             agent=method['agent'],
             env_name=env_name,
-            num_episodes=num_train_episodes,
+            num_episodes=test_episodes,
             use_shield_post=method['use_shield_post'],
             use_shield_pre=method['use_shield_pre'],
             use_shield_layer=method['use_shield_layer'],

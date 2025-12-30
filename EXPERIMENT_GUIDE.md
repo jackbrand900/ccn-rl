@@ -5,7 +5,7 @@
 ### 1. Run CartPole Experiments
 ```bash
 conda activate thesis_env
-python scripts/run_ijcai_experiments.py --env CartPole-v1 --num_train_episodes 2000
+python scripts/run_ijcai_experiments.py --env CartPole-v1
 ```
 
 ### 2. What Happens

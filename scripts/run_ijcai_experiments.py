@@ -655,12 +655,36 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
             plt.close()
         
         print(f"  ✓ Generated individual method plots")
+        
+        # Plot 5: Reward over time (all methods comparison)
+        fig, ax = plt.subplots(figsize=(12, 7))
+        
+        for (method_name, data), color in zip(all_method_data.items(), colors):
+            episodes = data['episode'].values
+            reward_mean = data['reward_mean'].values
+            reward_std = data['reward_std'].values
+            
+            ax.plot(episodes, reward_mean, label=method_name, color=color, linewidth=2)
+            ax.fill_between(episodes, reward_mean - reward_std, reward_mean + reward_std, 
+                          color=color, alpha=0.2)
+        
+        ax.set_xlabel('Episode', fontsize=12)
+        ax.set_ylabel('Reward', fontsize=12)
+        ax.set_title(f'{env_display} - Reward Over Time (Mean ± Std across 5 runs)', fontsize=14)
+        ax.legend(loc='best', fontsize=9)
+        ax.grid(alpha=0.3)
+        
+        plt.tight_layout()
+        reward_plot_path = os.path.join(plots_dir, f'{env_safe}_reward_over_time.png')
+        plt.savefig(reward_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✓ Saved: {reward_plot_path}")
     
     print(f"\n✓ All graphs generated!")
 
 
 def run_all_experiments(
-    num_train_episodes=2000,
+    num_train_episodes=500,
     num_eval_episodes=100,
     base_dir='results/ijcai_experiments',
     verbose=False,
@@ -805,10 +829,10 @@ if __name__ == "__main__":
         epilog="""
 Examples:
   # Run all environments (takes a long time)
-  python scripts/run_ijcai_experiments.py --num_train_episodes 2000
+  python scripts/run_ijcai_experiments.py
   
-  # Run only CartPole
-  python scripts/run_ijcai_experiments.py --env CartPole-v1 --num_train_episodes 2000
+  # Run only CartPole (default: 500 train, 100 eval episodes)
+  python scripts/run_ijcai_experiments.py --env CartPole-v1
   
   # Run only CliffWalking with specific methods
   python scripts/run_ijcai_experiments.py --env CliffWalking-v1 --method cppo ppo_postshield_hard
@@ -817,10 +841,10 @@ Examples:
   python scripts/run_ijcai_experiments.py --test --env CartPole-v1
         """
     )
-    parser.add_argument('--num_train_episodes', type=int, default=2000,
-                       help='Number of training episodes')
+    parser.add_argument('--num_train_episodes', type=int, default=500,
+                       help='Number of training episodes (default: 500)')
     parser.add_argument('--num_eval_episodes', type=int, default=100,
-                       help='Number of evaluation episodes')
+                       help='Number of evaluation episodes (default: 100)')
     parser.add_argument('--base_dir', type=str, default='results/ijcai_experiments',
                        help='Base directory for results')
     parser.add_argument('--verbose', action='store_true',

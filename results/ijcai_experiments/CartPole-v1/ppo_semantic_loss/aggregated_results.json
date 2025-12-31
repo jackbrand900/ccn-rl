@@ -1,58 +1,9 @@
 {
-  "total_violations": {
-    "mean": 493.6,
-    "std": 242.23426677495488,
-    "min": 269.0,
-    "max": 935.0
-  },
-  "avg_violations_per_step": {
-    "mean": 0.02806000004910661,
-    "std": 0.014263160325582456,
-    "min": 0.01294451662576392,
-    "max": 0.05255466246978809
-  },
-  "avg_violations_per_episode": {
-    "mean": 4.936,
-    "std": 2.4223426677495485,
-    "min": 2.69,
-    "max": 9.35
-  },
-  "avg_modifications_per_episode": {
-    "mean": 0.0,
-    "std": 0.0,
-    "min": 0.0,
-    "max": 0.0
-  },
-  "final_reward": {
-    "mean": 199.0,
-    "std": 59.26550430056257,
-    "min": 112.0,
-    "max": 267.0
-  },
-  "env": "CartPole-v1",
   "total_steps": {
-    "mean": 18684.6,
-    "std": 5024.506248379038,
-    "min": 10457.0,
-    "max": 25983.0
-  },
-  "total_modifications": {
-    "mean": 0.0,
-    "std": 0.0,
-    "min": 0.0,
-    "max": 0.0
-  },
-  "std_reward": {
-    "mean": 61.504333461844205,
-    "std": 18.067344725063272,
-    "min": 43.31620828281257,
-    "max": 94.39989989401472
-  },
-  "best_avg_reward": {
-    "mean": 245.43999999999997,
-    "std": 40.567898639195015,
-    "min": 200.2,
-    "max": 320.3
+    "mean": 17892.0,
+    "std": 5881.74984167127,
+    "min": 9807.0,
+    "max": 25578.0
   },
   "seed": {
     "mean": 484.2,
@@ -60,23 +11,73 @@
     "min": 42.0,
     "max": 1011.0
   },
-  "train_episodes": {
-    "mean": 500.0,
-    "std": 0.0,
-    "min": 500.0,
+  "std_reward": {
+    "mean": 67.20661195260503,
+    "std": 24.192866507546558,
+    "min": 43.93273380976876,
+    "max": 110.38078229474552
+  },
+  "avg_violations_per_step": {
+    "mean": 0.026010618756122317,
+    "std": 0.011528934769149,
+    "min": 0.011181484087888029,
+    "max": 0.04063282012130466
+  },
+  "total_violations": {
+    "mean": 444.8,
+    "std": 258.7241001530395,
+    "min": 281.0,
+    "max": 958.0
+  },
+  "env": "CartPole-v1",
+  "avg_reward": {
+    "mean": 178.92,
+    "std": 58.817498416712695,
+    "min": 98.07,
+    "max": 255.78
+  },
+  "method": "ppo_semantic_loss",
+  "max_reward": {
+    "mean": 411.6,
+    "std": 105.54733535243795,
+    "min": 218.0,
     "max": 500.0
   },
-  "max_reward": {
-    "mean": 378.6,
-    "std": 84.21068815773921,
-    "min": 291.0,
+  "avg_violations_per_episode": {
+    "mean": 4.4479999999999995,
+    "std": 2.5872410015303946,
+    "min": 2.81,
+    "max": 9.58
+  },
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "train_episodes": {
+    "mean": 356.0,
+    "std": 127.53038853543887,
+    "min": 210.0,
+    "max": 500.0
+  },
+  "best_avg_reward": {
+    "mean": 196.10399999999998,
+    "std": 35.269255506744116,
+    "min": 132.56,
+    "max": 229.08
+  },
+  "final_reward": {
+    "mean": 269.0,
+    "std": 132.09996214988104,
+    "min": 146.0,
     "max": 500.0
   },
   "min_reward": {
-    "mean": 65.0,
-    "std": 34.02939905434711,
-    "min": 21.0,
-    "max": 120.0
+    "mean": 51.0,
+    "std": 20.189105973271822,
+    "min": 16.0,
+    "max": 71.0
   },
   "avg_shield_mod_rate": {
     "mean": 0.0,
@@ -84,11 +85,10 @@
     "min": 0.0,
     "max": 0.0
   },
-  "method": "ppo_semantic_loss",
-  "avg_reward": {
-    "mean": 186.846,
-    "std": 50.245062483790385,
-    "min": 104.57,
-    "max": 259.83
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0
   }
 }

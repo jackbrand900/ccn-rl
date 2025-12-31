@@ -20,13 +20,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.train import train, evaluate_policy
 
 # Target rewards per environment (to be tuned to match)
-# Since we're focusing on violation/modification rates, we'll use more realistic targets
-# that allow fair comparison even if absolute rewards are lower
+# Aligned with TRAINING_TARGET_REWARDS to ensure hyperparameters are optimized
+# for the actual training regime (early stopping at this target)
 TARGET_REWARDS = {
-    'CartPole-v1': 300.0,  # Realistic target for constrained methods
+    'CartPole-v1': 200.0,  # Match training target for fair comparison
     'CliffWalking-v1': -15.0,  # Slightly worse than optimal (-13)
     'MiniGrid-DoorKey-5x5-v0': 0.7,  # Realistic target
     'ALE/Seaquest-v5': 800.0,  # Realistic target
+}
+
+# Target rewards for early stopping during training
+# Methods will stop training once they reach this target (using rolling average)
+# This ensures all methods are evaluated at similar performance levels
+TRAINING_TARGET_REWARDS = {
+    'CartPole-v1': 200.0,  # Stop training when rolling average reaches 200
+    'CliffWalking-v1': -15.0,
+    'MiniGrid-DoorKey-5x5-v0': 0.7,
+    'ALE/Seaquest-v5': 800.0,
 }
 
 # Methods to tune (ordered from lightest to heaviest for memory/computational efficiency)
@@ -210,6 +220,9 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
     agent = None
     env = None
     try:
+        # Get training target reward for early stopping
+        training_target = TRAINING_TARGET_REWARDS.get(env_name, target_reward)
+        
         agent, episode_rewards, best_weights, best_avg_reward, env = train(
             agent=method['agent'],
             env_name=env_name,
@@ -224,7 +237,8 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             render=False,
             seed=42,  # Fixed seed for tuning
             agent_kwargs=agent_kwargs,
-            early_stop_patience=100  # Stop training if no improvement after 100 episodes
+            early_stop_patience=100,  # Stop training if no improvement after 100 episodes
+            target_reward=training_target  # Stop training when target reward is reached
         )
         
         # Load best weights
@@ -514,6 +528,9 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     test_agent = None
     test_env = None
     try:
+        # Get training target for final test
+        training_target = TRAINING_TARGET_REWARDS.get(env_name, target_reward)
+        
         test_agent, episode_rewards, best_weights, best_avg_reward, test_env = train(
             agent=method['agent'],
             env_name=env_name,
@@ -528,7 +545,8 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
             render=False,
             seed=42,
             agent_kwargs=best_agent_kwargs,
-            early_stop_patience=100  # Stop training if no improvement after 100 episodes
+            early_stop_patience=100,  # Stop training if no improvement after 100 episodes
+            target_reward=training_target  # Stop training when target reward is reached
         )
         
         if hasattr(test_agent, 'load_weights') and best_weights is not None:
@@ -616,10 +634,11 @@ Examples:
     
     args = parser.parse_args()
     
-    target_reward = args.target_reward if args.target_reward is not None else TARGET_REWARDS.get(args.env)
-    if target_reward is None:
+    # Get base target reward for environment
+    base_target_reward = args.target_reward if args.target_reward is not None else TARGET_REWARDS.get(args.env)
+    if base_target_reward is None:
         print(f"Warning: No target reward for {args.env}, using 100.0")
-        target_reward = 100.0
+        base_target_reward = 100.0
     
     methods_to_tune = [m for m in METHODS if args.method is None or m['name'] == args.method]
     
@@ -627,10 +646,13 @@ Examples:
         print(f"Error: Method '{args.method}' not found")
         return
     
+    training_target = TRAINING_TARGET_REWARDS.get(args.env, base_target_reward)
+    
     print(f"\n{'#'*80}")
     print(f"# Hyperparameter Tuning for IJCAI Experiments")
     print(f"# Environment: {args.env}")
-    print(f"# Target Reward: {target_reward}")
+    print(f"# Training Target Reward: {training_target} (early stopping when reached)")
+    print(f"# Tuning Objective Target: {base_target_reward} (minimize difference)")
     print(f"# Methods: {len(methods_to_tune)}")
     print(f"# Trials per method: {args.trials}")
     print(f"# Train episodes per trial: {args.train_episodes}")
@@ -666,7 +688,7 @@ Examples:
             params, actual_reward = tune_method(
                 env_name=args.env,
                 method=method,
-                target_reward=target_reward,
+                target_reward=base_target_reward,  # Used for tuning objective (minimize difference)
                 n_trials=args.trials,
                 num_train_episodes=args.train_episodes,
                 num_eval_episodes=args.eval_episodes
@@ -674,11 +696,14 @@ Examples:
             method_time = time.time() - method_start
             method_time_str = str(timedelta(seconds=int(method_time))).split('.')[0]
             
+            # Get training target for display
+            training_target = TRAINING_TARGET_REWARDS.get(args.env, base_target_reward)
+            
             results_summary.append({
                 'method': method['display_name'],
-                'target_reward': target_reward,
+                'training_target': training_target,  # Target used for early stopping
                 'actual_reward': actual_reward,
-                'diff': abs(actual_reward - target_reward),
+                'diff': abs(actual_reward - training_target),
                 'time': method_time_str
             })
             
@@ -704,11 +729,11 @@ Examples:
     print(f"\n{'#'*80}")
     print("# Tuning Summary")
     print(f"{'#'*80}")
-    print(f"{'Method':<30} {'Target':<12} {'Actual':<12} {'Diff':<12} {'Time':<10}")
+    print(f"{'Method':<30} {'Train Target':<12} {'Actual':<12} {'Diff':<12} {'Time':<10}")
     print("-" * 80)
     for r in results_summary:
         time_str = r.get('time', 'N/A')
-        print(f"{r['method']:<30} {r['target_reward']:<12.2f} {r['actual_reward']:<12.2f} "
+        print(f"{r['method']:<30} {r['training_target']:<12.2f} {r['actual_reward']:<12.2f} "
               f"{r['diff']:<12.2f} {time_str:<10}")
     print("-" * 80)
     print(f"{'TOTAL TIME':<30} {'':<12} {'':<12} {'':<12} {total_time_str:<10}")

@@ -50,7 +50,8 @@ ENV_DISPLAY_NAMES = {
     'ALE/Seaquest-v5': 'Seaquest',
 }
 
-# Methods to compare (9 total, CPO skipped for now)
+# Methods to compare (7 total: CPO and Post-hoc methods skipped)
+# Post-hoc methods removed due to known PPO collapse issue
 METHODS = [
     # CPO skipped for now as requested
     # {
@@ -73,26 +74,27 @@ METHODS = [
         'lambda_sem': 0.0,
         'display_name': 'CMDP'
     },
-    {
-        'name': 'ppo_postshield_hard',
-        'agent': 'ppo',
-        'use_shield_post': True,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': 'hard',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Post-hoc (Hard)'
-    },
-    {
-        'name': 'ppo_postshield_soft',
-        'agent': 'ppo',
-        'use_shield_post': True,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': 'soft',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Post-hoc (Soft)'
-    },
+    # Post-hoc methods removed - known PPO collapse issue
+    # {
+    #     'name': 'ppo_postshield_hard',
+    #     'agent': 'ppo',
+    #     'use_shield_post': True,
+    #     'use_shield_pre': False,
+    #     'use_shield_layer': False,
+    #     'mode': 'hard',
+    #     'lambda_sem': 0.0,
+    #     'display_name': 'PPO + Post-hoc (Hard)'
+    # },
+    # {
+    #     'name': 'ppo_postshield_soft',
+    #     'agent': 'ppo',
+    #     'use_shield_post': True,
+    #     'use_shield_pre': False,
+    #     'use_shield_layer': False,
+    #     'mode': 'soft',
+    #     'lambda_sem': 0.0,
+    #     'display_name': 'PPO + Post-hoc (Soft)'
+    # },
     {
         'name': 'ppo_preshield_hard',
         'agent': 'ppo',
@@ -247,6 +249,10 @@ def run_single_experiment(
             max_memory = env_memory_limits.get(env_name, 2000)  # Default 2000
             agent_kwargs['max_episode_memory'] = max_memory
         
+        # Get training target for early stopping (from tuning config)
+        from scripts.tune_ijcai_methods import TRAINING_TARGET_REWARDS
+        training_target = TRAINING_TARGET_REWARDS.get(env_name, None)
+        
         # Train agent
         agent, episode_rewards, best_weights, best_avg_reward, env = train(
             agent=method['agent'],
@@ -262,7 +268,8 @@ def run_single_experiment(
             render=False,
             seed=seed,
             run_dir=run_dir,
-            agent_kwargs=agent_kwargs if agent_kwargs else None
+            agent_kwargs=agent_kwargs if agent_kwargs else None,
+            target_reward=training_target  # Stop training when target is reached
         )
         
         # Load best weights
@@ -513,15 +520,22 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
             # Combine all runs
             combined = pd.concat(dfs, ignore_index=True)
             
-            # Group by episode and compute mean/std
-            grouped = combined.groupby('episode').agg({
+            # Normalize episodes to training progress (0-100%) for fair comparison
+            # This accounts for methods that stop early when reaching target reward
+            max_episode = combined['episode'].max()
+            combined['training_progress'] = (combined['episode'] / max_episode) * 100
+            
+            # Group by training progress (rounded to nearest percent) and compute mean/std
+            combined['progress_bin'] = (combined['training_progress'] // 1).astype(int)  # Round to integer percent
+            grouped = combined.groupby('progress_bin').agg({
                 'violation_rate': ['mean', 'std'],
                 'modification_rate': ['mean', 'std'],
-                'reward': ['mean', 'std']
+                'reward': ['mean', 'std'],
+                'episode': 'mean'  # Keep track of actual episode number for reference
             }).reset_index()
             
             # Flatten column names
-            grouped.columns = ['episode', 'viol_mean', 'viol_std', 'mod_mean', 'mod_std', 'reward_mean', 'reward_std']
+            grouped.columns = ['training_progress', 'viol_mean', 'viol_std', 'mod_mean', 'mod_std', 'reward_mean', 'reward_std', 'avg_episode']
             
             all_method_data[method['display_name']] = grouped
         
@@ -533,24 +547,44 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
         plots_dir = os.path.join(env_dir, 'plots')
         os.makedirs(plots_dir, exist_ok=True)
         
+        # Set up styling for all plots (consistent across all graphs)
+        # Use a clean, publication-ready color palette
+        # Use distinct colors that work well in print
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
+        if len(all_method_data) > len(colors):
+            # Extend with additional colors if needed
+            colors.extend(plt.cm.tab20(np.linspace(0, 1, len(all_method_data) - len(colors))))
+        
+        # All solid lines for consistency
+        line_styles = ['-'] * len(all_method_data)
+        # Markers only at key points to reduce clutter
+        markers = ['o', 's', '^', 'v', 'D', 'p', '*']
+        marker_styles = [{'marker': m, 'markevery': max(5, len(data['training_progress']) // 10)} 
+                        for m, data in zip(markers, all_method_data.values())]
+        
         # Plot 1: Violation rates over time (all methods comparison)
         fig, ax = plt.subplots(figsize=(12, 7))
-        colors = plt.cm.tab10(np.linspace(0, 1, len(all_method_data)))
         
-        for (method_name, data), color in zip(all_method_data.items(), colors):
-            episodes = data['episode'].values
+        for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
+            progress = data['training_progress'].values
             viol_mean = data['viol_mean'].values
             viol_std = data['viol_std'].values
             
-            ax.plot(episodes, viol_mean, label=method_name, color=color, linewidth=2)
-            ax.fill_between(episodes, viol_mean - viol_std, viol_mean + viol_std, 
-                          color=color, alpha=0.2)
+            linestyle = line_styles[idx % len(line_styles)]
+            marker_info = marker_styles[idx]
+            
+            # Clean line plot - no fill for clarity
+            ax.plot(progress, viol_mean, label=method_name, color=color, linewidth=2.5,
+                   linestyle=linestyle, marker=marker_info['marker'], 
+                   markevery=marker_info['markevery'], markersize=7, 
+                   markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
         
-        ax.set_xlabel('Episode', fontsize=12)
-        ax.set_ylabel('Violation Rate (per step)', fontsize=12)
-        ax.set_title(f'{env_display} - Violation Rates Over Time (Mean ± Std across 5 runs)', fontsize=14)
-        ax.legend(loc='best', fontsize=9)
-        ax.grid(alpha=0.3)
+        ax.set_xlabel('Training Progress (%)', fontsize=13)
+        ax.set_ylabel('Violation Rate (per step)', fontsize=13)
+        ax.set_title(f'{env_display} - Violation Rates Over Training Progress', fontsize=15)
+        ax.legend(loc='best', fontsize=9, framealpha=0.9)
+        ax.grid(alpha=0.2, linestyle='--')
+        ax.tick_params(labelsize=11)
         
         plt.tight_layout()
         viol_plot_path = os.path.join(plots_dir, f'{env_safe}_violation_rates_over_time.png')
@@ -561,20 +595,26 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
         # Plot 2: Modification rates over time (all methods comparison)
         fig, ax = plt.subplots(figsize=(12, 7))
         
-        for (method_name, data), color in zip(all_method_data.items(), colors):
-            episodes = data['episode'].values
+        for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
+            progress = data['training_progress'].values
             mod_mean = data['mod_mean'].values
             mod_std = data['mod_std'].values
             
-            ax.plot(episodes, mod_mean, label=method_name, color=color, linewidth=2)
-            ax.fill_between(episodes, mod_mean - mod_std, mod_mean + mod_std, 
-                          color=color, alpha=0.2)
+            linestyle = line_styles[idx % len(line_styles)]
+            marker_info = marker_styles[idx]
+            
+            # Clean line plot - no fill for clarity
+            ax.plot(progress, mod_mean, label=method_name, color=color, linewidth=2.5,
+                   linestyle=linestyle, marker=marker_info['marker'], 
+                   markevery=marker_info['markevery'], markersize=7, 
+                   markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
         
-        ax.set_xlabel('Episode', fontsize=12)
-        ax.set_ylabel('Modification Rate (per step)', fontsize=12)
-        ax.set_title(f'{env_display} - Modification Rates Over Time (Mean ± Std across 5 runs)', fontsize=14)
-        ax.legend(loc='best', fontsize=9)
-        ax.grid(alpha=0.3)
+        ax.set_xlabel('Training Progress (%)', fontsize=13)
+        ax.set_ylabel('Modification Rate (per step)', fontsize=13)
+        ax.set_title(f'{env_display} - Modification Rates Over Training Progress', fontsize=15)
+        ax.legend(loc='best', fontsize=9, framealpha=0.9)
+        ax.grid(alpha=0.2, linestyle='--')
+        ax.tick_params(labelsize=11)
         
         plt.tight_layout()
         mod_plot_path = os.path.join(plots_dir, f'{env_safe}_modification_rates_over_time.png')
@@ -586,24 +626,35 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
         fig, ax1 = plt.subplots(figsize=(12, 7))
         
         # Left axis for violations
-        for (method_name, data), color in zip(all_method_data.items(), colors):
-            episodes = data['episode'].values
+        for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
+            progress = data['training_progress'].values
             viol_mean = data['viol_mean'].values
-            ax1.plot(episodes, viol_mean, label=f'{method_name} (Violations)', 
-                    color=color, linewidth=2, linestyle='-')
+            linestyle = line_styles[idx % len(line_styles)]
+            marker_info = marker_styles[idx]
+            ax1.plot(progress, viol_mean, label=f'{method_name} (Violations)', 
+                    color=color, linewidth=2.5, linestyle=linestyle,
+                    marker=marker_info['marker'], markevery=marker_info['markevery'], 
+                    markersize=7, markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
         
-        ax1.set_xlabel('Episode', fontsize=12)
+        ax1.set_xlabel('Training Progress (%)', fontsize=12)
         ax1.set_ylabel('Violation Rate (per step)', fontsize=12, color='red')
         ax1.tick_params(axis='y', labelcolor='red')
         ax1.grid(alpha=0.3)
         
         # Right axis for modifications
         ax2 = ax1.twinx()
-        for (method_name, data), color in zip(all_method_data.items(), colors):
-            episodes = data['episode'].values
+        for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
+            progress = data['training_progress'].values
             mod_mean = data['mod_mean'].values
-            ax2.plot(episodes, mod_mean, label=f'{method_name} (Modifications)', 
-                    color=color, linewidth=2, linestyle='--')
+            linestyle = line_styles[idx % len(line_styles)]
+            marker_info = marker_styles[idx]
+            # Use different marker for modifications to distinguish from violations
+            mod_markers = ['s', '^', 'v', 'D', 'p', '*', 'X']
+            ax2.plot(progress, mod_mean, label=f'{method_name} (Modifications)', 
+                    color=color, linewidth=2.5, linestyle=linestyle,
+                    marker=mod_markers[idx % len(mod_markers)], 
+                    markevery=marker_info['markevery'], markersize=7, 
+                    markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
         
         ax2.set_ylabel('Modification Rate (per step)', fontsize=12, color='orange')
         ax2.tick_params(axis='y', labelcolor='orange')
@@ -613,7 +664,7 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
         lines2, labels2 = ax2.get_legend_handles_labels()
         ax1.legend(lines1 + lines2, labels1 + labels2, loc='best', fontsize=8)
         
-        ax1.set_title(f'{env_display} - Violation and Modification Rates Over Time', fontsize=14)
+        ax1.set_title(f'{env_display} - Violation and Modification Rates Over Training Progress', fontsize=14)
         
         plt.tight_layout()
         combined_plot_path = os.path.join(plots_dir, f'{env_safe}_combined_rates_over_time.png')
@@ -627,23 +678,23 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
             
             fig, ax = plt.subplots(figsize=(10, 6))
             
-            episodes = data['episode'].values
+            progress = data['training_progress'].values
             viol_mean = data['viol_mean'].values
             viol_std = data['viol_std'].values
             mod_mean = data['mod_mean'].values
             mod_std = data['mod_std'].values
             
             # Plot violations
-            ax.plot(episodes, viol_mean, label='Violation Rate', color='red', linewidth=2)
-            ax.fill_between(episodes, viol_mean - viol_std, viol_mean + viol_std, 
+            ax.plot(progress, viol_mean, label='Violation Rate', color='red', linewidth=2)
+            ax.fill_between(progress, viol_mean - viol_std, viol_mean + viol_std, 
                           color='red', alpha=0.2)
             
             # Plot modifications
-            ax.plot(episodes, mod_mean, label='Modification Rate', color='orange', linewidth=2)
-            ax.fill_between(episodes, mod_mean - mod_std, mod_mean + mod_std, 
+            ax.plot(progress, mod_mean, label='Modification Rate', color='orange', linewidth=2)
+            ax.fill_between(progress, mod_mean - mod_std, mod_mean + mod_std, 
                           color='orange', alpha=0.2)
             
-            ax.set_xlabel('Episode', fontsize=12)
+            ax.set_xlabel('Training Progress (%)', fontsize=12)
             ax.set_ylabel('Rate (per step)', fontsize=12)
             ax.set_title(f'{env_display} - {method_name}\nViolation and Modification Rates (Mean ± Std)', fontsize=14)
             ax.legend(loc='best')
@@ -659,20 +710,26 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
         # Plot 5: Reward over time (all methods comparison)
         fig, ax = plt.subplots(figsize=(12, 7))
         
-        for (method_name, data), color in zip(all_method_data.items(), colors):
-            episodes = data['episode'].values
+        for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
+            progress = data['training_progress'].values
             reward_mean = data['reward_mean'].values
             reward_std = data['reward_std'].values
             
-            ax.plot(episodes, reward_mean, label=method_name, color=color, linewidth=2)
-            ax.fill_between(episodes, reward_mean - reward_std, reward_mean + reward_std, 
-                          color=color, alpha=0.2)
+            linestyle = line_styles[idx % len(line_styles)]
+            marker_info = marker_styles[idx]
+            
+            # Clean line plot - no fill for clarity
+            ax.plot(progress, reward_mean, label=method_name, color=color, linewidth=2.5,
+                   linestyle=linestyle, marker=marker_info['marker'], 
+                   markevery=marker_info['markevery'], markersize=7, 
+                   markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
         
-        ax.set_xlabel('Episode', fontsize=12)
-        ax.set_ylabel('Reward', fontsize=12)
-        ax.set_title(f'{env_display} - Reward Over Time (Mean ± Std across 5 runs)', fontsize=14)
-        ax.legend(loc='best', fontsize=9)
-        ax.grid(alpha=0.3)
+        ax.set_xlabel('Training Progress (%)', fontsize=13)
+        ax.set_ylabel('Reward', fontsize=13)
+        ax.set_title(f'{env_display} - Reward Over Training Progress', fontsize=15)
+        ax.legend(loc='best', fontsize=9, framealpha=0.9)
+        ax.grid(alpha=0.2, linestyle='--')
+        ax.tick_params(labelsize=11)
         
         plt.tight_layout()
         reward_plot_path = os.path.join(plots_dir, f'{env_safe}_reward_over_time.png')
@@ -835,7 +892,7 @@ Examples:
   python scripts/run_ijcai_experiments.py --env CartPole-v1
   
   # Run only CliffWalking with specific methods
-  python scripts/run_ijcai_experiments.py --env CliffWalking-v1 --method cppo ppo_postshield_hard
+  python scripts/run_ijcai_experiments.py --env CliffWalking-v1 --method cppo ppo_preshield_hard
   
   # Test mode (1 episode each)
   python scripts/run_ijcai_experiments.py --test --env CartPole-v1
@@ -854,7 +911,7 @@ Examples:
                             'Examples: --env CartPole-v1 or --env CartPole-v1 CliffWalking-v1')
     parser.add_argument('--method', type=str, nargs='+', default=None,
                        help='Filter: only run these methods (default: all). '
-                            'Examples: --method cppo or --method cppo ppo_postshield_hard')
+                            'Examples: --method cppo or --method cppo ppo_preshield_hard')
     parser.add_argument('--test', action='store_true',
                        help='Test mode: run 1 episode per config')
     parser.add_argument('--skip_existing', action='store_true',

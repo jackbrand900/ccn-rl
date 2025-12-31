@@ -10,7 +10,7 @@ python scripts/run_ijcai_experiments.py --env CartPole-v1
 
 ### 2. What Happens
 - **Loads tuned hyperparameters** from `config/ijcai_tuned/` automatically
-- **Runs 9 methods** × **5 seeds** = 45 total runs
+- **Runs 7 methods** × **5 seeds** = 35 total runs
 - **Tracks metrics per episode**: violation_rate, modification_rate, reward
 - **Aggregates across 5 runs**: computes mean ± std
 - **Generates graphs automatically** after completion
@@ -47,7 +47,7 @@ All graphs are:
 
 ```bash
 # Run specific methods only
-python scripts/run_ijcai_experiments.py --env CartPole-v1 --method cppo ppo_postshield_hard
+python scripts/run_ijcai_experiments.py --env CartPole-v1 --method cppo ppo_preshield_hard
 
 # Run multiple environments
 python scripts/run_ijcai_experiments.py --env CartPole-v1 CliffWalking-v1

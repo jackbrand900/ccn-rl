@@ -219,7 +219,7 @@ def step_env(env, action):
 
 
 def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_window=None, monitor_constraints=True, visualize=False,
-                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1, run_dir=None, early_stop_patience=None):
+                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1, run_dir=None, early_stop_patience=None, target_reward=None):
     if run_dir is not None:
         rewards_log_path = os.path.join(run_dir, f"train_metrics_run{run_id}.csv")
         with open(rewards_log_path, "w", newline="") as f:
@@ -366,6 +366,11 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
                 best_weights = copy.deepcopy(agent.get_weights())
                 last_improvement_episode = episode
                 print(f"[Checkpoint] New best avg reward ({checkpoint_window} episodes): {best_avg_reward:.2f} at episode {episode}")
+                
+                # Check if target reward is reached
+                if target_reward is not None and checkpoint_avg_reward >= target_reward:
+                    print(f"[Target Reached] Average reward ({checkpoint_window} episodes): {checkpoint_avg_reward:.2f} >= target: {target_reward:.2f}. Stopping training at episode {episode}.")
+                    break
             else:
                 # Check if we've gone long enough without improvement
                 episodes_since_improvement = episode - last_improvement_episode
@@ -464,7 +469,8 @@ def train(agent='ppo',
           sb3_train=False,
           sb3_save_path=None,
           run_dir=None,
-          early_stop_patience=None):
+          early_stop_patience=None,
+          target_reward=None):
     # rand_seed = np.random.randint(0, 2**32 - 1)
     # print(f'Rand_seed: {rand_seed}')
     env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
@@ -680,7 +686,8 @@ def train(agent='ppo',
             use_cnn=use_cnn,
             run_id=seed,
             run_dir=run_dir,
-            early_stop_patience=early_stop_patience
+            early_stop_patience=early_stop_patience,
+            target_reward=target_reward
         )
 
     if hasattr(agent_trained, 'load_weights') and best_weights is not None:

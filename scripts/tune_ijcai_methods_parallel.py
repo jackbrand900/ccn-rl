@@ -14,7 +14,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.tune_ijcai_methods import METHODS
+from scripts.tune_ijcai_methods import METHODS, TARGET_REWARDS, TRAINING_TARGET_REWARDS
 
 def main():
     parser = argparse.ArgumentParser(
@@ -100,7 +100,9 @@ def main():
         print(f"# Method {i}/{len(methods_to_run)}: {method['display_name']}")
         print(f"{'#'*80}\n")
         
-        # Build command
+        # Build command (training target is handled internally via TRAINING_TARGET_REWARDS)
+        base_target = args.target_reward if args.target_reward is not None else TARGET_REWARDS.get(args.env)
+        
         cmd = [
             sys.executable,
             str(Path(__file__).parent / "tune_ijcai_methods.py"),

@@ -1,23 +1,19 @@
 ========================================================================================================================
 EXPERIMENT SUMMARY TABLE
 ========================================================================================================================
-    Environment                   Method Reward (mean ± std)       Viol Rate        Mod Rate    Total Viol     Total Mod
-CliffWalking-v1                     CMDP             Pending         Pending         Pending       Pending       Pending
-CliffWalking-v1    PPO + Post-hoc (Hard)             Pending         Pending         Pending       Pending       Pending
-CliffWalking-v1    PPO + Post-hoc (Soft)             Pending         Pending         Pending       Pending       Pending
-CliffWalking-v1 PPO + Pre-emptive (Hard)             Pending         Pending         Pending       Pending       Pending
-CliffWalking-v1 PPO + Pre-emptive (Soft)             Pending         Pending         Pending       Pending       Pending
-CliffWalking-v1       PPO + Layer (Hard)             Pending         Pending         Pending       Pending       Pending
-CliffWalking-v1       PPO + Layer (Soft)             Pending         Pending         Pending       Pending       Pending
-CliffWalking-v1      PPO + Semantic Loss             Pending         Pending         Pending       Pending       Pending
-CliffWalking-v1     PPO + Reward Shaping             Pending         Pending         Pending       Pending       Pending
-    CartPole-v1                     CMDP     188.87 ± 123.07 0.0138 ± 0.0142 0.0000 ± 0.0000 257.2 ± 249.0     0.0 ± 0.0
-    CartPole-v1    PPO + Post-hoc (Hard)        30.17 ± 4.18 0.0826 ± 0.0034 0.0826 ± 0.0034  249.8 ± 39.3  249.8 ± 39.3
-    CartPole-v1    PPO + Post-hoc (Soft)        29.59 ± 0.88 0.0809 ± 0.0049 0.0649 ± 0.0035  239.2 ± 13.1  192.0 ± 11.0
-    CartPole-v1 PPO + Pre-emptive (Hard)     267.29 ± 124.16 0.0250 ± 0.0112 0.0250 ± 0.0112 579.8 ± 198.9 579.8 ± 198.9
-    CartPole-v1 PPO + Pre-emptive (Soft)      265.52 ± 24.62 0.0116 ± 0.0019 0.0097 ± 0.0018  307.2 ± 44.3  257.4 ± 42.7
-    CartPole-v1       PPO + Layer (Hard)     264.98 ± 145.42 0.0463 ± 0.0602 0.0463 ± 0.0602 677.8 ± 733.8 677.8 ± 733.8
-    CartPole-v1       PPO + Layer (Soft)     258.73 ± 103.53 0.0123 ± 0.0099 0.0100 ± 0.0081 250.4 ± 103.6  204.6 ± 86.1
-    CartPole-v1      PPO + Semantic Loss      178.92 ± 58.82 0.0260 ± 0.0115 0.0000 ± 0.0000 444.8 ± 258.7     0.0 ± 0.0
-    CartPole-v1     PPO + Reward Shaping      220.27 ± 50.19 0.0140 ± 0.0078 0.0000 ± 0.0000 294.4 ± 155.2     0.0 ± 0.0
+    Environment                   Method Reward (median) Reward (mean ± std)       Viol Rate        Mod Rate    Total Viol     Total Mod
+CliffWalking-v1     PPO + Reward Shaping          -25.54    -122.39 ± 193.75 0.0040 ± 0.0032 0.0000 ± 0.0000    11.8 ± 8.5     0.0 ± 0.0
+CliffWalking-v1      PPO + Semantic Loss          -27.45    -121.96 ± 189.51 0.0046 ± 0.0078 0.0000 ± 0.0000    8.2 ± 13.9     0.0 ± 0.0
+CliffWalking-v1 PPO + Pre-emptive (Soft)          -31.02       -31.02 ± 9.60 0.0056 ± 0.0040 0.0047 ± 0.0033   12.0 ± 10.5    10.0 ± 8.7
+CliffWalking-v1 PPO + Pre-emptive (Hard)          -19.93       -19.66 ± 0.87 0.0997 ± 0.0289 0.0997 ± 0.0289  195.8 ± 57.6  195.8 ± 57.6
+CliffWalking-v1       PPO + Layer (Soft)          -22.84    -217.49 ± 392.25 0.0016 ± 0.0013 0.0016 ± 0.0013     3.8 ± 1.9     3.8 ± 1.9
+CliffWalking-v1       PPO + Layer (Hard)          -24.45       -24.38 ± 3.07 0.1907 ± 0.0235 0.1907 ± 0.0235  460.2 ± 49.8  460.2 ± 49.8
+CliffWalking-v1                     CMDP         Pending             Pending         Pending         Pending       Pending       Pending
+    CartPole-v1     PPO + Reward Shaping          222.15      220.27 ± 50.19 0.0140 ± 0.0078 0.0000 ± 0.0000 294.4 ± 155.2     0.0 ± 0.0
+    CartPole-v1      PPO + Semantic Loss          163.08      178.92 ± 58.82 0.0260 ± 0.0115 0.0000 ± 0.0000 444.8 ± 258.7     0.0 ± 0.0
+    CartPole-v1 PPO + Pre-emptive (Soft)          258.08      265.52 ± 24.62 0.0116 ± 0.0019 0.0097 ± 0.0018  307.2 ± 44.3  257.4 ± 42.7
+    CartPole-v1 PPO + Pre-emptive (Hard)          230.53     267.29 ± 124.16 0.0250 ± 0.0112 0.0250 ± 0.0112 579.8 ± 198.9 579.8 ± 198.9
+    CartPole-v1       PPO + Layer (Soft)          250.71     258.73 ± 103.53 0.0123 ± 0.0099 0.0100 ± 0.0081 250.4 ± 103.6  204.6 ± 86.1
+    CartPole-v1       PPO + Layer (Hard)          208.49     264.98 ± 145.42 0.0463 ± 0.0602 0.0463 ± 0.0602 677.8 ± 733.8 677.8 ± 733.8
+    CartPole-v1                     CMDP          147.28     188.87 ± 123.07 0.0138 ± 0.0142 0.0000 ± 0.0000 257.2 ± 249.0     0.0 ± 0.0
 ========================================================================================================================

@@ -52,7 +52,83 @@ ENV_DISPLAY_NAMES = {
 
 # Methods to compare (7 total: CPO and Post-hoc methods skipped)
 # Post-hoc methods removed due to known PPO collapse issue
+# Ordered from lightest to heaviest computationally
 METHODS = [
+    # Lightest: No shield computation during training
+    {
+        'name': 'ppo_reward_shaping',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'mode': '',
+        'lambda_sem': 0.0,
+        'lambda_penalty': 1.0,  # Reward shaping penalty (will be tuned)
+        'display_name': 'PPO + Reward Shaping'
+    },
+    {
+        'name': 'ppo_semantic_loss',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'mode': '',
+        'lambda_sem': 1.0,  # Semantic loss coefficient
+        'display_name': 'PPO + Semantic Loss'
+    },
+    # Medium: Shield computation before action (pre-emptive)
+    {
+        'name': 'ppo_preshield_soft',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': True,
+        'use_shield_layer': False,
+        'mode': 'soft',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Pre-emptive (Soft)'
+    },
+    {
+        'name': 'ppo_preshield_hard',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': True,
+        'use_shield_layer': False,
+        'mode': 'hard',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Pre-emptive (Hard)'
+    },
+    # Medium-Heavy: Shield as differentiable layer
+    {
+        'name': 'ppo_layer_soft',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': True,
+        'mode': 'soft',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Layer (Soft)'
+    },
+    {
+        'name': 'ppo_layer_hard',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': True,
+        'mode': 'hard',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Layer (Hard)'
+    },
+    # Heaviest: CMDP with dual optimization (2-3x slower)
+    {
+        'name': 'cppo',
+        'agent': 'cppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'mode': '',
+        'lambda_sem': 0.0,
+        'display_name': 'CMDP'
+    },
     # CPO skipped for now as requested
     # {
     #     'name': 'cpo',
@@ -64,16 +140,6 @@ METHODS = [
     #     'lambda_sem': 0.0,
     #     'display_name': 'CPO'
     # },
-    {
-        'name': 'cppo',
-        'agent': 'cppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': '',
-        'lambda_sem': 0.0,
-        'display_name': 'CMDP'
-    },
     # Post-hoc methods removed - known PPO collapse issue
     # {
     #     'name': 'ppo_postshield_hard',
@@ -95,67 +161,6 @@ METHODS = [
     #     'lambda_sem': 0.0,
     #     'display_name': 'PPO + Post-hoc (Soft)'
     # },
-    {
-        'name': 'ppo_preshield_hard',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': True,
-        'use_shield_layer': False,
-        'mode': 'hard',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Pre-emptive (Hard)'
-    },
-    {
-        'name': 'ppo_preshield_soft',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': True,
-        'use_shield_layer': False,
-        'mode': 'soft',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Pre-emptive (Soft)'
-    },
-    {
-        'name': 'ppo_layer_hard',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': True,
-        'mode': 'hard',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Layer (Hard)'
-    },
-    {
-        'name': 'ppo_layer_soft',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': True,
-        'mode': 'soft',
-        'lambda_sem': 0.0,
-        'display_name': 'PPO + Layer (Soft)'
-    },
-    {
-        'name': 'ppo_semantic_loss',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': '',
-        'lambda_sem': 1.0,  # Semantic loss coefficient
-        'display_name': 'PPO + Semantic Loss'
-    },
-    {
-        'name': 'ppo_reward_shaping',
-        'agent': 'ppo',
-        'use_shield_post': False,
-        'use_shield_pre': False,
-        'use_shield_layer': False,
-        'mode': '',
-        'lambda_sem': 0.0,
-        'lambda_penalty': 1.0,  # Reward shaping penalty (will be tuned)
-        'display_name': 'PPO + Reward Shaping'
-    },
 ]
 
 
@@ -242,7 +247,7 @@ def run_single_experiment(
         if 'max_episode_memory' not in agent_kwargs:
             env_memory_limits = {
                 'CartPole-v1': 500,      # Short episodes, small memory needed
-                'CliffWalking-v1': 1000, # Medium episodes
+                'CliffWalking-v1': 1000,  # Match step limit (1000 steps) for exploration
                 'MiniGrid-DoorKey-5x5-v0': 2000,  # Longer episodes
                 'ALE/Seaquest-v5': 5000,  # Very long episodes (up to 10k steps)
             }
@@ -269,6 +274,7 @@ def run_single_experiment(
             seed=seed,
             run_dir=run_dir,
             agent_kwargs=agent_kwargs if agent_kwargs else None,
+            early_stop_patience=100,  # Stop training if no improvement after 100 episodes
             target_reward=training_target  # Stop training when target is reached
         )
         
@@ -360,10 +366,16 @@ def generate_summary_table(base_dir):
                     with open(aggregated_path, 'r') as f:
                         agg = json.load(f)
                     
+                    reward_agg = agg.get('avg_reward', {})
+                    reward_mean = reward_agg.get('mean', 0)
+                    reward_std = reward_agg.get('std', 0)
+                    reward_median = reward_agg.get('median', reward_mean)  # Fallback to mean if median not available
+                    
                     summary_data.append({
                         'Environment': env_name,
                         'Method': method['display_name'],
-                        'Reward (mean ± std)': f"{agg.get('avg_reward', {}).get('mean', 0):.2f} ± {agg.get('avg_reward', {}).get('std', 0):.2f}",
+                        'Reward (median)': f"{reward_median:.2f}",
+                        'Reward (mean ± std)': f"{reward_mean:.2f} ± {reward_std:.2f}",
                         'Viol Rate': f"{agg.get('avg_violations_per_step', {}).get('mean', 0):.4f} ± {agg.get('avg_violations_per_step', {}).get('std', 0):.4f}",
                         'Mod Rate': f"{agg.get('avg_shield_mod_rate', {}).get('mean', 0):.4f} ± {agg.get('avg_shield_mod_rate', {}).get('std', 0):.4f}",
                         'Total Viol': f"{agg.get('total_violations', {}).get('mean', 0):.1f} ± {agg.get('total_violations', {}).get('std', 0):.1f}",
@@ -373,6 +385,7 @@ def generate_summary_table(base_dir):
                     summary_data.append({
                         'Environment': env_name,
                         'Method': method['display_name'],
+                        'Reward (median)': 'Error',
                         'Reward (mean ± std)': 'Error',
                         'Viol Rate': 'Error',
                         'Mod Rate': 'Error',
@@ -384,6 +397,7 @@ def generate_summary_table(base_dir):
                 summary_data.append({
                     'Environment': env_name,
                     'Method': method['display_name'],
+                    'Reward (median)': 'Pending',
                     'Reward (mean ± std)': 'Pending',
                     'Viol Rate': 'Pending',
                     'Mod Rate': 'Pending',
@@ -455,11 +469,13 @@ def aggregate_results(all_results):
                 std_val = float(np.std(values))
                 min_val = float(np.min(values))
                 max_val = float(np.max(values))
+                median_val = float(np.median(values))
                 aggregated[key] = {
                     'mean': mean_val,
                     'std': std_val,
                     'min': min_val,
-                    'max': max_val
+                    'max': max_val,
+                    'median': median_val
                 }
             else:
                 aggregated[key] = values[0]  # Use first non-numeric value

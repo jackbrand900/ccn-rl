@@ -1,0 +1,109 @@
+{
+  "avg_reward": {
+    "mean": -121.95800000000001,
+    "std": 189.51158164080633,
+    "min": -500.0,
+    "max": -16.21,
+    "median": -27.44750000000002
+  },
+  "env": "CliffWalking-v1",
+  "avg_violations_per_step": {
+    "mean": 0.004618353445548858,
+    "std": 0.007802376030660734,
+    "min": 0.0,
+    "max": 0.020168067226890758,
+    "median": 0.0007309250002133826
+  },
+  "total_violations": {
+    "mean": 8.2,
+    "std": 13.948476619330155,
+    "min": 0.0,
+    "max": 36.0,
+    "median": 1.25
+  },
+  "final_reward": {
+    "mean": -132.6,
+    "std": 187.45943561208114,
+    "min": -500.0,
+    "max": -15.0,
+    "median": -132.6
+  },
+  "avg_violations_per_episode": {
+    "mean": 0.08199999999999999,
+    "std": 0.13948476619330155,
+    "min": 0.0,
+    "max": 0.36,
+    "median": 0.012499999999999983
+  },
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "total_steps": {
+    "mean": 11384.0,
+    "std": 19308.81739516949,
+    "min": 1423.0,
+    "max": 50000.0,
+    "median": 1730.0
+  },
+  "train_episodes": {
+    "mean": 202.0,
+    "std": 93.68030742904295,
+    "min": 100.0,
+    "max": 360.0,
+    "median": 202.0
+  },
+  "min_reward": {
+    "mean": -240.6,
+    "std": 164.4805155633943,
+    "min": -500.0,
+    "max": -25.0,
+    "median": -240.6
+  },
+  "best_avg_reward": {
+    "mean": -115.09599999999998,
+    "std": 192.45308639769848,
+    "min": -500.0,
+    "max": -17.92,
+    "median": -18.869999999999976
+  },
+  "seed": {
+    "mean": 484.2,
+    "std": 373.42276309834136,
+    "min": 42.0,
+    "max": 1011.0,
+    "median": 484.2
+  },
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "method": "ppo_semantic_loss",
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "max_reward": {
+    "mean": -111.6,
+    "std": 194.20566418104283,
+    "min": -500.0,
+    "max": -13.0,
+    "median": -14.5
+  },
+  "std_reward": {
+    "mean": 21.83359423192077,
+    "std": 24.736184485806138,
+    "min": 0.0,
+    "max": 68.19743323615633,
+    "median": 21.83359423192077
+  }
+}

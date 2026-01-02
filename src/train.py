@@ -141,7 +141,7 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
 
         if env_name == "CliffWalking-v1":
             env = gym.make(env_name, render_mode="human" if render else None)
-            env = TimeLimit(env, max_episode_steps=1000)
+            env = TimeLimit(env, max_episode_steps=1000)  # 1000 steps: allow exploration to find goal
             env.env_name = env_name
             env.use_ram = False
             env.reset(seed=seed)

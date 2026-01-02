@@ -24,7 +24,7 @@ from src.train import train, evaluate_policy
 # for the actual training regime (early stopping at this target)
 TARGET_REWARDS = {
     'CartPole-v1': 200.0,  # Match training target for fair comparison
-    'CliffWalking-v1': -15.0,  # Slightly worse than optimal (-13)
+    'CliffWalking-v1': -20.0,  # Target reward for CliffWalking
     'MiniGrid-DoorKey-5x5-v0': 0.7,  # Realistic target
     'ALE/Seaquest-v5': 800.0,  # Realistic target
 }
@@ -34,7 +34,7 @@ TARGET_REWARDS = {
 # This ensures all methods are evaluated at similar performance levels
 TRAINING_TARGET_REWARDS = {
     'CartPole-v1': 200.0,  # Stop training when rolling average reaches 200
-    'CliffWalking-v1': -15.0,
+    'CliffWalking-v1': -20.0,  # Stop training when rolling average reaches -20
     'MiniGrid-DoorKey-5x5-v0': 0.7,
     'ALE/Seaquest-v5': 800.0,
 }
@@ -137,22 +137,85 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
     Objective function: minimize absolute difference from target reward.
     """
     # === Shared hyperparameters ===
-    lr = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
-    gamma = trial.suggest_float("gamma", 0.90, 0.999)
-    hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512])
-    use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [True, False])
-    num_layers = trial.suggest_int("num_layers", 2, 4)
+    # Tuned ranges for CliffWalking PPO agents (capturing paper parameters)
+    if env_name == 'CliffWalking-v1' and method['agent'] == 'ppo':
+        # Expanded ranges that capture paper values: hidden_dim=128, gamma=0.99, clip_eps=0.2, 
+        # ent_coef=0.015, epochs=7, batch_size=512, lr=3e-4 or 5e-4
+        hidden_dim = trial.suggest_categorical("hidden_dim", [64, 128, 256, 512])  # Captures 128, wider range
+        use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [False, True])  # Captures False
+        gamma = trial.suggest_float("gamma", 0.90, 0.999)  # Captures 0.99, wider range
+        num_layers = trial.suggest_int("num_layers", 2, 4)
+        
+        # Learning rate ranges: 3e-4 for reward shaping/semantic loss, 5e-4 for preemptive/layer
+        if method['name'] in ['ppo_reward_shaping', 'ppo_semantic_loss']:
+            lr = trial.suggest_float("lr", 1e-4, 2e-3, log=True)  # Wider range around 3e-4
+        elif method['name'] in ['ppo_preshield_soft', 'ppo_preshield_hard', 
+                                'ppo_layer_soft', 'ppo_layer_hard']:
+            lr = trial.suggest_float("lr", 1e-4, 2e-3, log=True)  # Wider range around 5e-4
+        else:
+            lr = trial.suggest_float("lr", 1e-4, 2e-3, log=True)  # Default wider range
+        
+        clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)  # Wider range around 0.2
+        ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)  # Wider range around 0.015
+        epochs = trial.suggest_int("epochs", 1, 10)  # Full range, captures 7
+        batch_size = trial.suggest_categorical("batch_size", [128, 256, 512, 1024])  # Captures 512, wider range
+        
+        agent_kwargs = {
+            "lr": lr,
+            "gamma": gamma,
+            "hidden_dim": hidden_dim,
+            "use_orthogonal_init": use_orthogonal_init,
+            "num_layers": num_layers,
+            "clip_eps": clip_eps,
+            "ent_coef": ent_coef,
+            "epochs": epochs,
+            "batch_size": batch_size,
+        }
+        
+        # Semantic loss coefficient (if applicable) - still tune this
+        if method.get('lambda_sem', 0.0) > 0:
+            lambda_sem = trial.suggest_float("lambda_sem", 0.1, 10.0, log=True)
+            agent_kwargs['lambda_sem'] = lambda_sem
+        
+        # Reward shaping penalty (if applicable) - still tune this
+        if method.get('lambda_penalty', 0.0) > 0:
+            lambda_penalty = trial.suggest_float("lambda_penalty", 0.1, 10.0, log=True)
+            agent_kwargs['lambda_penalty'] = lambda_penalty
     
-    agent_kwargs = {
-        "lr": lr,
-        "gamma": gamma,
-        "hidden_dim": hidden_dim,
-        "use_orthogonal_init": use_orthogonal_init,
-        "num_layers": num_layers
-    }
+    # CMDP-specific handling for CliffWalking
+    elif env_name == 'CliffWalking-v1' and method['agent'] == 'cppo':
+        lr = trial.suggest_float("lr", 0.012, 0.022, log=True)  # Tight range around trial 18 (0.0172)
+        gamma = trial.suggest_float("gamma", 0.93, 0.97)  # Around 0.951
+        hidden_dim = trial.suggest_categorical("hidden_dim", [256])  # Fix to 256
+        use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [False])  # Fix to False
+        num_layers = trial.suggest_int("num_layers", 3, 3)  # Fix to 3
+        
+        agent_kwargs = {
+            "lr": lr,
+            "gamma": gamma,
+            "hidden_dim": hidden_dim,
+            "use_orthogonal_init": use_orthogonal_init,
+            "num_layers": num_layers
+        }
     
-    # === Agent-specific parameters ===
-    if method['agent'] == 'ppo':
+    # Default tuning for other environments/methods
+    else:
+        lr = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
+        gamma = trial.suggest_float("gamma", 0.90, 0.999)
+        hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512])
+        use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [True, False])
+        num_layers = trial.suggest_int("num_layers", 2, 4)
+        
+        agent_kwargs = {
+            "lr": lr,
+            "gamma": gamma,
+            "hidden_dim": hidden_dim,
+            "use_orthogonal_init": use_orthogonal_init,
+            "num_layers": num_layers
+        }
+    
+    # === Agent-specific parameters (for non-CliffWalking PPO) ===
+    if method['agent'] == 'ppo' and not (env_name == 'CliffWalking-v1'):
         clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
         ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
         epochs = trial.suggest_int("epochs", 1, 10)
@@ -195,15 +258,29 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             "max_kl": max_kl,
         })
     elif method['agent'] == 'cppo':
-        cost_gamma = trial.suggest_float("cost_gamma", 0.90, 0.999)
-        cost_lam = trial.suggest_float("cost_lam", 0.90, 0.999)
-        clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
-        ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
-        epochs = trial.suggest_int("epochs", 1, 10)
-        batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
-        # Increased budget range - allow more violations to achieve higher rewards
-        budget = trial.suggest_float("budget", 0.10, 0.50)  # Increased from 0.05-0.30 to 0.10-0.50
-        nu_lr = trial.suggest_float("nu_lr", 1e-4, 1e-2, log=True)  # Tune nu learning rate
+        # Environment-specific adjustments for CliffWalking
+        if env_name == 'CliffWalking-v1':
+            # Tight ranges around trial 18's best params
+            lr = trial.suggest_float("lr", 0.012, 0.022, log=True)  # Around 0.0172
+            cost_gamma = trial.suggest_float("cost_gamma", 0.90, 0.93)  # Around 0.917
+            cost_lam = trial.suggest_float("cost_lam", 0.89, 0.92)  # Around 0.909
+            clip_eps = trial.suggest_float("clip_eps", 0.28, 0.37)  # Around 0.326
+            ent_coef = trial.suggest_float("ent_coef", 0.09, 0.15)  # Around 0.119
+            epochs = trial.suggest_int("epochs", 10, 12)  # Around 11
+            # Keep same categorical choices to avoid Optuna TPE indexing errors
+            batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
+            budget = trial.suggest_float("budget", 0.25, 0.35)  # Around 0.298
+            nu_lr = trial.suggest_float("nu_lr", 5e-4, 1e-3, log=True)  # Around 0.000752
+        else:
+            # Default ranges for other environments
+            cost_gamma = trial.suggest_float("cost_gamma", 0.90, 0.999)
+            cost_lam = trial.suggest_float("cost_lam", 0.90, 0.999)
+            clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
+            ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
+            epochs = trial.suggest_int("epochs", 1, 10)
+            batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
+            budget = trial.suggest_float("budget", 0.10, 0.50)
+            nu_lr = trial.suggest_float("nu_lr", 1e-4, 1e-2, log=True)
         
         agent_kwargs.update({
             "cost_gamma": cost_gamma,
@@ -312,10 +389,15 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     method_name = method['name']
     env_safe = env_name.replace('/', '_')
     
-    storage = f"sqlite:///optuna_ijcai_{method_name}_{env_safe}.db"
+    # Add version suffix to study name to avoid conflicts with old trials
+    # Change this version number when you modify hyperparameter ranges
+    study_version = "v6"  # Increment this when changing hyperparameter ranges (v3 = tight ranges around trial 18)
+    study_name = f"ijcai_{method_name}_{env_safe}_{study_version}"
+    
+    storage = f"sqlite:///optuna_ijcai_{method_name}_{env_safe}_{study_version}.db"
     
     # Check if database file exists and is writable
-    db_path = f"optuna_ijcai_{method_name}_{env_safe}.db"
+    db_path = f"optuna_ijcai_{method_name}_{env_safe}_{study_version}.db"
     if os.path.exists(db_path):
         if not os.access(db_path, os.W_OK):
             print(f"Warning: Database file {db_path} is not writable. Attempting to fix permissions...")
@@ -351,7 +433,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     try:
         study = optuna.create_study(
             direction="maximize",  # We maximize negative diff (minimize diff)
-            study_name=f"ijcai_{method_name}_{env_safe}",
+            study_name=study_name,
             storage=storage,
             load_if_exists=True
         )
@@ -361,7 +443,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
         # Try creating without load_if_exists
         study = optuna.create_study(
             direction="maximize",
-            study_name=f"ijcai_{method_name}_{env_safe}",
+            study_name=study_name,
             storage=storage,
             load_if_exists=False
         )

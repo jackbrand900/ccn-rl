@@ -76,7 +76,7 @@ custom_envs = {
     "CliffWalking-v1": (None, None),
 }
 
-def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
+def create_environment(env_name, render=False, use_ram_obs=False, seed=42, max_episode_steps=None):
     if env_name in custom_envs:
         entry_point, kwargs = custom_envs[env_name]
         if entry_point:
@@ -91,14 +91,16 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
 
         if env_name == "CarRacing-v3":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=200)
+            max_steps = max_episode_steps if max_episode_steps is not None else 200
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = False
             return env
 
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=500)
+            max_steps = max_episode_steps if max_episode_steps is not None else 500
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = False
             env.reset(seed=seed)
@@ -111,7 +113,8 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
             env = AtariPreprocessing(env, frame_skip=8, scale_obs=True, terminal_on_life_loss=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=3000)
+            max_steps = max_episode_steps if max_episode_steps is not None else 3000
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = use_ram_obs
             return env
@@ -121,7 +124,8 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=10000)
+            max_steps = max_episode_steps if max_episode_steps is not None else 10000
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = use_ram_obs
             return env
@@ -131,7 +135,8 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=5000)
+            max_steps = max_episode_steps if max_episode_steps is not None else 5000
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = use_ram_obs
             env.reset(seed=seed)
@@ -141,7 +146,8 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42):
 
         if env_name == "CliffWalking-v1":
             env = gym.make(env_name, render_mode="human" if render else None)
-            env = TimeLimit(env, max_episode_steps=1000)  # 1000 steps: allow exploration to find goal
+            max_steps = max_episode_steps if max_episode_steps is not None else 1000  # 1000 steps: allow exploration to find goal
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = False
             env.reset(seed=seed)
@@ -470,10 +476,11 @@ def train(agent='ppo',
           sb3_save_path=None,
           run_dir=None,
           early_stop_patience=None,
-          target_reward=None):
+          target_reward=None,
+          max_episode_steps=None):
     # rand_seed = np.random.randint(0, 2**32 - 1)
     # print(f'Rand_seed: {rand_seed}')
-    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed)
+    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed, max_episode_steps=max_episode_steps)
     set_seed(seed)
     print("Observation space:", env.observation_space)
     obs_space = env.observation_space

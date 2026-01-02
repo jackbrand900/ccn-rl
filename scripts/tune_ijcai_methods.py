@@ -26,7 +26,7 @@ TARGET_REWARDS = {
     'CartPole-v1': 200.0,  # Match training target for fair comparison
     'CliffWalking-v1': -20.0,  # Target reward for CliffWalking
     'MiniGrid-DoorKey-5x5-v0': 0.7,  # Realistic target
-    'ALE/Seaquest-v5': 800.0,  # Realistic target
+    'ALE/Seaquest-v5': 350.0,  # Balanced target for RAM observations with limited steps
 }
 
 # Target rewards for early stopping during training
@@ -36,7 +36,7 @@ TRAINING_TARGET_REWARDS = {
     'CartPole-v1': 200.0,  # Stop training when rolling average reaches 200
     'CliffWalking-v1': -20.0,  # Stop training when rolling average reaches -20
     'MiniGrid-DoorKey-5x5-v0': 0.7,
-    'ALE/Seaquest-v5': 800.0,
+    'ALE/Seaquest-v5': 350.0,
 }
 
 # Methods to tune (ordered from lightest to heaviest for memory/computational efficiency)
@@ -132,7 +132,7 @@ METHODS = [
 ]
 
 
-def objective(trial, env_name, method, target_reward, num_train_episodes=500, num_eval_episodes=50):
+def objective(trial, env_name, method, target_reward, num_train_episodes=500, num_eval_episodes=50, max_episode_steps=None, use_ram_obs=False):
     """
     Objective function: minimize absolute difference from target reward.
     """
@@ -198,6 +198,76 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             "num_layers": num_layers
         }
     
+    # Seaquest-specific tuning (Atari environment with sparse rewards)
+    elif env_name == 'ALE/Seaquest-v5':
+        # Learning rate: 1e-4 to 3e-4 (optimized range for Atari)
+        lr = trial.suggest_float("lr", 1e-4, 3e-4, log=True)
+        # Gamma: 0.95-0.999, focusing around 0.99
+        gamma = trial.suggest_float("gamma", 0.95, 0.999)
+        # Hidden dimensions: reasonable range for deep networks
+        hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512])
+        use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [True, False])
+        num_layers = trial.suggest_int("num_layers", 2, 4)
+        
+        agent_kwargs = {
+            "lr": lr,
+            "gamma": gamma,
+            "hidden_dim": hidden_dim,
+            "use_orthogonal_init": use_orthogonal_init,
+            "num_layers": num_layers
+        }
+        
+        # PPO-specific parameters for Seaquest
+        if method['agent'] == 'ppo':
+            # Clip range: 0.1 to 0.2 (tighter range for stability)
+            clip_eps = trial.suggest_float("clip_eps", 0.1, 0.2)
+            # Entropy coefficient: 0.005 to 0.1 (crucial for exploration in sparse rewards)
+            ent_coef = trial.suggest_float("ent_coef", 0.005, 0.1, log=True)
+            # Epochs: 4-10 (multiple epochs per batch for stability)
+            epochs = trial.suggest_int("epochs", 4, 10)
+            # Batch size: 128, 256 (larger batches for stability)
+            batch_size = trial.suggest_categorical("batch_size", [128, 256])
+            
+            agent_kwargs.update({
+                "clip_eps": clip_eps,
+                "ent_coef": ent_coef,
+                "epochs": epochs,
+                "batch_size": batch_size,
+            })
+            
+            # Semantic loss coefficient (if applicable)
+            if method.get('lambda_sem', 0.0) > 0:
+                lambda_sem = trial.suggest_float("lambda_sem", 0.1, 10.0, log=True)
+                agent_kwargs['lambda_sem'] = lambda_sem
+            
+            # Reward shaping penalty (if applicable)
+            if method.get('lambda_penalty', 0.0) > 0:
+                lambda_penalty = trial.suggest_float("lambda_penalty", 0.1, 10.0, log=True)
+                agent_kwargs['lambda_penalty'] = lambda_penalty
+        
+        # CPO/CPPO-specific parameters for Seaquest
+        elif method['agent'] in ['cpo', 'cppo']:
+            cost_gamma = trial.suggest_float("cost_gamma", 0.95, 0.999)  # Similar to gamma
+            cost_lam = trial.suggest_float("cost_lam", 0.90, 0.99)  # GAE lambda: 0.95-0.99
+            clip_eps = trial.suggest_float("clip_eps", 0.1, 0.2)
+            ent_coef = trial.suggest_float("ent_coef", 0.005, 0.1, log=True)
+            epochs = trial.suggest_int("epochs", 4, 10)
+            batch_size = trial.suggest_categorical("batch_size", [128, 256])
+            budget = trial.suggest_float("budget", 0.05, 0.30)
+            nu_lr = trial.suggest_float("nu_lr", 1e-4, 1e-2, log=True)
+            
+            agent_kwargs.update({
+                "cost_gamma": cost_gamma,
+                "cost_lam": cost_lam,
+                "clip_eps": clip_eps,
+                "ent_coef": ent_coef,
+                "epochs": epochs,
+                "batch_size": batch_size,
+                "budget": budget,
+            })
+            if method['agent'] == 'cppo':
+                agent_kwargs['nu_lr'] = nu_lr
+    
     # Default tuning for other environments/methods
     else:
         lr = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
@@ -214,8 +284,8 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             "num_layers": num_layers
         }
     
-    # === Agent-specific parameters (for non-CliffWalking PPO) ===
-    if method['agent'] == 'ppo' and not (env_name == 'CliffWalking-v1'):
+    # === Agent-specific parameters (for non-CliffWalking, non-Seaquest PPO) ===
+    if method['agent'] == 'ppo' and not (env_name == 'CliffWalking-v1') and not (env_name == 'ALE/Seaquest-v5'):
         clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
         ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
         epochs = trial.suggest_int("epochs", 1, 10)
@@ -315,7 +385,9 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             seed=42,  # Fixed seed for tuning
             agent_kwargs=agent_kwargs,
             early_stop_patience=100,  # Stop training if no improvement after 100 episodes
-            target_reward=training_target  # Stop training when target reward is reached
+            target_reward=training_target,  # Stop training when target reward is reached
+            max_episode_steps=max_episode_steps,
+            use_ram_obs=use_ram_obs
         )
         
         # Load best weights
@@ -382,7 +454,7 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
     return result
 
 
-def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes=500, num_eval_episodes=50):
+def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes=500, num_eval_episodes=50, max_episode_steps=None, use_ram_obs=False):
     """
     Tune hyperparameters for a specific method on a specific environment.
     """
@@ -391,7 +463,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     
     # Add version suffix to study name to avoid conflicts with old trials
     # Change this version number when you modify hyperparameter ranges
-    study_version = "v6"  # Increment this when changing hyperparameter ranges (v3 = tight ranges around trial 18)
+    study_version = "v7"  # Increment this when changing hyperparameter ranges (v7 = Seaquest-specific ranges with log=True for ent_coef)
     study_name = f"ijcai_{method_name}_{env_safe}_{study_version}"
     
     storage = f"sqlite:///optuna_ijcai_{method_name}_{env_safe}_{study_version}.db"
@@ -573,7 +645,9 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
                 method=method,
                 target_reward=target_reward,
                 num_train_episodes=num_train_episodes,
-                num_eval_episodes=num_eval_episodes
+                num_eval_episodes=num_eval_episodes,
+                max_episode_steps=max_episode_steps,
+                use_ram_obs=use_ram_obs
             ),
             n_trials=n_trials,
             show_progress_bar=True,
@@ -628,7 +702,9 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
             seed=42,
             agent_kwargs=best_agent_kwargs,
             early_stop_patience=100,  # Stop training if no improvement after 100 episodes
-            target_reward=training_target  # Stop training when target reward is reached
+            target_reward=training_target,  # Stop training when target reward is reached
+            max_episode_steps=max_episode_steps,
+            use_ram_obs=use_ram_obs
         )
         
         if hasattr(test_agent, 'load_weights') and best_weights is not None:
@@ -698,6 +774,12 @@ Examples:
   
   # Quick test (fewer episodes, fewer trials)
   python scripts/tune_ijcai_methods.py --env CartPole-v1 --trials 10 --train_episodes 200 --eval_episodes 20
+  
+  # Tune Seaquest with step cap for faster tuning (default: 1000 steps)
+  python scripts/tune_ijcai_methods.py --env ALE/Seaquest-v5 --trials 20 --max_episode_steps 1000
+  
+  # Tune Seaquest with RAM observations
+  python scripts/tune_ijcai_methods.py --env ALE/Seaquest-v5 --trials 20 --max_episode_steps 2000 --use_ram_obs
         """
     )
     parser.add_argument('--env', type=str, required=True,
@@ -713,8 +795,16 @@ Examples:
                        help='Number of evaluation episodes during tuning')
     parser.add_argument('--target_reward', type=float, default=None,
                        help='Target reward (default: use predefined)')
+    parser.add_argument('--max_episode_steps', type=int, default=None,
+                       help='Maximum steps per episode (default: env-specific, 1000 for Seaquest)')
+    parser.add_argument('--use_ram_obs', action='store_true',
+                       help='Use RAM observations instead of image observations (for Atari games)')
     
     args = parser.parse_args()
+    
+    # Set default max_episode_steps for Seaquest if not specified
+    if args.max_episode_steps is None and args.env == 'ALE/Seaquest-v5':
+        args.max_episode_steps = 1000  # Reduced from 10000 for faster tuning
     
     # Get base target reward for environment
     base_target_reward = args.target_reward if args.target_reward is not None else TARGET_REWARDS.get(args.env)
@@ -739,6 +829,10 @@ Examples:
     print(f"# Trials per method: {args.trials}")
     print(f"# Train episodes per trial: {args.train_episodes}")
     print(f"# Eval episodes per trial: {args.eval_episodes}")
+    if args.max_episode_steps is not None:
+        print(f"# Max episode steps: {args.max_episode_steps}")
+    if args.use_ram_obs:
+        print(f"# Using RAM observations")
     print(f"{'#'*80}")
     print(f"\n📋 Methods to tune:")
     for i, method in enumerate(methods_to_tune, 1):
@@ -773,7 +867,9 @@ Examples:
                 target_reward=base_target_reward,  # Used for tuning objective (minimize difference)
                 n_trials=args.trials,
                 num_train_episodes=args.train_episodes,
-                num_eval_episodes=args.eval_episodes
+                num_eval_episodes=args.eval_episodes,
+                max_episode_steps=args.max_episode_steps,
+                use_ram_obs=args.use_ram_obs
             )
             method_time = time.time() - method_start
             method_time_str = str(timedelta(seconds=int(method_time))).split('.')[0]

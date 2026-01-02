@@ -36,6 +36,10 @@ def main():
                        help='Skip methods that already have config files')
     parser.add_argument('--method', type=str, default=None,
                        help='Tune only this specific method (default: all)')
+    parser.add_argument('--max_episode_steps', type=int, default=None,
+                       help='Maximum steps per episode (default: env-specific)')
+    parser.add_argument('--use_ram_obs', action='store_true',
+                       help='Use RAM observations instead of image observations (for Atari games)')
     
     args = parser.parse_args()
     
@@ -115,6 +119,12 @@ def main():
         
         if args.target_reward is not None:
             cmd.extend(["--target_reward", str(args.target_reward)])
+        
+        if args.max_episode_steps is not None:
+            cmd.extend(["--max_episode_steps", str(args.max_episode_steps)])
+        
+        if args.use_ram_obs:
+            cmd.append("--use_ram_obs")
         
         # Run in separate process
         try:

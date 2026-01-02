@@ -8,7 +8,7 @@ CliffWalking-v1 PPO + Pre-emptive (Soft)          -31.02       -31.02 ± 9.60 0.
 CliffWalking-v1 PPO + Pre-emptive (Hard)          -19.93       -19.66 ± 0.87 0.0997 ± 0.0289 0.0997 ± 0.0289  195.8 ± 57.6  195.8 ± 57.6
 CliffWalking-v1       PPO + Layer (Soft)          -22.84    -217.49 ± 392.25 0.0016 ± 0.0013 0.0016 ± 0.0013     3.8 ± 1.9     3.8 ± 1.9
 CliffWalking-v1       PPO + Layer (Hard)          -24.45       -24.38 ± 3.07 0.1907 ± 0.0235 0.1907 ± 0.0235  460.2 ± 49.8  460.2 ± 49.8
-CliffWalking-v1                     CMDP         Pending             Pending         Pending         Pending       Pending       Pending
+CliffWalking-v1                     CMDP          -53.60      -63.18 ± 25.28 0.0099 ± 0.0190 0.0000 ± 0.0000  88.0 ± 173.0     0.0 ± 0.0
     CartPole-v1     PPO + Reward Shaping          222.15      220.27 ± 50.19 0.0140 ± 0.0078 0.0000 ± 0.0000 294.4 ± 155.2     0.0 ± 0.0
     CartPole-v1      PPO + Semantic Loss          163.08      178.92 ± 58.82 0.0260 ± 0.0115 0.0000 ± 0.0000 444.8 ± 258.7     0.0 ± 0.0
     CartPole-v1 PPO + Pre-emptive (Soft)          258.08      265.52 ± 24.62 0.0116 ± 0.0019 0.0097 ± 0.0018  307.2 ± 44.3  257.4 ± 42.7

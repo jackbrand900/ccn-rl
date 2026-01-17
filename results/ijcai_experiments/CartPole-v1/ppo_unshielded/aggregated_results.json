@@ -1,0 +1,109 @@
+{
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "std_reward": {
+    "mean": 97.40601596217348,
+    "std": 18.595537485558275,
+    "min": 77.02160995460949,
+    "max": 130.11637099150897,
+    "median": 93.70904118600296
+  },
+  "avg_violations_per_episode": {
+    "mean": 4.162000000000001,
+    "std": 0.7857582325372097,
+    "min": 3.49,
+    "max": 5.52,
+    "median": 3.67
+  },
+  "avg_reward": {
+    "mean": 210.092,
+    "std": 24.39183420737358,
+    "min": 167.03,
+    "max": 239.66,
+    "median": 209.46
+  },
+  "best_avg_reward": {
+    "mean": 214.8,
+    "std": 10.757337960666664,
+    "min": 202.92,
+    "max": 229.92,
+    "median": 208.48
+  },
+  "min_reward": {
+    "mean": 22.0,
+    "std": 7.874007874011811,
+    "min": 14.0,
+    "max": 36.0,
+    "median": 18.0
+  },
+  "max_reward": {
+    "mean": 473.6,
+    "std": 24.47529366524537,
+    "min": 440.0,
+    "max": 500.0,
+    "median": 476.0
+  },
+  "total_violations": {
+    "mean": 416.2,
+    "std": 78.575823253721,
+    "min": 349.0,
+    "max": 552.0,
+    "median": 367.0
+  },
+  "method": "ppo_unshielded",
+  "total_steps": {
+    "mean": 21009.2,
+    "std": 2439.183420737358,
+    "min": 16703.0,
+    "max": 23966.0,
+    "median": 20946.0
+  },
+  "final_reward": {
+    "mean": 199.8,
+    "std": 135.78718643524505,
+    "min": 63.0,
+    "max": 431.0,
+    "median": 154.0
+  },
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "train_episodes": {
+    "mean": 268.0,
+    "std": 42.61455150532503,
+    "min": 210.0,
+    "max": 330.0,
+    "median": 260.0
+  },
+  "seed": {
+    "mean": 484.2,
+    "std": 373.42276309834136,
+    "min": 42.0,
+    "max": 1011.0,
+    "median": 456.0
+  },
+  "env": "CartPole-v1",
+  "avg_violations_per_step": {
+    "mean": 0.019928201636425544,
+    "std": 0.0034159009587716475,
+    "min": 0.015313360594175082,
+    "max": 0.024457244129375277,
+    "median": 0.02125366700592708
+  },
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  }
+}

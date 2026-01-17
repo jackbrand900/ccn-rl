@@ -17,6 +17,8 @@ import sys
 import argparse
 import json
 import csv
+import subprocess
+import gc
 from datetime import datetime
 from pathlib import Path
 import numpy as np
@@ -50,11 +52,22 @@ ENV_DISPLAY_NAMES = {
     'ALE/Seaquest-v5': 'Seaquest',
 }
 
-# Methods to compare (7 total: CPO and Post-hoc methods skipped)
+# Methods to compare (8 total: CPO and Post-hoc methods skipped)
 # Post-hoc methods removed due to known PPO collapse issue
 # Ordered from lightest to heaviest computationally
 METHODS = [
-    # Lightest: No shield computation during training
+    # Lightest: Baseline (no modifications)
+    {
+        'name': 'ppo_unshielded',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'mode': '',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO (Unshielded)'
+    },
+    # Light: Simple reward/loss modifications (no shield integration)
     {
         'name': 'ppo_reward_shaping',
         'agent': 'ppo',
@@ -164,6 +177,46 @@ METHODS = [
 ]
 
 
+def run_single_experiment_subprocess(
+    env_name,
+    method_name,
+    seed,
+    num_train_episodes,
+    num_eval_episodes,
+    base_dir,
+    verbose=False
+):
+    """
+    Wrapper function to run a single experiment in a subprocess.
+    This function is called from command line when using --use_subprocess flag.
+    """
+    # Find the method by name
+    method = None
+    for m in METHODS:
+        if m['name'] == method_name:
+            method = m
+            break
+    
+    if method is None:
+        print(f"Error: Method '{method_name}' not found")
+        return 1
+    
+    result = run_single_experiment(
+        env_name=env_name,
+        method=method,
+        seed=seed,
+        num_train_episodes=num_train_episodes,
+        num_eval_episodes=num_eval_episodes,
+        base_dir=base_dir,
+        verbose=verbose
+    )
+    
+    # Force garbage collection after each run
+    gc.collect()
+    
+    return 0 if result else 1
+
+
 def run_single_experiment(
     env_name,
     method,
@@ -258,6 +311,11 @@ def run_single_experiment(
         from scripts.tune_ijcai_methods import TRAINING_TARGET_REWARDS
         training_target = TRAINING_TARGET_REWARDS.get(env_name, None)
         
+        # Seaquest-specific settings
+        use_ram_obs = (env_name == 'ALE/Seaquest-v5')
+        max_episode_steps = 2000 if env_name == 'ALE/Seaquest-v5' else None
+        early_stop_patience = 250 if env_name == 'ALE/Seaquest-v5' else 100  # Longer patience for Seaquest
+        
         # Train agent
         agent, episode_rewards, best_weights, best_avg_reward, env = train(
             agent=method['agent'],
@@ -274,8 +332,10 @@ def run_single_experiment(
             seed=seed,
             run_dir=run_dir,
             agent_kwargs=agent_kwargs if agent_kwargs else None,
-            early_stop_patience=100,  # Stop training if no improvement after 100 episodes
-            target_reward=training_target  # Stop training when target is reached
+            early_stop_patience=early_stop_patience,  # Environment-specific early stopping
+            target_reward=training_target,  # Stop training when target is reached
+            use_ram_obs=use_ram_obs,  # Use RAM observations for Seaquest
+            max_episode_steps=max_episode_steps  # Limit episode steps for Seaquest
         )
         
         # Load best weights
@@ -326,6 +386,11 @@ def run_single_experiment(
         results['seed'] = seed
         results['method'] = method['name']
         results['env'] = env_name
+        
+        # Save results to JSON file (for subprocess mode)
+        result_file = os.path.join(run_dir, 'results.json')
+        with open(result_file, 'w') as f:
+            json.dump(results, f, indent=2)
         
         env.close()
         
@@ -763,7 +828,8 @@ def run_all_experiments(
     verbose=False,
     env_filter=None,
     method_filter=None,
-    skip_existing=False
+    skip_existing=False,
+    use_subprocess=False
 ):
     """
     Run all experiment configurations.
@@ -819,19 +885,62 @@ def run_all_experiments(
                 config_num += 1
                 print(f"\n[{config_num}/{total_configs}] Configuration: {method['display_name']} on {env_name} (seed={seed})")
                 
-                result = run_single_experiment(
-                    env_name=env_name,
-                    method=method,
-                    seed=seed,
-                    num_train_episodes=num_train_episodes,
-                    num_eval_episodes=num_eval_episodes,
-                    base_dir=base_dir,
-                    verbose=verbose
-                )
-                
-                if result:
-                    method_results.append(result)
-                    all_results.append(result)
+                if use_subprocess:
+                    # Run in a separate subprocess to free memory between runs
+                    script_path = os.path.abspath(__file__)
+                    cmd = [
+                        sys.executable, script_path,
+                        '--subprocess-run',
+                        '--env', env_name,
+                        '--method', method['name'],
+                        '--seed', str(seed),
+                        '--train_episodes', str(num_train_episodes),
+                        '--eval_episodes', str(num_eval_episodes),
+                        '--base_dir', base_dir,
+                    ]
+                    if verbose:
+                        cmd.append('--verbose')
+                    
+                    print(f"  [Subprocess] Starting separate process for memory isolation...")
+                    result_code = subprocess.run(cmd, check=False).returncode
+                    
+                    if result_code == 0:
+                        # Load the result from the saved file
+                        run_dir = os.path.join(
+                            base_dir,
+                            env_name.replace('/', '_'),
+                            method['name'],
+                            f'run_{seed}'
+                        )
+                        result_file = os.path.join(run_dir, 'results.json')
+                        if os.path.exists(result_file):
+                            with open(result_file, 'r') as f:
+                                result = json.load(f)
+                                method_results.append(result)
+                                all_results.append(result)
+                                print(f"  ✓ Subprocess completed successfully")
+                        else:
+                            print(f"  ⚠ Warning: Subprocess completed but result file not found")
+                    else:
+                        print(f"  ✗ Subprocess failed with exit code {result_code}")
+                else:
+                    # Run in the same process (original behavior)
+                    result = run_single_experiment(
+                        env_name=env_name,
+                        method=method,
+                        seed=seed,
+                        num_train_episodes=num_train_episodes,
+                        num_eval_episodes=num_eval_episodes,
+                        base_dir=base_dir,
+                        verbose=verbose
+                    )
+                    
+                    if result:
+                        method_results.append(result)
+                        all_results.append(result)
+                    
+                    # Force garbage collection after each run
+                    gc.collect()
             
             # Aggregate results for this method
             if method_results:
@@ -912,6 +1021,9 @@ Examples:
   
   # Test mode (1 episode each)
   python scripts/run_ijcai_experiments.py --test --env CartPole-v1
+  
+  # Use subprocess mode to free memory between runs (recommended for large experiments)
+  python scripts/run_ijcai_experiments.py --env ALE/Seaquest-v5 --use_subprocess
         """
     )
     parser.add_argument('--num_train_episodes', type=int, default=500,
@@ -936,8 +1048,45 @@ Examples:
                        help='Show summary table and exit (do not run experiments)')
     parser.add_argument('--generate_graphs', action='store_true',
                        help='Generate graphs from existing data and exit (do not run experiments)')
+    parser.add_argument('--use_subprocess', action='store_true',
+                       help='Run each experiment in a separate subprocess to free memory between runs')
+    # Internal flag for subprocess mode (not shown in help)
+    parser.add_argument('--subprocess-run', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--seed', type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument('--train_episodes', type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument('--eval_episodes', type=int, default=None, help=argparse.SUPPRESS)
     
     args = parser.parse_args()
+    
+    # Handle subprocess mode (when called with --subprocess-run)
+    if args.subprocess_run:
+        if args.env is None or len(args.env) != 1:
+            print("Error: --subprocess-run requires exactly one --env")
+            sys.exit(1)
+        if args.method is None or len(args.method) != 1:
+            print("Error: --subprocess-run requires exactly one --method")
+            sys.exit(1)
+        if args.seed is None:
+            print("Error: --subprocess-run requires --seed")
+            sys.exit(1)
+        
+        env_name = args.env[0]
+        method_name = args.method[0]
+        seed = args.seed
+        num_train = args.train_episodes if args.train_episodes else 500
+        num_eval = args.eval_episodes if args.eval_episodes else 100
+        base_dir = args.base_dir
+        
+        exit_code = run_single_experiment_subprocess(
+            env_name=env_name,
+            method_name=method_name,
+            seed=seed,
+            num_train_episodes=num_train,
+            num_eval_episodes=num_eval,
+            base_dir=base_dir,
+            verbose=args.verbose
+        )
+        sys.exit(exit_code)
     
     # If just showing summary, do that and exit
     if args.show_summary:
@@ -981,6 +1130,7 @@ Examples:
         verbose=args.verbose,
         env_filter=args.env,
         method_filter=args.method,
-        skip_existing=args.skip_existing
+        skip_existing=args.skip_existing,
+        use_subprocess=args.use_subprocess
     )
 

@@ -1,0 +1,109 @@
+{
+  "total_steps": {
+    "mean": 51856.4,
+    "std": 6984.352299247225,
+    "min": 42664.0,
+    "max": 60605.0,
+    "median": 49930.0
+  },
+  "std_reward": {
+    "mean": 45.121468410764734,
+    "std": 24.00193926449194,
+    "min": 16.803571049035977,
+    "max": 72.62919523166975,
+    "median": 52.2803978561755
+  },
+  "min_reward": {
+    "mean": 4.0,
+    "std": 8.0,
+    "min": 0.0,
+    "max": 20.0,
+    "median": 0.0
+  },
+  "final_reward": {
+    "mean": 32.0,
+    "std": 24.0,
+    "min": 0.0,
+    "max": 60.0,
+    "median": 20.0
+  },
+  "method": "cppo",
+  "total_violations": {
+    "mean": 5025.0,
+    "std": 1739.0623910601942,
+    "min": 1759.0,
+    "max": 6413.0,
+    "median": 5911.0
+  },
+  "train_episodes": {
+    "mean": 438.0,
+    "std": 77.56287771866127,
+    "min": 320.0,
+    "max": 500.0,
+    "median": 500.0
+  },
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "max_reward": {
+    "mean": 200.0,
+    "std": 110.99549540409286,
+    "min": 60.0,
+    "max": 340.0,
+    "median": 240.0
+  },
+  "avg_violations_per_episode": {
+    "mean": 50.25,
+    "std": 17.390623910601942,
+    "min": 17.59,
+    "max": 64.13,
+    "median": 59.11
+  },
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "env": "ALE/Seaquest-v5",
+  "avg_violations_per_step": {
+    "mean": 0.0969262426978372,
+    "std": 0.03170565887456955,
+    "min": 0.035229321049469256,
+    "max": 0.12613362354095983,
+    "median": 0.10658561296859169
+  },
+  "best_avg_reward": {
+    "mean": 77.12,
+    "std": 33.361438817892726,
+    "min": 37.6,
+    "max": 116.8,
+    "median": 66.4
+  },
+  "avg_reward": {
+    "mean": 65.72,
+    "std": 47.942065036875505,
+    "min": 13.6,
+    "max": 128.8,
+    "median": 57.4
+  },
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "seed": {
+    "mean": 484.2,
+    "std": 373.42276309834136,
+    "min": 42.0,
+    "max": 1011.0,
+    "median": 456.0
+  }
+}

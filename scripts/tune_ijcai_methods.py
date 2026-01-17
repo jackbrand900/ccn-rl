@@ -11,6 +11,10 @@ import argparse
 import os
 import sys
 import time
+import subprocess
+import json
+import gc
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -26,7 +30,7 @@ TARGET_REWARDS = {
     'CartPole-v1': 200.0,  # Match training target for fair comparison
     'CliffWalking-v1': -20.0,  # Target reward for CliffWalking
     'MiniGrid-DoorKey-5x5-v0': 0.7,  # Realistic target
-    'ALE/Seaquest-v5': 350.0,  # Balanced target for RAM observations with limited steps
+    'ALE/Seaquest-v5': 250.0,  # More realistic target (best CMDP achieved ~180, PPO baseline ~200-300)
 }
 
 # Target rewards for early stopping during training
@@ -36,7 +40,7 @@ TRAINING_TARGET_REWARDS = {
     'CartPole-v1': 200.0,  # Stop training when rolling average reaches 200
     'CliffWalking-v1': -20.0,  # Stop training when rolling average reaches -20
     'MiniGrid-DoorKey-5x5-v0': 0.7,
-    'ALE/Seaquest-v5': 350.0,
+    'ALE/Seaquest-v5': 250.0,
 }
 
 # Methods to tune (ordered from lightest to heaviest for memory/computational efficiency)
@@ -132,7 +136,7 @@ METHODS = [
 ]
 
 
-def objective(trial, env_name, method, target_reward, num_train_episodes=500, num_eval_episodes=50, max_episode_steps=None, use_ram_obs=False):
+def objective(trial, env_name, method, target_reward, num_train_episodes=500, num_eval_episodes=50, max_episode_steps=None, use_ram_obs=False, use_subprocess=False):
     """
     Objective function: minimize absolute difference from target reward.
     """
@@ -250,11 +254,16 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             cost_gamma = trial.suggest_float("cost_gamma", 0.95, 0.999)  # Similar to gamma
             cost_lam = trial.suggest_float("cost_lam", 0.90, 0.99)  # GAE lambda: 0.95-0.99
             clip_eps = trial.suggest_float("clip_eps", 0.1, 0.2)
-            ent_coef = trial.suggest_float("ent_coef", 0.005, 0.1, log=True)
+            # Much higher entropy for better exploration and to prevent collapse (0.05-0.25)
+            ent_coef = trial.suggest_float("ent_coef", 0.05, 0.25, log=True)
             epochs = trial.suggest_int("epochs", 4, 10)
             batch_size = trial.suggest_categorical("batch_size", [128, 256])
-            budget = trial.suggest_float("budget", 0.05, 0.30)
-            nu_lr = trial.suggest_float("nu_lr", 1e-4, 1e-2, log=True)
+            # Much higher budget to allow violations during learning (0.25-0.60)
+            # Violations are ~0.10-0.12, so budget should be comfortably above that
+            budget = trial.suggest_float("budget", 0.25, 0.60)
+            # Much lower nu_lr for very stable Lagrangian updates (1e-5 to 1e-3)
+            # Prevents nu from growing too fast and causing collapse
+            nu_lr = trial.suggest_float("nu_lr", 1e-5, 1e-3, log=True)
             
             agent_kwargs.update({
                 "cost_gamma": cost_gamma,
@@ -341,6 +350,10 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
             budget = trial.suggest_float("budget", 0.25, 0.35)  # Around 0.298
             nu_lr = trial.suggest_float("nu_lr", 5e-4, 1e-3, log=True)  # Around 0.000752
+        elif env_name == 'ALE/Seaquest-v5':
+            # Seaquest CMDP parameters are already set in the Seaquest-specific section above
+            # Don't override them here to avoid log configuration conflicts
+            pass
         else:
             # Default ranges for other environments
             cost_gamma = trial.suggest_float("cost_gamma", 0.90, 0.999)
@@ -352,23 +365,103 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             budget = trial.suggest_float("budget", 0.10, 0.50)
             nu_lr = trial.suggest_float("nu_lr", 1e-4, 1e-2, log=True)
         
-        agent_kwargs.update({
-            "cost_gamma": cost_gamma,
-            "cost_lam": cost_lam,
-            "clip_eps": clip_eps,
-            "ent_coef": ent_coef,
-            "epochs": epochs,
-            "batch_size": batch_size,
-            "budget": budget,
-            "nu_lr": nu_lr,
-        })
+        # Only update agent_kwargs if we're not in Seaquest (Seaquest params already set)
+        if env_name != 'ALE/Seaquest-v5':
+            agent_kwargs.update({
+                "cost_gamma": cost_gamma,
+                "cost_lam": cost_lam,
+                "clip_eps": clip_eps,
+                "ent_coef": ent_coef,
+                "epochs": epochs,
+                "batch_size": batch_size,
+                "budget": budget,
+                "nu_lr": nu_lr,
+            })
     
     # === Train ===
+    # If use_subprocess, spawn subprocess for training/evaluation to free memory
+    if use_subprocess:
+        # Serialize parameters for subprocess
+        trial_data = {
+            'agent_kwargs': agent_kwargs,
+            'env_name': env_name,
+            'method': method,
+            'target_reward': target_reward,
+            'num_train_episodes': num_train_episodes,
+            'num_eval_episodes': num_eval_episodes,
+            'max_episode_steps': max_episode_steps,
+            'use_ram_obs': use_ram_obs
+        }
+        
+        # Write to temp file
+        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        json.dump(trial_data, temp_file)
+        temp_file.close()
+        
+        # Spawn subprocess
+        script_path = os.path.abspath(__file__)
+        cmd = [
+            sys.executable, script_path,
+            '--subprocess-trial',
+            '--trial-data', temp_file.name
+        ]
+        
+        # Write result to a file so we can read it after subprocess completes
+        result_file = temp_file.name.replace('.json', '_result.txt')
+        
+        try:
+            # Run subprocess - output will print naturally to terminal
+            # The subprocess writes the result to a file which we read after
+            print(f"\n[Subprocess] Starting trial evaluation (output will appear below)...")
+            result_code = subprocess.run(cmd, check=False)
+            print(f"[Subprocess] Trial evaluation completed (exit code: {result_code.returncode})\n")
+            
+            if result_code.returncode == 0:
+                # Read result from file
+                if os.path.exists(result_file):
+                    with open(result_file, 'r') as f:
+                        result_data = json.load(f)
+                        result = result_data['result']
+                        avg_reward = result_data.get('actual_reward', None)
+                        if avg_reward is not None:
+                            trial.set_user_attr("actual_reward", avg_reward)
+                            trial.set_user_attr("target_reward", target_reward)
+                            reward_diff = abs(avg_reward - target_reward)
+                            trial.set_user_attr("reward_diff", reward_diff)
+                            print(f"[Subprocess] Trial result: reward={avg_reward:.2f}, normalized_diff={-result:.4f}")
+                        else:
+                            print(f"[Subprocess] Warning: No actual_reward in result file")
+                else:
+                    # Fallback: try to read from stdout if file doesn't exist
+                    print(f"[Subprocess] Warning: Result file not found, subprocess may have failed")
+                    result = -1000.0
+            else:
+                print(f"[Subprocess] Failed with exit code {result_code.returncode}")
+                result = -1000.0
+        finally:
+            # Clean up temp files
+            try:
+                os.unlink(temp_file.name)
+            except:
+                pass
+            try:
+                if os.path.exists(result_file):
+                    os.unlink(result_file)
+            except:
+                pass
+        
+        # Force garbage collection
+        gc.collect()
+        return result
+    
+    # Normal execution (no subprocess)
     agent = None
     env = None
     try:
         # Get training target reward for early stopping
         training_target = TRAINING_TARGET_REWARDS.get(env_name, target_reward)
+        # Environment-specific early stopping patience (longer for Seaquest)
+        early_stop_patience = 250 if env_name == 'ALE/Seaquest-v5' else 100
         
         agent, episode_rewards, best_weights, best_avg_reward, env = train(
             agent=method['agent'],
@@ -384,7 +477,7 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             render=False,
             seed=42,  # Fixed seed for tuning
             agent_kwargs=agent_kwargs,
-            early_stop_patience=100,  # Stop training if no improvement after 100 episodes
+            early_stop_patience=early_stop_patience,  # Environment-specific early stopping
             target_reward=training_target,  # Stop training when target reward is reached
             max_episode_steps=max_episode_steps,
             use_ram_obs=use_ram_obs
@@ -445,7 +538,6 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             del best_weights
         
         # Force garbage collection and clear CUDA cache
-        import gc
         import torch
         gc.collect()
         if torch.cuda.is_available():
@@ -454,7 +546,7 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
     return result
 
 
-def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes=500, num_eval_episodes=50, max_episode_steps=None, use_ram_obs=False):
+def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes=500, num_eval_episodes=50, max_episode_steps=None, use_ram_obs=False, use_subprocess=False):
     """
     Tune hyperparameters for a specific method on a specific environment.
     """
@@ -463,7 +555,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     
     # Add version suffix to study name to avoid conflicts with old trials
     # Change this version number when you modify hyperparameter ranges
-    study_version = "v7"  # Increment this when changing hyperparameter ranges (v7 = Seaquest-specific ranges with log=True for ent_coef)
+    study_version = "v11"  # Increment this when changing hyperparameter ranges (v11 = Seaquest CMDP anti-collapse: much higher ent_coef/budget, much lower nu_lr)
     study_name = f"ijcai_{method_name}_{env_safe}_{study_version}"
     
     storage = f"sqlite:///optuna_ijcai_{method_name}_{env_safe}_{study_version}.db"
@@ -647,7 +739,8 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
                 num_train_episodes=num_train_episodes,
                 num_eval_episodes=num_eval_episodes,
                 max_episode_steps=max_episode_steps,
-                use_ram_obs=use_ram_obs
+                use_ram_obs=use_ram_obs,
+                use_subprocess=use_subprocess
             ),
             n_trials=n_trials,
             show_progress_bar=True,
@@ -686,6 +779,8 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     try:
         # Get training target for final test
         training_target = TRAINING_TARGET_REWARDS.get(env_name, target_reward)
+        # Environment-specific early stopping patience (longer for Seaquest)
+        early_stop_patience = 250 if env_name == 'ALE/Seaquest-v5' else 100
         
         test_agent, episode_rewards, best_weights, best_avg_reward, test_env = train(
             agent=method['agent'],
@@ -701,7 +796,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
             render=False,
             seed=42,
             agent_kwargs=best_agent_kwargs,
-            early_stop_patience=100,  # Stop training if no improvement after 100 episodes
+            early_stop_patience=early_stop_patience,  # Environment-specific early stopping
             target_reward=training_target,  # Stop training when target reward is reached
             max_episode_steps=max_episode_steps,
             use_ram_obs=use_ram_obs
@@ -782,7 +877,7 @@ Examples:
   python scripts/tune_ijcai_methods.py --env ALE/Seaquest-v5 --trials 20 --max_episode_steps 2000 --use_ram_obs
         """
     )
-    parser.add_argument('--env', type=str, required=True,
+    parser.add_argument('--env', type=str, required=False,  # Not required when --subprocess-trial is used
                        choices=['CartPole-v1', 'CliffWalking-v1', 'MiniGrid-DoorKey-5x5-v0', 'ALE/Seaquest-v5'],
                        help='Environment to tune')
     parser.add_argument('--method', type=str, default=None,
@@ -799,8 +894,115 @@ Examples:
                        help='Maximum steps per episode (default: env-specific, 1000 for Seaquest)')
     parser.add_argument('--use_ram_obs', action='store_true',
                        help='Use RAM observations instead of image observations (for Atari games)')
+    parser.add_argument('--use_subprocess', action='store_true',
+                       help='Run each trial in a separate subprocess to free memory between runs')
+    # Internal flag for subprocess mode (not shown in help)
+    parser.add_argument('--subprocess-trial', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--trial-data', type=str, default=None, help=argparse.SUPPRESS)
     
     args = parser.parse_args()
+    
+    # Handle subprocess trial mode (when called with --subprocess-trial)
+    if args.subprocess_trial:
+        if args.trial_data is None:
+            print("Error: --subprocess-trial requires --trial-data")
+            sys.exit(1)
+        
+        # Load trial data
+        with open(args.trial_data, 'r') as f:
+            trial_data = json.load(f)
+        
+        # Run training and evaluation
+        try:
+            training_target = TRAINING_TARGET_REWARDS.get(trial_data['env_name'], trial_data['target_reward'])
+            # Environment-specific early stopping patience (longer for Seaquest)
+            early_stop_patience = 250 if trial_data['env_name'] == 'ALE/Seaquest-v5' else 100
+            
+            agent, episode_rewards, best_weights, best_avg_reward, env = train(
+                agent=trial_data['method']['agent'],
+                env_name=trial_data['env_name'],
+                num_episodes=trial_data['num_train_episodes'],
+                use_shield_post=trial_data['method']['use_shield_post'],
+                use_shield_pre=trial_data['method']['use_shield_pre'],
+                use_shield_layer=trial_data['method']['use_shield_layer'],
+                monitor_constraints=True,
+                mode=trial_data['method']['mode'],
+                verbose=False,
+                visualize=False,
+                render=False,
+                seed=42,
+                agent_kwargs=trial_data['agent_kwargs'],
+                early_stop_patience=early_stop_patience,  # Environment-specific early stopping
+                target_reward=training_target,
+                max_episode_steps=trial_data['max_episode_steps'],
+                use_ram_obs=trial_data['use_ram_obs']
+            )
+            
+            # Load best weights
+            if hasattr(agent, 'load_weights') and best_weights is not None:
+                agent.load_weights(best_weights)
+            
+            # Evaluate
+            results = evaluate_policy(
+                agent,
+                env,
+                num_episodes=trial_data['num_eval_episodes'],
+                visualize=False,
+                render=False,
+                force_disable_shield=False,
+                softness=trial_data['method']['mode']
+            )
+            
+            avg_reward = results['avg_reward']
+            reward_diff = abs(avg_reward - trial_data['target_reward'])
+            normalized_diff = reward_diff / (abs(trial_data['target_reward']) + 1e-6)
+            result = -normalized_diff
+            
+            # Write result to file for parent process to read
+            result_file = args.trial_data.replace('.json', '_result.txt')
+            with open(result_file, 'w') as f:
+                json.dump({
+                    'result': result,
+                    'actual_reward': avg_reward,
+                    'target_reward': trial_data['target_reward'],
+                    'reward_diff': reward_diff
+                }, f)
+            
+            # Cleanup
+            if agent is not None:
+                if hasattr(agent, 'memory'):
+                    agent.memory.clear()
+                if hasattr(agent, 'constraint_monitor'):
+                    agent.constraint_monitor.reset_all()
+                del agent
+            if env is not None:
+                env.close()
+                del env
+            
+            gc.collect()
+            sys.exit(0)
+        except Exception as e:
+            print(f"Error in subprocess trial: {e}")
+            import traceback
+            traceback.print_exc()
+            # Write error result to file
+            result_file = args.trial_data.replace('.json', '_result.txt')
+            try:
+                with open(result_file, 'w') as f:
+                    json.dump({
+                        'result': -1000.0,
+                        'actual_reward': None,
+                        'target_reward': trial_data.get('target_reward', 0),
+                        'reward_diff': None,
+                        'error': str(e)
+                    }, f)
+            except:
+                pass
+            sys.exit(1)
+    
+    # Validate that --env is provided (unless in subprocess mode)
+    if args.env is None:
+        parser.error("--env is required (unless using --subprocess-trial)")
     
     # Set default max_episode_steps for Seaquest if not specified
     if args.max_episode_steps is None and args.env == 'ALE/Seaquest-v5':
@@ -833,6 +1035,8 @@ Examples:
         print(f"# Max episode steps: {args.max_episode_steps}")
     if args.use_ram_obs:
         print(f"# Using RAM observations")
+    if args.use_subprocess:
+        print(f"# Using subprocess mode (memory isolation between trials)")
     print(f"{'#'*80}")
     print(f"\n📋 Methods to tune:")
     for i, method in enumerate(methods_to_tune, 1):
@@ -869,7 +1073,8 @@ Examples:
                 num_train_episodes=args.train_episodes,
                 num_eval_episodes=args.eval_episodes,
                 max_episode_steps=args.max_episode_steps,
-                use_ram_obs=args.use_ram_obs
+                use_ram_obs=args.use_ram_obs,
+                use_subprocess=args.use_subprocess
             )
             method_time = time.time() - method_start
             method_time_str = str(timedelta(seconds=int(method_time))).split('.')[0]

@@ -1,5 +1,0 @@
-CliffWalking-v1	PPO	cliff_safe.cnf	ShieldLayer	1	-16.06	1.26	208	0.1295	208	0.1295
-CliffWalking-v1	PPO	cliff_safe.cnf	ShieldLayer	2	-16.92	2.12	242	0.1430	242	0.1430
-CliffWalking-v1	PPO	cliff_safe.cnf	ShieldLayer	3	-16.03	1.45	224	0.1397	224	0.1397
-CliffWalking-v1	PPO	cliff_safe.cnf	ShieldLayer	4	-15.59	1.04	207	0.1328	207	0.1328
-CliffWalking-v1	PPO	cliff_safe.cnf	ShieldLayer	5	-16.39	1.67	222	0.1354	222	0.1354

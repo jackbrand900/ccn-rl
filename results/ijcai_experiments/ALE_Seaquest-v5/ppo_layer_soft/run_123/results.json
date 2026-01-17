@@ -1,0 +1,19 @@
+{
+  "avg_reward": 248.4,
+  "std_reward": 96.04915408268832,
+  "max_reward": 560.0,
+  "min_reward": 80.0,
+  "avg_shield_mod_rate": 0.07065050084065452,
+  "avg_violations_per_step": 0.07739941746193374,
+  "avg_violations_per_episode": 65.37,
+  "avg_modifications_per_episode": 59.67,
+  "total_violations": 6537,
+  "total_modifications": 5967,
+  "total_steps": 84458,
+  "train_episodes": 370,
+  "best_avg_reward": 253.5,
+  "final_reward": 260.0,
+  "seed": 123,
+  "method": "ppo_layer_soft",
+  "env": "ALE/Seaquest-v5"
+}

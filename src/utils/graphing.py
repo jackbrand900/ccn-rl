@@ -1,11 +1,29 @@
 from datetime import datetime
+import matplotlib
+import pandas as pd
+from setuptools import glob
 
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+plt.ioff()
 import numpy as np
 import os
 import math
 from collections import defaultdict
 import matplotlib.patches as mpatches
+
+# Set publication-quality defaults
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.serif'] = ['Times New Roman', 'Times', 'DejaVu Serif']
+plt.rcParams['font.size'] = 12
+plt.rcParams['axes.labelsize'] = 12
+plt.rcParams['axes.titlesize'] = 14
+plt.rcParams['xtick.labelsize'] = 10
+plt.rcParams['ytick.labelsize'] = 10
+plt.rcParams['legend.fontsize'] = 10
+plt.rcParams['figure.dpi'] = 300
+plt.rcParams['savefig.dpi'] = 300
+plt.rcParams['savefig.bbox'] = 'tight'
 
 def plot_rewards(
         rewards,
@@ -15,64 +33,74 @@ def plot_rewards(
         rolling_window=10,
         save_path=None,
         show=True,
-        run_dir=None
+        run_dir=None,
+        stds=None
 ):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import os
+    from datetime import datetime
+
     episodes = np.arange(1, len(rewards) + 1)
     rewards = np.array(rewards)
 
-    plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(10, 6))
     ax = plt.gca()
 
-    ax.plot(episodes, rewards, label="Episode Reward", alpha=0.6)
+    # Use matplotlib's default blue
+    default_blue = plt.rcParams["axes.prop_cycle"].by_key()["color"][0]
 
+    # === Mean reward line ===
+    ax.plot(episodes, rewards, label="Mean Reward", linewidth=2)
+
+    # === Std deviation band (gray) ===
+    if stds is not None:
+        stds = np.array(stds)
+        ax.fill_between(
+            episodes,
+            rewards - stds,
+            rewards + stds,
+            alpha=0.25,
+            color="gray",
+            label="±1 Std Dev (Across Runs)"
+        )
+
+    # === Rolling average (orange) ===
+    if rolling_window > 1 and len(rewards) >= rolling_window:
+        smoothed = np.convolve(rewards, np.ones(rolling_window) / rolling_window, mode='valid')
+        smoothed_episodes = episodes[rolling_window - 1:]
+        ax.plot(smoothed_episodes, smoothed, label=f"{rolling_window}-Episode Rolling Avg", color='orange', linewidth=2)
+
+    # === Stats box ===
     avg_reward = np.mean(rewards)
     std_reward = np.std(rewards)
-
-    if rolling_window > 1 and len(rewards) >= 2:
-        rolling_mean = np.array([
-            np.mean(rewards[max(0, i - rolling_window):i + 1])
-            for i in range(len(rewards))
-        ])
-        rolling_std = np.array([
-            np.std(rewards[max(0, i - rolling_window):i + 1])
-            for i in range(len(rewards))
-        ])
-        ax.plot(episodes, rolling_mean, label=f"{rolling_window}-Episode Average", linewidth=2)
-        ax.fill_between(episodes,
-                        rolling_mean - rolling_std,
-                        rolling_mean + rolling_std,
-                        alpha=0.2,
-                        color="gray",
-                        label="±1 Std Dev")
-
     stats_text = f"Mean: {avg_reward:.2f}\nStd Dev: {std_reward:.2f}"
     ax.text(0.02, 0.95, stats_text, transform=ax.transAxes,
             verticalalignment='top', horizontalalignment='left',
             fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.5))
 
-    ax.legend(loc='upper right')
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(alpha=0.3)
-    print(f'run dir: {run_dir}')
-    # Save if a filename was provided
+    ax.legend(loc='best')
+
+    # === Save plot ===
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path)
-        print(f"Plot saved to {save_path}")
+        print(f"[Saved] {save_path}")
     elif run_dir:
         os.makedirs(run_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"reward_plot_{timestamp}.png"
         full_path = os.path.join(run_dir, filename)
         plt.savefig(full_path)
-        print(f"Plot saved to {full_path}")
+        print(f"[Saved] {full_path}")
 
-    # if show:
-    #     plt.show()
-    # else:
-    #     plt.close()
+    if show:
+        plt.show()
+    plt.close(fig)
 
 
 def plot_action_frequencies(actions, action_labels=None, title="Action Selection Frequencies", save_path=None, show=True):
@@ -99,8 +127,8 @@ def plot_action_frequencies(actions, action_labels=None, title="Action Selection
 
     if show:
         plt.show()
-    else:
-        plt.close()
+
+    plt.close()
 
 def plot_action_heatmaps(visited_actions, grid_size=(5, 5), num_actions=7):
     """
@@ -141,6 +169,7 @@ def plot_action_heatmaps(visited_actions, grid_size=(5, 5), num_actions=7):
 
     plt.tight_layout()
     plt.show()
+    plt.close()
 
 def get_action_counts_per_state(visited_actions, grid_size=(5, 5), num_actions=7):
     """
@@ -193,6 +222,7 @@ def plot_action_histograms(action_counts, action_names=None, max_cols=10):
 
     plt.tight_layout()
     plt.show()
+    plt.close()
 
 def moving_average(values, window=10):
     if len(values) < window:
@@ -225,6 +255,7 @@ def plot_losses(logs, window=10, save_path=None):
     if save_path:
         plt.savefig(save_path)
     plt.show()
+    plt.close()
 
 def plot_prob_shift(logs, window=10, save_path=None):
     prob_shift = moving_average(logs["prob_shift"], window)
@@ -241,6 +272,7 @@ def plot_prob_shift(logs, window=10, save_path=None):
     if save_path:
         plt.savefig(save_path)
     plt.show()
+    plt.close()
 
 def plot_violations(
         violations,
@@ -263,7 +295,7 @@ def plot_violations(
     ax.set_ylabel("Violations")
     ax.set_title(title)
     ax.grid(True)
-    ax.legend(loc="upper right")
+    ax.legend(loc="best")
 
     # Top-left annotation
     stats_text = (
@@ -281,83 +313,616 @@ def plot_violations(
 
     if show:
         plt.show()
-    else:
-        plt.close()
+
+    plt.close()
 
 
-def plot_summary_metrics(rewards, mod_rate, viol_rate, title_prefix, save_dir="plots", rolling_window=10, run_dir=None):
-    os.makedirs(save_dir, exist_ok=True)
-    episodes = np.arange(len(rewards))
-
-    # Compute basic stats
-    mod_mean = np.mean(mod_rate)
-    mod_std = np.std(mod_rate)
-    vio_mean = np.mean(viol_rate)
-    vio_std = np.std(viol_rate)
+def plot_summary_metrics(
+        rewards,
+        mod_rate,
+        viol_rate,
+        title_prefix,
+        save_dir="plots",
+        rolling_window=10,
+        run_dir=None,
+        mod_std=None,
+        viol_std=None
+):
+    episodes = np.arange(len(mod_rate))
 
     fig, ax = plt.subplots(figsize=(10, 8))
-
-    def rolling_stats(data):
-        data = np.array(data)
-        rolling_mean = np.convolve(data, np.ones(rolling_window) / rolling_window, mode='valid')
-        rolling_windows = [data[max(0, i - rolling_window):i] for i in range(rolling_window, len(data) + 1)]
-        rolling_array = np.vstack([
-            np.pad(window.astype(float), (rolling_window - len(window), 0), constant_values=np.nan)
-            for window in rolling_windows
-        ])
-        rolling_std = np.nanstd(rolling_array, axis=1)
-        rolling_episodes = np.arange(rolling_window, len(data) + 1)
-        return rolling_episodes, rolling_mean, rolling_std
-
     legend_handles = []
 
-    if rolling_window > 1 and len(rewards) >= rolling_window:
-        # Modifications
-        mod_eps, mod_mean_arr, mod_std_arr = rolling_stats(mod_rate)
-        mod_line, = ax.plot(mod_eps, mod_mean_arr, color='orange',
-                            label=f"Modification Rate (Mean:{mod_mean:.2f}, Std Dev:{mod_std:.2f})")
-        ax.fill_between(mod_eps, mod_mean_arr - mod_std_arr, mod_mean_arr + mod_std_arr,
-                        color='orange', alpha=0.2)
-        mod_fill_patch = mpatches.Patch(color='orange', alpha=0.2, label='±1 Std Dev (Modifications)')
-        legend_handles.extend([mod_line, mod_fill_patch])
+    # === Plot modification rate ===
+    mod_line, = ax.plot(episodes, mod_rate, color='orange',
+                        label=f"Modification Rate (Mean: {np.mean(mod_rate):.2f})")
+    legend_handles.append(mod_line)
 
-        # Violations
-        vio_eps, vio_mean_arr, vio_std_arr = rolling_stats(viol_rate)
-        vio_line, = ax.plot(vio_eps, vio_mean_arr, color='red',
-                            label=f"Violation Rate (Mean:{vio_mean:.2f}, Std Dev:{vio_std:.2f})")
-        ax.fill_between(vio_eps, vio_mean_arr - vio_std_arr, vio_mean_arr + vio_std_arr,
-                        color='red', alpha=0.2)
-        vio_fill_patch = mpatches.Patch(color='red', alpha=0.2, label='±1 Std Dev (Violations)')
-        legend_handles.extend([vio_line, vio_fill_patch])
+    if mod_std is not None and len(mod_std) == len(mod_rate):
+        ax.fill_between(
+            episodes,
+            np.array(mod_rate) - np.array(mod_std),
+            np.array(mod_rate) + np.array(mod_std),
+            color='orange',
+            alpha=0.2
+        )
+        legend_handles.append(mpatches.Patch(color='orange', alpha=0.2, label='±1 Std Dev (Modifications)'))
 
-    else:
-        # Fallback to raw plots
-        mod_line, = ax.plot(episodes, mod_rate, color='orange',
-                            label=f"Modification Rate (Mean:{mod_mean:.2f}, Std Dev:{mod_std:.2f})")
-        vio_line, = ax.plot(episodes, viol_rate, color='red',
-                            label=f"Violation Rate (Mean:{vio_mean:.2f}, Std Dev:{vio_std:.2f})")
-        legend_handles.extend([mod_line, vio_line])
+    # === Plot violation rate ===
+    vio_line, = ax.plot(episodes, viol_rate, color='red',
+                        label=f"Violation Rate (Mean: {np.mean(viol_rate):.2f})")
+    legend_handles.append(vio_line)
 
+    if viol_std is not None and len(viol_std) == len(viol_rate):
+        ax.fill_between(
+            episodes,
+            np.array(viol_rate) - np.array(viol_std),
+            np.array(viol_rate) + np.array(viol_std),
+            color='red',
+            alpha=0.2
+        )
+        legend_handles.append(mpatches.Patch(color='red', alpha=0.2, label='±1 Std Dev (Violations)'))
+
+    # === Final plot formatting ===
     ax.set_xlabel("Episode")
-    ax.set_ylabel("Value")
-    ax.set_title(f"{title_prefix} – Modification and Violation Rates per Episode")
+    ax.set_ylabel("Rate")
+    ax.set_title(f"{title_prefix} – Modification and Violation Rates")
     ax.grid(alpha=0.3)
-    ax.legend(handles=legend_handles, loc='upper right')
+    ax.legend(handles=legend_handles, loc='best')
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"summary_metrics_{timestamp}.png"
 
-    # Save
-    print(f'run dir:{run_dir}')
     if run_dir:
         os.makedirs(run_dir, exist_ok=True)
         save_path = os.path.join(run_dir, filename)
-        fig.savefig(save_path)
-        print(f"Plot saved to {save_path}")
-    elif save_dir:
+    else:
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, filename)
-        fig.savefig(save_path)
-        print(f"Plot saved to {save_path}")
-    # plt.show()
-    # plt.close(fig)
+
+    fig.savefig(save_path)
+    print(f"Plot saved to {save_path}")
+    plt.close(fig)
+
+    def plot_loss_comparison(run_dir, window=10):
+        csv_files = glob.glob(os.path.join(run_dir, "train_metrics_*.csv"))
+        if not csv_files:
+            print(f"No training CSV files found in: {run_dir}")
+            return
+
+        all_policy = []
+        all_semantic = []
+        max_len = 0
+
+        for f in csv_files:
+            df = pd.read_csv(f)
+            if "policy_loss" not in df.columns or "req_loss" not in df.columns:
+                print(f"Missing expected columns in {f}")
+                continue
+
+            all_policy.append(df["policy_loss"].values)
+            all_semantic.append(df["req_loss"].values)
+            max_len = max(max_len, len(df))
+
+        # Pad shorter runs with NaNs so we can compute mean/std
+        def pad_runs(runs, length):
+            return [np.pad(run, (0, length - len(run)), constant_values=np.nan) for run in runs]
+
+        all_policy = np.array(pad_runs(all_policy, max_len))
+        all_semantic = np.array(pad_runs(all_semantic, max_len))
+
+        # Compute means and stds, ignoring NaNs
+        policy_mean = np.nanmean(all_policy, axis=0)
+        policy_std = np.nanstd(all_policy, axis=0)
+        semantic_mean = np.nanmean(all_semantic, axis=0)
+        semantic_std = np.nanstd(all_semantic, axis=0)
+
+        steps = np.arange(len(policy_mean))
+
+        # === Plotting ===
+        plt.figure(figsize=(10, 6))
+        plt.plot(steps, policy_mean, label="Policy Loss", color="blue")
+        plt.fill_between(steps, policy_mean - policy_std, policy_mean + policy_std, color="blue", alpha=0.2)
+
+        plt.plot(steps, semantic_mean, label="Semantic Loss", color="green")
+        plt.fill_between(steps, semantic_mean - semantic_std, semantic_mean + semantic_std, color="green", alpha=0.2)
+
+        plt.xlabel("Training Step")
+        plt.ylabel("Loss")
+        plt.title("PPO Loss vs Semantic Loss (Averaged Across Runs)")
+        plt.legend()
+        plt.grid(True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = os.path.join(run_dir, f"loss_comparison_{timestamp}.png")
+        plt.savefig(save_path)
+        plt.show()
+        print(f"[Saved] {save_path}")
+        plt.close()
+
+def plot_aggregated_training_metrics(run_dir, rolling_window=10):
+    """
+    Loads all `train_metrics_*.csv` files in `run_dir`, computes average and std across runs,
+    and generates reward and constraint plots.
+    """
+    csv_files = glob.glob(os.path.join(run_dir, "train_metrics_*.csv"))
+    if not csv_files:
+        print(f"No training CSV files found in: {run_dir}")
+        return
+
+    dfs = []
+    for f in csv_files:
+        df = pd.read_csv(f)
+        run_number = os.path.basename(f).split("_")[-1].split(".")[0]
+        df["run"] = run_number
+        dfs.append(df)
+
+    combined = pd.concat(dfs)
+
+    grouped = combined.groupby("episode").agg({
+        "reward": ["mean", "std"],
+        "modification_rate": ["mean", "std"],
+        "violation_rate": ["mean", "std"],
+    }).reset_index()
+
+    # Flatten multi-index columns
+    grouped.columns = ["episode", "reward_mean", "reward_std", "mod_mean", "mod_std", "viol_mean", "viol_std"]
+
+    # Plot constraints
+    plot_summary_metrics(
+        rewards=grouped["reward_mean"].tolist(),
+        mod_rate=grouped["mod_mean"].tolist(),
+        viol_rate=grouped["viol_mean"].tolist(),
+        mod_std=grouped["mod_std"].tolist(),
+        viol_std=grouped["viol_std"].tolist(),
+        title_prefix="Avg Constraint Metrics, CliffWalking Preemptive-Hard (Across Runs)",
+        run_dir=run_dir,
+        rolling_window=10
+    )
+
+    # plot_rewards(
+    #     rewards=grouped["reward_mean"].tolist(),
+    #     stds=grouped["reward_std"].to_numpy(),
+    #     title="Average Reward Across Runs (CartPole, Preemptive-Hard)",
+    #     xlabel="Episode",
+    #     ylabel="Reward",
+    #     rolling_window=10,
+    #     run_dir=run_dir,
+    # )
+
+
+def plot_violations_over_time(
+    violations_mean,
+    violations_std=None,
+    episodes=None,
+    title="Constraint Violations Over Time",
+    xlabel="Episode",
+    ylabel="Violations per Episode",
+    save_path=None,
+    run_dir=None,
+    show=False
+):
+    """
+    Plot violations per episode with confidence intervals (mean ± std across runs).
+    
+    Args:
+        violations_mean: Array of mean violations per episode
+        violations_std: Optional array of std deviations
+        episodes: Optional episode numbers (defaults to 1..len(violations_mean))
+        title: Plot title
+        xlabel: X-axis label
+        ylabel: Y-axis label
+        save_path: Path to save figure
+        run_dir: Directory to save figure (alternative to save_path)
+        show: Whether to display plot
+    """
+    if episodes is None:
+        episodes = np.arange(1, len(violations_mean) + 1)
+    
+    violations_mean = np.array(violations_mean)
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    ax.plot(episodes, violations_mean, color='red', linewidth=2, label='Mean Violations')
+    
+    if violations_std is not None:
+        violations_std = np.array(violations_std)
+        ax.fill_between(
+            episodes,
+            violations_mean - violations_std,
+            violations_mean + violations_std,
+            color='red',
+            alpha=0.25,
+            label='±1 Std Dev'
+        )
+    
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(alpha=0.3)
+    ax.legend(loc='best')
+    
+    # Add statistics box
+    avg_viol = np.mean(violations_mean)
+    std_viol = np.std(violations_mean)
+    stats_text = f"Mean: {avg_viol:.3f}\nStd: {std_viol:.3f}"
+    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+            verticalalignment='top', horizontalalignment='left',
+            fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    elif run_dir:
+        os.makedirs(run_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"violations_over_time_{timestamp}.png"
+        save_path = os.path.join(run_dir, filename)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    
+    if show:
+        plt.show()
+    plt.close(fig)
+
+
+def plot_modifications_over_time(
+    modifications_mean,
+    modifications_std=None,
+    episodes=None,
+    title="Shield Modifications Over Time",
+    xlabel="Episode",
+    ylabel="Modifications per Episode",
+    save_path=None,
+    run_dir=None,
+    show=False
+):
+    """
+    Plot modifications per episode with confidence intervals (mean ± std across runs).
+    
+    Args:
+        modifications_mean: Array of mean modifications per episode
+        modifications_std: Optional array of std deviations
+        episodes: Optional episode numbers (defaults to 1..len(modifications_mean))
+        title: Plot title
+        xlabel: X-axis label
+        ylabel: Y-axis label
+        save_path: Path to save figure
+        run_dir: Directory to save figure (alternative to save_path)
+        show: Whether to display plot
+    """
+    if episodes is None:
+        episodes = np.arange(1, len(modifications_mean) + 1)
+    
+    modifications_mean = np.array(modifications_mean)
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    ax.plot(episodes, modifications_mean, color='orange', linewidth=2, label='Mean Modifications')
+    
+    if modifications_std is not None:
+        modifications_std = np.array(modifications_std)
+        ax.fill_between(
+            episodes,
+            modifications_mean - modifications_std,
+            modifications_mean + modifications_std,
+            color='orange',
+            alpha=0.25,
+            label='±1 Std Dev'
+        )
+    
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(alpha=0.3)
+    ax.legend(loc='best')
+    
+    # Add statistics box
+    avg_mod = np.mean(modifications_mean)
+    std_mod = np.std(modifications_mean)
+    stats_text = f"Mean: {avg_mod:.3f}\nStd: {std_mod:.3f}"
+    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+            verticalalignment='top', horizontalalignment='left',
+            fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    elif run_dir:
+        os.makedirs(run_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"modifications_over_time_{timestamp}.png"
+        save_path = os.path.join(run_dir, filename)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    
+    if show:
+        plt.show()
+    plt.close(fig)
+
+
+def plot_combined_constraint_metrics(
+    violations_mean,
+    modifications_mean,
+    violations_std=None,
+    modifications_std=None,
+    episodes=None,
+    title="Constraint Metrics Over Time",
+    xlabel="Episode",
+    save_path=None,
+    run_dir=None,
+    show=False
+):
+    """
+    Dual-axis plot showing both violations and modifications over time.
+    
+    Args:
+        violations_mean: Array of mean violations per episode
+        modifications_mean: Array of mean modifications per episode
+        violations_std: Optional array of std deviations for violations
+        modifications_std: Optional array of std deviations for modifications
+        episodes: Optional episode numbers
+        title: Plot title
+        xlabel: X-axis label
+        save_path: Path to save figure
+        run_dir: Directory to save figure
+        show: Whether to display plot
+    """
+    if episodes is None:
+        episodes = np.arange(1, len(violations_mean) + 1)
+    
+    violations_mean = np.array(violations_mean)
+    modifications_mean = np.array(modifications_mean)
+    
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    
+    # Left y-axis for violations
+    color_viol = 'red'
+    ax1.set_xlabel(xlabel)
+    ax1.set_ylabel('Violations per Episode', color=color_viol)
+    line1 = ax1.plot(episodes, violations_mean, color=color_viol, linewidth=2, label='Violations')
+    ax1.tick_params(axis='y', labelcolor=color_viol)
+    
+    if violations_std is not None:
+        violations_std = np.array(violations_std)
+        ax1.fill_between(
+            episodes,
+            violations_mean - violations_std,
+            violations_mean + violations_std,
+            color=color_viol,
+            alpha=0.2
+        )
+    
+    # Right y-axis for modifications
+    ax2 = ax1.twinx()
+    color_mod = 'orange'
+    ax2.set_ylabel('Modifications per Episode', color=color_mod)
+    line2 = ax2.plot(episodes, modifications_mean, color=color_mod, linewidth=2, label='Modifications')
+    ax2.tick_params(axis='y', labelcolor=color_mod)
+    
+    if modifications_std is not None:
+        modifications_std = np.array(modifications_std)
+        ax2.fill_between(
+            episodes,
+            modifications_mean - modifications_std,
+            modifications_mean + modifications_std,
+            color=color_mod,
+            alpha=0.2
+        )
+    
+    # Combined legend
+    lines = line1 + line2
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper left')
+    
+    ax1.set_title(title)
+    ax1.grid(alpha=0.3)
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    elif run_dir:
+        os.makedirs(run_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"combined_constraint_metrics_{timestamp}.png"
+        save_path = os.path.join(run_dir, filename)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    
+    if show:
+        plt.show()
+    plt.close(fig)
+
+
+def plot_comparison_summary(
+    methods_data,
+    metric='avg_reward',
+    title="Method Comparison",
+    ylabel="Average Reward",
+    save_path=None,
+    run_dir=None,
+    show=False
+):
+    """
+    Bar plot comparing methods across environments.
+    
+    Args:
+        methods_data: Dict of {method_name: {env_name: value}} or {method_name: value}
+        metric: Metric name for labeling
+        title: Plot title
+        ylabel: Y-axis label
+        save_path: Path to save figure
+        run_dir: Directory to save figure
+        show: Whether to display plot
+    """
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Determine if data is nested (env-specific) or flat
+    is_nested = any(isinstance(v, dict) for v in methods_data.values())
+    
+    if is_nested:
+        # Grouped bar chart
+        methods = list(methods_data.keys())
+        envs = set()
+        for method_data in methods_data.values():
+            envs.update(method_data.keys())
+        envs = sorted(list(envs))
+        
+        x = np.arange(len(envs))
+        width = 0.8 / len(methods)
+        
+        for i, method in enumerate(methods):
+            values = [methods_data[method].get(env, 0) for env in envs]
+            offset = (i - len(methods) / 2) * width + width / 2
+            ax.bar(x + offset, values, width, label=method)
+        
+        ax.set_xlabel('Environment')
+        ax.set_xticks(x)
+        ax.set_xticklabels(envs, rotation=45, ha='right')
+    else:
+        # Simple bar chart
+        methods = list(methods_data.keys())
+        values = list(methods_data.values())
+        x = np.arange(len(methods))
+        
+        ax.bar(x, values, width=0.6)
+        ax.set_xlabel('Method')
+        ax.set_xticks(x)
+        ax.set_xticklabels(methods, rotation=45, ha='right')
+    
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(alpha=0.3, axis='y')
+    if is_nested:
+        ax.legend(loc='best')
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    elif run_dir:
+        os.makedirs(run_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"comparison_summary_{timestamp}.png"
+        save_path = os.path.join(run_dir, filename)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    
+    if show:
+        plt.show()
+    plt.close(fig)
+
+
+def plot_training_curves_comparison(
+    methods_data,
+    episodes=None,
+    title="Training Curves Comparison",
+    xlabel="Episode",
+    ylabel="Reward",
+    save_path=None,
+    run_dir=None,
+    show=False,
+    rolling_window=10
+):
+    """
+    Overlay reward curves for all methods with confidence intervals.
+    
+    Args:
+        methods_data: Dict of {method_name: {'mean': array, 'std': array}}
+        episodes: Optional episode numbers
+        title: Plot title
+        xlabel: X-axis label
+        ylabel: Y-axis label
+        save_path: Path to save figure
+        run_dir: Directory to save figure
+        show: Whether to display plot
+        rolling_window: Window for rolling average (0 to disable)
+    """
+    # Color scheme: CMDP=blue, Post-hoc=orange, Pre-emptive=green, Layer=purple
+    color_map = {
+        'CMDP': '#1f77b4',  # blue
+        'CPPO': '#1f77b4',  # blue
+        'Post-hoc': '#ff7f0e',  # orange
+        'Pre-emptive': '#2ca02c',  # green
+        'Layer': '#9467bd',  # purple
+    }
+    
+    fig, ax = plt.subplots(figsize=(12, 7))
+    
+    if episodes is None:
+        # Use length of first method's data
+        first_method = list(methods_data.keys())[0]
+        first_data = methods_data[first_method]
+        if isinstance(first_data, dict):
+            episodes = np.arange(1, len(first_data['mean']) + 1)
+        else:
+            episodes = np.arange(1, len(first_data) + 1)
+    
+    for method_name, data in methods_data.items():
+        if isinstance(data, dict):
+            mean = np.array(data['mean'])
+            std = data.get('std', None)
+        else:
+            mean = np.array(data)
+            std = None
+        
+        # Apply rolling average if requested
+        if rolling_window > 1 and len(mean) >= rolling_window:
+            mean_smooth = np.convolve(mean, np.ones(rolling_window) / rolling_window, mode='valid')
+            episodes_smooth = episodes[rolling_window - 1:]
+            if std is not None:
+                std_smooth = np.convolve(std, np.ones(rolling_window) / rolling_window, mode='valid')
+            else:
+                std_smooth = None
+        else:
+            mean_smooth = mean
+            episodes_smooth = episodes
+            std_smooth = std
+        
+        color = color_map.get(method_name, None)
+        line = ax.plot(episodes_smooth, mean_smooth, linewidth=2, label=method_name, color=color)
+        
+        if std_smooth is not None:
+            std_smooth = np.array(std_smooth)
+            ax.fill_between(
+                episodes_smooth,
+                mean_smooth - std_smooth,
+                mean_smooth + std_smooth,
+                alpha=0.2,
+                color=line[0].get_color()
+            )
+    
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(alpha=0.3)
+    ax.legend(loc='best')
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    elif run_dir:
+        os.makedirs(run_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"training_curves_comparison_{timestamp}.png"
+        save_path = os.path.join(run_dir, filename)
+        plt.savefig(save_path)
+        print(f"[Saved] {save_path}")
+    
+    if show:
+        plt.show()
+    plt.close(fig)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Plot aggregated training metrics across multiple runs.")
+    parser.add_argument("--run_dir", type=str, required=True, help="Directory containing train_metrics_*.csv files")
+    parser.add_argument("--rolling_window", type=int, default=1, help="Rolling window size for smoothing")
+    args = parser.parse_args()
+    plot_aggregated_training_metrics(run_dir=args.run_dir, rolling_window=args.rolling_window)

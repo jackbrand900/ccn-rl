@@ -1,0 +1,109 @@
+{
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "final_reward": {
+    "mean": -331.6,
+    "std": 631.2006337132434,
+    "min": -1594.0,
+    "max": -15.0,
+    "median": -17.0
+  },
+  "avg_violations_per_episode": {
+    "mean": 0.506,
+    "std": 0.9821731008330458,
+    "min": 0.0,
+    "max": 2.47,
+    "median": 0.01
+  },
+  "env": "CliffWalking-v1",
+  "min_reward": {
+    "mean": -613.8,
+    "std": 736.10037359045,
+    "min": -1891.0,
+    "max": -21.0,
+    "median": -125.0
+  },
+  "total_steps": {
+    "mean": 27218.2,
+    "std": 38114.75803622529,
+    "min": 1686.0,
+    "max": 100000.0,
+    "median": 1744.0
+  },
+  "best_avg_reward": {
+    "mean": -287.928,
+    "std": 501.3790699420948,
+    "min": -1289.08,
+    "max": -18.32,
+    "median": -20.0
+  },
+  "method": "ppo_unshielded",
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "max_reward": {
+    "mean": -212.0,
+    "std": 394.0020304516209,
+    "min": -1000.0,
+    "max": -13.0,
+    "median": -15.0
+  },
+  "std_reward": {
+    "mean": 129.7549086207284,
+    "std": 172.85752806524346,
+    "min": 0.8284926070883193,
+    "max": 451.402345585399,
+    "median": 22.621960569322894
+  },
+  "avg_reward": {
+    "mean": -322.276,
+    "std": 474.79144737874117,
+    "min": -1244.53,
+    "max": -16.86,
+    "median": -21.87
+  },
+  "total_violations": {
+    "mean": 50.6,
+    "std": 98.21731008330455,
+    "min": 0.0,
+    "max": 247.0,
+    "median": 1.0
+  },
+  "seed": {
+    "mean": 484.2,
+    "std": 373.42276309834136,
+    "min": 42.0,
+    "max": 1011.0,
+    "median": 456.0
+  },
+  "avg_violations_per_step": {
+    "mean": 0.001091474619437557,
+    "std": 0.0013325068447534807,
+    "min": 0.0,
+    "max": 0.002955082742316785,
+    "median": 3.2290354871000035e-05
+  },
+  "train_episodes": {
+    "mean": 160.0,
+    "std": 78.74007874011811,
+    "min": 80.0,
+    "max": 310.0,
+    "median": 140.0
+  }
+}

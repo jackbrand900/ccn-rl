@@ -1,0 +1,6 @@
+avg_reward,std_reward,max_reward,min_reward,avg_shield_mod_rate,avg_violations_per_step,avg_violations_per_episode,avg_modifications_per_episode,total_violations,total_modifications,total_steps,train_episodes,best_avg_reward,final_reward,seed,method,env
+128.8,66.95192304930457,280.0,20.0,0.0,0.10581635178615625,64.13,0.0,6413,0,60605,500,116.0,60.0,42,cppo,ALE/Seaquest-v5
+13.6,16.942254867637896,80.0,0.0,0.0,0.110866304144009,47.3,0.0,4730,0,42664,370,48.8,0.0,123,cppo,ALE/Seaquest-v5
+15.8,16.803571049035977,60.0,0.0,0.0,0.035229321049469256,17.59,0.0,1759,0,49930,500,37.6,60.0,456,cppo,ALE/Seaquest-v5
+113.0,72.62919523166975,340.0,0.0,0.0,0.10658561296859169,63.12,0.0,6312,0,59220,500,116.8,20.0,789,cppo,ALE/Seaquest-v5
+57.4,52.2803978561755,240.0,0.0,0.0,0.12613362354095983,59.11,0.0,5911,0,46863,320,66.4,20.0,1011,cppo,ALE/Seaquest-v5

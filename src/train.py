@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
-
+from random import random
+import csv
 import gymnasium as gym
 import numpy as np
 from gymnasium.wrappers import TimeLimit, AtariPreprocessing
@@ -13,6 +14,8 @@ from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
+from src.agents.constrained_ppo_agent import ConstrainedPPOAgent
+from src.agents.sb3_wrapper import SB3Wrapper
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 import sys
@@ -23,7 +26,25 @@ from src.utils.wrappers import RAMObservationWrapper, SeaquestRAMWrapper, DemonA
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import copy
+import random, os
 # import cv2
+
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    torch.use_deterministic_algorithms(True)
+
+    print(f"[Seed set to {seed}]")
 
 register(
     id="CarRacingWithTrafficLights-v0",
@@ -51,10 +72,11 @@ custom_envs = {
     "ALE/Freeway-v5": (None, None),
     "FreewayNoFrameskip-v4": (None, None),
     "ALE/Seaquest-v5": (None, None),
-    "ALE/DemonAttack-v5": (None, None)
+    "ALE/DemonAttack-v5": (None, None),
+    "CliffWalking-v1": (None, None),
 }
 
-def create_environment(env_name, render=False, use_ram_obs=False):
+def create_environment(env_name, render=False, use_ram_obs=False, seed=42, max_episode_steps=None):
     if env_name in custom_envs:
         entry_point, kwargs = custom_envs[env_name]
         if entry_point:
@@ -69,16 +91,21 @@ def create_environment(env_name, render=False, use_ram_obs=False):
 
         if env_name == "CarRacing-v3":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=200)
+            max_steps = max_episode_steps if max_episode_steps is not None else 200
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = False
             return env
 
         if env_name == "CarRacingWithTrafficLights-v0":
             env = gym.make(env_name, render_mode="human" if render else None, continuous=False)
-            env = TimeLimit(env, max_episode_steps=300)  # ✅ Set timestep limit
+            max_steps = max_episode_steps if max_episode_steps is not None else 500
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
             return env
 
         if env_name == "ALE/Freeway-v5":
@@ -86,7 +113,8 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=8, scale_obs=True, terminal_on_life_loss=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            env = TimeLimit(env, max_episode_steps=3000)
+            max_steps = max_episode_steps if max_episode_steps is not None else 3000
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = use_ram_obs
             return env
@@ -96,7 +124,8 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            # env = TimeLimit(env, max_episode_steps=1000)
+            max_steps = max_episode_steps if max_episode_steps is not None else 10000
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = use_ram_obs
             return env
@@ -106,9 +135,24 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             env = AtariPreprocessing(env, frame_skip=4, scale_obs=True)
             if use_ram_obs:
                 env = RAMObservationWrapper(env)
-            # env = TimeLimit(env, max_episode_steps=1000)
+            max_steps = max_episode_steps if max_episode_steps is not None else 5000
+            env = TimeLimit(env, max_episode_steps=max_steps)
             env.env_name = env_name
             env.use_ram = use_ram_obs
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
+            return env
+
+        if env_name == "CliffWalking-v1":
+            env = gym.make(env_name, render_mode="human" if render else None)
+            max_steps = max_episode_steps if max_episode_steps is not None else 1000  # 1000 steps: allow exploration to find goal
+            env = TimeLimit(env, max_episode_steps=max_steps)
+            env.env_name = env_name
+            env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
             return env
 
         # Handle MiniGrid environments
@@ -120,6 +164,10 @@ def create_environment(env_name, render=False, use_ram_obs=False):
             else:
                 env = FlatObsWrapper(env)
             env.env_name = env_name
+            env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
         return env
 
 def log_ram(obs, prev_obs, step):
@@ -130,9 +178,14 @@ def log_ram(obs, prev_obs, step):
         print(f"[RAM] Changed indices: {changed}, deltas: {delta[changed]}")
 
 
-def preprocess_state(state, use_cnn=False):
+def preprocess_state(state, use_cnn=False, obs_space=None):
     if isinstance(state, dict):
         state = state['image']
+    if isinstance(state, int):
+        n_states = obs_space.n if obs_space else 48
+        one_hot = np.zeros(n_states, dtype=np.float32)
+        one_hot[state] = 1.0
+        return one_hot
     if isinstance(state, np.ndarray):
         if use_cnn:
             if state.ndim == 2:
@@ -171,23 +224,35 @@ def step_env(env, action):
     return next_state, reward, done, info
 
 
-def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constraints=True, visualize=False,
-                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False):
+def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_window=None, monitor_constraints=True, visualize=False,
+                 softness="", verbose=False, log_rewards=False, use_cnn=False, render=False, run_id=1, run_dir=None, early_stop_patience=None, target_reward=None):
+    if run_dir is not None:
+        rewards_log_path = os.path.join(run_dir, f"train_metrics_run{run_id}.csv")
+        with open(rewards_log_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["episode", "reward", "violations", "violation_rate", "modifications", "modification_rate"])
+    else:
+        rewards_log_path = None
     episode_rewards = []
     mod_rate_per_episode = []
     viol_rate_per_episode = []
     best_avg_reward = float('-inf')
     best_weights = None
-    actions_taken = []
-    no_improve_counter = 0  # Early stopping counter
-    early_stop_patience = 500 # Stop if no improvement after 500 episodes
+    last_improvement_episode = 0  # Track episode where last improvement occurred
+    if early_stop_patience is None:
+        early_stop_patience = 1000  # Default: Stop if no improvement after 1000 episodes
+    
+    # Make checkpoint window adaptive: 5% of total episodes, with bounds (20-40 episodes)
+    # For 500 episodes: 5% = 25 episodes
+    if checkpoint_window is None:
+        checkpoint_window = max(20, min(40, int(num_episodes * 0.05)))
 
     if not softness:
         softness = ""
     else:
         softness = softness.capitalize()
 
-    env_name = getattr(env, 'spec', None).id if hasattr(env, 'spec') else str(env)
+    env_name = getattr(env.unwrapped, 'env_name', getattr(getattr(env, 'spec', None), 'id', 'UnknownEnv'))
     if getattr(agent, 'use_shield_layer', False):
         shield_mode = "Layered Shield"
     elif getattr(agent, 'use_shield_post', False):
@@ -206,7 +271,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         state, _ = env.reset()
         state = preprocess_state(state, use_cnn=use_cnn)
         try:
-            key_pos = find_key(env) # TODO: move this
+            key_pos = find_key(env)
             env.key_pos = key_pos
         except AttributeError:
             key_pos = None
@@ -218,6 +283,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         total_reward = 0
         step_count = 0
         while not done:
+            # print(f'Step count: {step_count+1}')
             result = agent.select_action(state)
             if isinstance(result, tuple) and len(result) == 4:
                 selected_action, a_unshielded, a_shielded, context = result
@@ -240,7 +306,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
             pos = context.get("position", None)
             x, y = pos if pos is not None else (None, None)
-            actions_taken.append((x, y, selected_action))
+            # actions_taken.append((x, y, selected_action))
             next_state, reward, terminated, truncated, info = env.step(selected_action)
 
             if render:
@@ -250,10 +316,28 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
 
             done = terminated or truncated
 
+            # Reward shaping: add penalty for constraint violations
+            # Check if we should apply reward shaping (via agent_kwargs or lambda_penalty)
+            if hasattr(agent, 'lambda_penalty') and agent.lambda_penalty > 0:
+                # Check if unshielded action would violate constraints
+                if hasattr(agent, 'constraint_monitor') and hasattr(agent, 'shield_controller'):
+                    would_violate = agent.constraint_monitor.would_violate(
+                        a_unshielded, context, agent.shield_controller
+                    )
+                    if would_violate:
+                        reward = reward - agent.lambda_penalty  # Penalty for violation
+
             agent.store_transition(state, action_for_training, reward, next_state, context, done)
             agent.update()
             state = next_state
             total_reward += reward
+            
+            # Periodic memory cleanup for very long episodes (e.g., Seaquest)
+            if step_count % 1000 == 0:
+                import gc
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
         constraint_monitor = agent.constraint_monitor
         stats = constraint_monitor.summary()
@@ -263,9 +347,54 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
         mod_rate_per_episode.append(episode_mod_rate)
         viol_rate_per_episode.append(episode_viol_rate)
 
+        episode_violations = stats['episode_violations']
+        episode_violation_rate = stats['episode_viol_rate']
+        episode_modifications = stats['episode_modifications']
+        episode_modification_rate = stats['episode_mod_rate']
+
+        if rewards_log_path:
+            with open(rewards_log_path, "a", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    episode,
+                    total_reward,
+                    episode_violations,
+                    episode_violation_rate,
+                    episode_modifications,
+                    episode_modification_rate
+                ])
+
+        # Checkpointing: use larger window for more stable performance measurement
+        if checkpoint_window and episode >= checkpoint_window and episode % print_interval == 0:
+            checkpoint_avg_reward = np.mean(episode_rewards[-checkpoint_window:])
+            if checkpoint_avg_reward > best_avg_reward:
+                best_avg_reward = checkpoint_avg_reward
+                best_weights = copy.deepcopy(agent.get_weights())
+                last_improvement_episode = episode
+                print(f"[Checkpoint] New best avg reward ({checkpoint_window} episodes): {best_avg_reward:.2f} at episode {episode}")
+                
+                # Check if target reward is reached
+                if target_reward is not None and checkpoint_avg_reward >= target_reward:
+                    print(f"[Target Reached] Average reward ({checkpoint_window} episodes): {checkpoint_avg_reward:.2f} >= target: {target_reward:.2f}. Stopping training at episode {episode}.")
+                    break
+            else:
+                # Check if we've gone long enough without improvement
+                episodes_since_improvement = episode - last_improvement_episode
+                if episodes_since_improvement >= early_stop_patience:
+                    print(f"[Early Stopping] No improvement for {episodes_since_improvement} episodes (since episode {last_improvement_episode}). Stopping training at episode {episode}.")
+                    break
+        
+        # Logging: use smaller window for more frequent updates
         if print_interval and episode % print_interval == 0:
             avg_reward = np.mean(episode_rewards[-print_interval:])
-            use_ram = 'RAM' if env.use_ram else 'OBS'
+            use_ram = 'RAM' if getattr(env, 'use_ram', False) else 'OBS'
+            
+            # Also show checkpoint window average if we have enough episodes
+            checkpoint_avg_str = ""
+            if checkpoint_window and episode >= checkpoint_window:
+                checkpoint_avg = np.mean(episode_rewards[-checkpoint_window:])
+                checkpoint_avg_str = f", Checkpoint Avg ({checkpoint_window}): {checkpoint_avg:.2f}"
+            
             log_msg = (
                 f"[{env.env_name}] "
                 f"[{str(type(agent)).split('.')[-1][:-2]}] "
@@ -273,7 +402,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                 f"[{softness.capitalize()}] "
                 f"[{use_ram}], "
                 f"Episode {episode}, "
-                f"Avg Reward ({print_interval}): {avg_reward:.2f}, "
+                f"Avg Reward ({print_interval}): {avg_reward:.2f}{checkpoint_avg_str}, "
             )
             if monitor_constraints:
                 constraint_monitor = agent.constraint_monitor
@@ -293,18 +422,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
                 log_msg += f", Epsilon: {agent.epsilon:.3f}"
             print(log_msg)
 
-            if avg_reward > best_avg_reward:
-                best_avg_reward = avg_reward
-                best_weights = copy.deepcopy(agent.get_weights())
-                no_improve_counter = 0
-                print(f"[Checkpoint] New best avg reward: {best_avg_reward:.2f} at episode {episode}")
-            else:
-                no_improve_counter += print_interval
-                if no_improve_counter >= early_stop_patience:
-                    print(f"[Early Stopping] No improvement for {early_stop_patience} episodes. Stopping training.")
-                    break
 
-    env.close()
     if visualize:
         agent_name = agent.__class__.__name__
 
@@ -327,7 +445,14 @@ def run_training(agent, env, num_episodes=100, print_interval=10, monitor_constr
             title_prefix=title_prefix,
             run_dir=run_dir
         )
-
+    env.close()
+    
+    # Final memory cleanup
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     return agent, episode_rewards, best_weights, best_avg_reward
 
 
@@ -343,8 +468,20 @@ def train(agent='ppo',
           use_ram_obs=False,
           agent_kwargs=None,
           env_name='MiniGrid-Empty-5x5-v0',
-          render=False):
-    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs)
+          render=False,
+          seed=42,
+          use_sb3=False,
+          sb3_model_path=None,
+          sb3_train=False,
+          sb3_save_path=None,
+          run_dir=None,
+          early_stop_patience=None,
+          target_reward=None,
+          max_episode_steps=None):
+    # rand_seed = np.random.randint(0, 2**32 - 1)
+    # print(f'Rand_seed: {rand_seed}')
+    env = create_environment(env_name, render=render, use_ram_obs=use_ram_obs, seed=seed, max_episode_steps=max_episode_steps)
+    set_seed(seed)
     print("Observation space:", env.observation_space)
     obs_space = env.observation_space
     if agent_kwargs is None:
@@ -367,6 +504,9 @@ def train(agent='ppo',
         state_dim = int(np.prod(obs_space.shape))
     elif isinstance(obs_space, gym.spaces.Dict) and 'image' in obs_space.spaces:
         state_dim = int(np.prod(obs_space.spaces['image'].shape))
+    elif isinstance(obs_space, gym.spaces.Discrete):
+        state_dim = obs_space.n
+        input_shape = (obs_space.n,)  # for one-hot encoding
     else:
         raise ValueError(f"Unsupported observation space type: {obs_space}")
 
@@ -375,9 +515,45 @@ def train(agent='ppo',
     else:
         action_dim = env.action_space.shape[0]
 
-    requirements_path = 'src/requirements/emergency_cartpole.cnf'
+    # Select requirements file based on environment
+    env_to_requirements = {
+        'CartPole-v1': 'src/requirements/emergency_cartpole.cnf',
+        'CliffWalking-v1': 'src/requirements/cliff_safe.cnf',
+        'MiniGrid-DoorKey-5x5-v0': 'src/requirements/pickup_on_key.cnf',
+        'MiniGrid-DoorKey-6x6-v0': 'src/requirements/pickup_on_key.cnf',
+        'ALE/Seaquest-v5': 'src/requirements/seaquest_low_oxygen_go_up.cnf',
+        'ALE/DemonAttack-v5': 'src/requirements/demon_attack_defensive.cnf',
+        'ALE/Freeway-v5': 'src/requirements/freeway_go_up_when_safe.cnf',
+        'CarRacingWithTrafficLights-v0': 'src/requirements/red_light_stop.cnf',
+    }
+    requirements_path = env_to_requirements.get(env_name, 'src/requirements/cliff_safe.cnf')
 
-    if agent == 'dqn':
+    # Handle SB3 agents
+    if use_sb3:
+        if agent not in ['dqn', 'ppo', 'a2c']:
+            raise ValueError(f"SB3 wrapper only supports 'dqn', 'ppo', 'a2c', not '{agent}'")
+        
+        agent = SB3Wrapper(
+            agent_type=agent,
+            env=env,
+            input_shape=input_shape,
+            action_dim=action_dim,
+            agent_kwargs=agent_kwargs,
+            model_path=sb3_model_path,
+            train_new=sb3_train,
+            num_episodes=num_episodes,
+            verbose=verbose
+        )
+        
+        # For SB3 agents in training mode, use SB3's learn() method
+        # Training will happen in train() function after agent creation
+        if sb3_train:
+            print(f"[SB3] Will train {agent.agent_type.upper()} agent on {env_name}")
+        elif sb3_model_path:
+            print(f"[SB3] Using pretrained {agent.agent_type.upper()} agent on {env_name}")
+        else:
+            print(f"[SB3] Created {agent.agent_type.upper()} agent on {env_name} (evaluation only)")
+    elif agent == 'dqn':
         agent = DQNAgent(input_shape=input_shape,
                          action_dim=action_dim,
                          use_shield_post=use_shield_post,
@@ -404,6 +580,31 @@ def train(agent='ppo',
                          requirements_path=requirements_path,
                          env=env,
                          use_cnn=use_cnn)
+    elif agent == 'cppo':
+        agent = ConstrainedPPOAgent(
+            input_shape=input_shape,
+            action_dim=action_dim,
+            agent_kwargs=agent_kwargs,
+            monitor_constraints=monitor_constraints,
+            mode=mode,
+            verbose=verbose,
+            requirements_path=requirements_path,
+            env=env,
+            use_cnn=use_cnn
+        )
+    elif agent == 'cpo':
+        from src.agents.cpo_agent import CPOAgent
+        agent = CPOAgent(
+            input_shape=input_shape,
+            action_dim=action_dim,
+            agent_kwargs=agent_kwargs,
+            monitor_constraints=monitor_constraints,
+            mode=mode,
+            verbose=verbose,
+            requirements_path=requirements_path,
+            env=env,
+            use_cnn=use_cnn
+        )
     elif agent == 'a2c':
         agent = A2CAgent(input_shape=input_shape,
                          action_dim=action_dim,
@@ -419,18 +620,82 @@ def train(agent='ppo',
     else:
         raise ValueError("Unsupported agent type.")
 
-    print(f"Training {agent.__class__.__name__} agent on {env_name} with shield post: {use_shield_post} "
-          f"with shield layer: {use_shield_layer} with shield pre: {use_shield_pre}")
-
-    agent_trained, episode_rewards, best_weights, best_avg_reward = run_training(
-        agent, env,
-        verbose=verbose,
-        num_episodes=num_episodes,
-        visualize=visualize,
-        render=render,
-        softness=mode,
-        use_cnn=use_cnn
-    )
+    # For SB3 agents, handle training differently
+    if use_sb3:
+        if sb3_train:
+            # SB3 training mode: train with learn(), then collect evaluation metrics
+            print(f"\n{'='*70}")
+            print(f"[SB3] Training {agent.agent_type.upper()} agent on {env_name}")
+            print(f"{'='*70}")
+            print(f"[SB3] Configuration:")
+            print(f"  - Agent type: {agent.agent_type.upper()}")
+            print(f"  - Environment: {env_name}")
+            print(f"  - Target episodes: {num_episodes}")
+            print(f"  - Using RAM observations: {use_ram_obs}")
+            print(f"  - Observation space: {env.observation_space}")
+            print(f"  - Action space: {env.action_space}")
+            
+            # Estimate total timesteps (approximate episodes * avg steps per episode)
+            if 'CartPole' in env_name:
+                avg_steps_per_episode = 200
+            elif 'CliffWalking' in env_name:
+                avg_steps_per_episode = 50
+            elif 'ALE' in env_name or 'Atari' in env_name:
+                avg_steps_per_episode = 1000
+            else:
+                avg_steps_per_episode = 200  # Default
+            
+            total_timesteps = num_episodes * avg_steps_per_episode
+            print(f"  - Estimated steps per episode: {avg_steps_per_episode}")
+            print(f"  - Total timesteps: {total_timesteps:,}")
+            print(f"{'='*70}\n")
+            
+            agent.learn(total_timesteps=total_timesteps)
+            
+            # Save model if save path provided
+            if sb3_save_path:
+                print(f"\n[SB3] Saving trained model...")
+                agent.save_model(sb3_save_path)
+                print(f"[SB3] Model saved to: {sb3_save_path}")
+            else:
+                print(f"\n[SB3] No save path provided (--sb3_save_path), model not saved")
+            
+            # Episode rewards will be collected during evaluation phase
+            agent_trained = agent
+            episode_rewards = []
+            best_weights = agent.get_weights()
+            best_avg_reward = 0.0
+        elif sb3_model_path:
+            # Pretrained SB3 model - skip training, just prepare for evaluation
+            print(f"[SB3] Using pretrained {agent.agent_type.upper()} agent on {env_name}")
+            agent_trained = agent
+            episode_rewards = []
+            best_weights = agent.get_weights()
+            best_avg_reward = 0.0
+        else:
+            # SB3 agent created but no training specified - evaluate only
+            print(f"[SB3] Using {agent.agent_type.upper()} agent on {env_name} (evaluation only)")
+            agent_trained = agent
+            episode_rewards = []
+            best_weights = agent.get_weights()
+            best_avg_reward = 0.0
+    else:
+        print(f"Training {agent.__class__.__name__} agent on {env_name} with shield post: {use_shield_post} "
+              f"with shield layer: {use_shield_layer} with shield pre: {use_shield_pre}")
+        # Regular training path for custom agents
+        agent_trained, episode_rewards, best_weights, best_avg_reward = run_training(
+            agent, env,
+            verbose=verbose,
+            num_episodes=num_episodes,
+            visualize=visualize,
+            render=render,
+            softness=mode,
+            use_cnn=use_cnn,
+            run_id=seed,
+            run_dir=run_dir,
+            early_stop_patience=early_stop_patience,
+            target_reward=target_reward
+        )
 
     if hasattr(agent_trained, 'load_weights') and best_weights is not None:
         print(f"\n[Post-Training] Loading best weights with avg reward: {best_avg_reward:.2f}")
@@ -480,9 +745,15 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
         agent.constraint_monitor.reset_all()
 
     for episode in range(num_episodes):
-        state = reset_env(env)
+        obs_space = env.observation_space
+        state = preprocess_state(reset_env(env), use_cnn=getattr(agent, "use_cnn", False), obs_space=obs_space)
         done = False
         episode_reward = 0
+        episode_steps = 0
+
+        # Reset frame buffer for SB3 agents at episode start
+        if hasattr(agent, 'start_new_episode'):
+            agent.start_new_episode()
 
         if hasattr(agent, 'constraint_monitor') and agent.constraint_monitor:
             agent.constraint_monitor.reset()
@@ -496,7 +767,9 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
                 selected_action, a_unshielded, a_shielded, context = agent.select_action(state, env, do_apply_shield=not force_disable_shield)
 
             state, reward, done, _ = step_env(env, selected_action)
+            state = preprocess_state(state, use_cnn=getattr(agent, "use_cnn", False), obs_space=obs_space)
             episode_reward += reward
+            episode_steps += 1
             total_steps += 1
 
             if render:
@@ -505,7 +778,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
         total_rewards.append(episode_reward)
 
         # === Episode stats ===
-        if hasattr(agent, 'constraint_monitor'):
+        if hasattr(agent, 'constraint_monitor') and agent.constraint_monitor:
             stats = agent.constraint_monitor.summary()
             episode_modifications = stats['episode_modifications']
             modification_rate = stats['total_mod_rate']
@@ -515,16 +788,24 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             violation_rate = stats['total_viol_rate']
             violations_per_episode.append(episode_violations)
 
-            # print(
-            #     f"Episode {episode + 1}: "
-            #     f"Reward = {episode_reward:.2f}, "
-            #     f"Episode Modifications = {episode_modifications}, "
-            #     f"Episode Violations = {episode_violations}, "
-            #     f"Total Modifications = {total_modifications}, "
-            #     f"Total Violations = {total_violations}, "
-            #     f"Mod Rate = {modification_rate:.4f}, "
-            #     f"Viol Rate = {violation_rate:.4f}"
-            # )
+            print(
+                f"Episode {episode + 1}/{num_episodes}: "
+                f"Reward = {episode_reward:.2f}, "
+                f"Steps = {episode_steps}, "
+                f"Episode Modifications = {episode_modifications}, "
+                f"Episode Violations = {episode_violations}, "
+                f"Total Modifications = {total_modifications}, "
+                f"Total Violations = {total_violations}, "
+                f"Mod Rate = {modification_rate:.4f}, "
+                f"Viol Rate = {violation_rate:.4f}"
+            )
+        else:
+            # Log basic episode info even without constraint monitor
+            print(
+                f"Episode {episode + 1}/{num_episodes}: "
+                f"Reward = {episode_reward:.2f}, "
+                f"Steps = {episode_steps}"
+            )
 
     if original_epsilon is not None:
         agent.epsilon = original_epsilon
@@ -573,7 +854,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
             xlabel="Episode",
             ylabel="Reward",
             rolling_window=5,
-            run_dir=run_dir,
+            run_dir=run_dir if visualize else None,  # Only save graphs if visualize=True
             show=False,
         )
 
@@ -588,6 +869,7 @@ def evaluate_policy(agent, env, num_episodes=100, visualize=False, render=False,
     total_violations = stats["total_violations"]
     total_modifications = stats["total_modifications"]
     total_steps_eval = stats["total_steps"]
+    env.close()
 
     return {
         "avg_reward": np.mean(total_rewards),
@@ -608,9 +890,9 @@ def run_multiple_evaluations(
         agent_name='dqn',
         env_name='MiniGrid-Empty-5x5-v0',
         use_ram_obs=False,
-        num_runs=3,
+        num_runs=2,
         num_train_episodes=2000,
-        num_eval_episodes=15,
+        num_eval_episodes=100,
         use_shield_post=False,
         use_shield_pre=False,
         use_shield_layer=False,
@@ -620,13 +902,20 @@ def run_multiple_evaluations(
         visualize=False,
         render=False,
         force_disable_shield=False,
-        run_dir=None
+        run_dir=None,
+        use_sb3=False,
+        sb3_model_path=None,
+        sb3_train=False,
+        sb3_save_path=None
 ):
     all_results = []
 
     for run in range(num_runs):
         print(f"\n=== Run {run + 1}/{num_runs} ===")
 
+        # For SB3 training, only save on the first run to avoid overwriting
+        save_path = sb3_save_path if (sb3_train and run == 0) else None
+        
         agent, episode_rewards, best_weights, best_avg_reward, env = train(
             agent=agent_name,
             env_name=env_name,
@@ -639,7 +928,12 @@ def run_multiple_evaluations(
             mode=mode,
             verbose=verbose,
             visualize=visualize,
-            render=render
+            render=render,
+            seed=run+1, # seed is run number (1-indexed)
+            use_sb3=use_sb3,
+            sb3_model_path=sb3_model_path,
+            sb3_train=sb3_train,
+            sb3_save_path=save_path
         )
 
         if hasattr(agent, 'load_weights') and best_weights is not None:
@@ -655,6 +949,7 @@ def run_multiple_evaluations(
             force_disable_shield=force_disable_shield,
             run_dir=run_dir
         )
+        env.close()
 
         # === CSV-Formatted Output for Excel Logging ===
         if force_disable_shield:
@@ -673,7 +968,7 @@ def run_multiple_evaluations(
         csv_line = "\t".join([
             env_name,
             agent_name.upper(),
-            "emergency_cartpole.cnf", # TODO: make this not hardcoded
+            "cliff_safe.cnf", # TODO: make this not hardcoded
             shield_mode,
             f"{run + 1}",
             f"{results['avg_reward']:.2f}",
@@ -729,8 +1024,8 @@ def make_run_dir(base_dir="results", env_name=None, agent_name=None, softness=""
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train RL agent (DQN, A2C, PPO) with optional shield and environment.")
-    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c'], default='ppo',
-                        help='Which agent to use: dqn, ppo, a2c')
+    parser.add_argument('--agent', choices=['dqn', 'ppo', 'a2c', 'cppo'], default='ppo',
+                        help='Which agent to use: dqn, ppo, a2c, cppo')
     parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--use_shield_pre', action='store_true', help='Enable preemptive constraints during training')
     parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')
@@ -744,6 +1039,10 @@ if __name__ == "__main__":
     parser.add_argument('--monitor_constraints', action='store_true', help='Enable constraint monitor')
     parser.add_argument('--no_eval', action='store_true', help='Do not run eval')
     parser.add_argument('--use_ram_obs', action='store_true', help='Use RAM for observation space')
+    parser.add_argument('--use_sb3', action='store_true', help='Use stable-baselines3 agent instead of custom agent')
+    parser.add_argument('--sb3_model_path', type=str, default=None, help='Path to pretrained SB3 model (or HuggingFace model ID)')
+    parser.add_argument('--sb3_train', action='store_true', help='Train a new SB3 model instead of loading pretrained')
+    parser.add_argument('--sb3_save_path', type=str, default=None, help='Path to save trained SB3 model (only used with --sb3_train)')
     args = parser.parse_args()
     print(f'parser use shield post: {args.use_shield_post}')
 
@@ -765,7 +1064,7 @@ if __name__ == "__main__":
             agent_name=args.agent,
             env_name=args.env,
             use_ram_obs=args.use_ram_obs,
-            num_runs=10,
+            num_runs=5,
             num_train_episodes=args.num_episodes,
             num_eval_episodes=100,
             use_shield_post=args.use_shield_post,
@@ -777,5 +1076,9 @@ if __name__ == "__main__":
             visualize=args.visualize,
             render=args.render,
             force_disable_shield=args.force_disable_shield,
-            run_dir=run_dir
+            run_dir=run_dir,
+            use_sb3=args.use_sb3,
+            sb3_model_path=args.sb3_model_path,
+            sb3_train=args.sb3_train,
+            sb3_save_path=args.sb3_save_path
         )

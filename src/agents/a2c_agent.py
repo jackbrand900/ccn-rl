@@ -26,7 +26,7 @@ class A2CAgent:
                  verbose=False):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"[BatchedA2CAgent] Using device: {self.device}")
+        print(f"[A2CAgent] Using device: {self.device}")
 
         self.use_cnn = use_cnn
         self.use_shield_post = use_shield_post
@@ -36,17 +36,27 @@ class A2CAgent:
         self.verbose = verbose
         self.env = env
         self.action_dim = action_dim
+        print(f'Action dim: {action_dim}')
 
         self.gamma = 0.99
-        self.lr = 3e-4
+        self.lr = 1e-3
         self.hidden_dim = 128
-        self.entropy_coef = 0.01
+        self.entropy_coef = 0.03
         self.lambda_sem = 0
         self.use_cnn = False
         self.num_layers = 2
-        self.use_orthogonal_init = False
+        self.use_orthogonal_init = True
         self.pretrained_cnn = None
 
+        # agent_kwargs = {
+        #     'lr': 1e-3,
+        #     'gamma': 0.99,
+        #     'hidden_dim': 256,
+        #     'num_layers': 3,
+        #     'use_orthogonal_init': False,
+        #     'ent_coef': 0.01
+        # }
+        # print(agent_kwargs)
         # === Override from agent_kwargs ===
         if agent_kwargs is not None:
             self.gamma = agent_kwargs.get("gamma", self.gamma)
@@ -65,7 +75,7 @@ class A2CAgent:
             num_actions=action_dim,
             mode=mode,
             verbose=verbose,
-            is_shield_active=(use_shield_layer or use_shield_post)
+            is_shield_active=(use_shield_layer or use_shield_post or use_shield_pre)
         )
         self.shield_controller.constraint_monitor = self.constraint_monitor
 
@@ -73,6 +83,7 @@ class A2CAgent:
             input_shape=input_shape,
             output_dim=action_dim,
             hidden_dim=self.hidden_dim,
+            num_layers=self.num_layers,
             use_cnn=self.use_cnn,
             actor_critic=True,
             use_shield_layer=use_shield_layer,
@@ -174,11 +185,17 @@ class A2CAgent:
             shielded_probs = raw_probs
 
         dist = Categorical(probs=shielded_probs)
-        new_log_probs = log_probs  # already stored during action selection
-        entropy = dist.entropy().mean()
 
+        if self.use_shield_layer:
+            # Recompute log_probs because the shield is inside the model
+            new_log_probs = dist.log_prob(actions)
+        else:
+            # Use stored log_probs (from raw or shielded sampling)
+            new_log_probs = log_probs
+
+        entropy = dist.entropy().mean()
         policy_loss = -(advantages.detach() * new_log_probs).mean()
-        value_loss = nn.MSELoss()(predicted_values.squeeze(), targets)
+        value_loss = nn.MSELoss()(predicted_values.view(-1), targets.view(-1))
 
         # === Semantic Loss ===
         semantic_loss = 0
@@ -190,7 +207,7 @@ class A2CAgent:
             ]
             flag_tensor = torch.tensor(flag_values, dtype=raw_probs.dtype, device=raw_probs.device)
             probs_all = torch.cat([raw_probs, flag_tensor], dim=1)
-            semantic_loss = self.shield_controller.compute_semantic_loss(probs_all)
+            semantic_loss = self.shield_controller.compute_semantic_loss(probs_all, flag_tensor)
 
         # === Total Loss ===
         loss = policy_loss + value_loss - self.entropy_coef * entropy + self.lambda_sem * semantic_loss

@@ -1,0 +1,13 @@
+batch_size: 64
+budget: 0.2550326146153321
+clip_eps: 0.333763803142096
+cost_gamma: 0.9144641472975551
+cost_lam: 0.894537130212592
+ent_coef: 0.130201013066491
+epochs: 10
+gamma: 0.9413163134075333
+hidden_dim: 256
+lr: 0.012616892994612593
+nu_lr: 0.0008895874217572163
+num_layers: 3
+use_orthogonal_init: false

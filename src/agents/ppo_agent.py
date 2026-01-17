@@ -22,14 +22,14 @@ class PPOAgent:
                  lr=5e-4,
                  gamma=0.99,
                  clip_eps=0.2,
-                 ent_coef=0.01,
-                 lambda_sem=0.1,
+                 ent_coef=0.015,
+                 lambda_sem=0.0,
                  lambda_consistency=0,
                  verbose=False,
                  requirements_path=None,
                  env=None,
-                 batch_size=64,
-                 epochs=4,
+                 batch_size=512,
+                 epochs=7,
                  use_shield_post=False,
                  use_shield_pre=False,
                  use_shield_layer=False,
@@ -39,6 +39,7 @@ class PPOAgent:
 
         self.lambda_sem = lambda_sem
         self.lambda_consistency = lambda_consistency
+        self.lambda_penalty = 0.0  # Reward shaping penalty coefficient (set via agent_kwargs)
         self.use_shield_post = use_shield_post
         self.use_shield_pre = use_shield_pre
         self.use_shield_layer = use_shield_layer
@@ -46,8 +47,8 @@ class PPOAgent:
         self.verbose = verbose
         self.env = env
         self.action_dim = action_dim
-
-        print(agent_kwargs)
+        # agent_kwargs = {'lr': 0.0009836111562499252, 'gamma': 0.9884995391196614, 'hidden_dim': 128, 'use_orthogonal_init': False, 'num_layers': 2, 'clip_eps': 0.21312490598946232, 'ent_coef': 0.013917372958293163, 'epochs': 7, 'batch_size': 512}
+        # print(agent_kwargs)
         if agent_kwargs is not None:
             self.hidden_dim = agent_kwargs.get("hidden_dim", hidden_dim)
             self.use_orthogonal_init = agent_kwargs.get("use_orthogonal_init", use_orthogonal_init)
@@ -58,6 +59,7 @@ class PPOAgent:
             self.batch_size = agent_kwargs.get("batch_size", batch_size)
             self.epochs = agent_kwargs.get("epochs", epochs)
             self.num_layers = agent_kwargs.get("num_layers", 2)
+            self.lambda_penalty = agent_kwargs.get("lambda_penalty", 0.0)  # Reward shaping penalty
         else:
             self.lr = lr
             self.gamma = gamma
@@ -67,7 +69,8 @@ class PPOAgent:
             self.epochs = epochs
             self.use_orthogonal_init = use_orthogonal_init
             self.hidden_dim = hidden_dim
-            self.num_layers = 3
+            self.lambda_penalty = 0.0  # Default: no reward shaping
+            self.num_layers = 2
 
         self.use_cnn = use_cnn
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -145,6 +148,8 @@ class PPOAgent:
                 shielded_probs /= shielded_probs.sum()
                 dist_shielded = torch.distributions.Categorical(probs=shielded_probs)
                 a_shielded = dist_shielded.sample().item()
+            else:
+                a_shielded = None
 
             selected_action = a_unshielded
 
@@ -235,7 +240,7 @@ class PPOAgent:
                 ]
                 flag_tensor = torch.tensor(flag_values, dtype=probs.dtype, device=probs.device)
                 probs_all = torch.cat([probs, flag_tensor], dim=1)  # [B, num_vars]
-                semantic_loss = self.shield_controller.compute_semantic_loss(probs_all)
+                semantic_loss = self.shield_controller.compute_semantic_loss(probs_all, flag_tensor)
             total_loss = (policy_loss +
                           0.5 * value_loss -
                           self.ent_coef * entropy +

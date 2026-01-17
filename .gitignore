@@ -1,0 +1,35 @@
+# Miniconda/Anaconda installers
+*.exe
+miniconda*.sh
+Anaconda*.sh
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Optuna databases (can be large)
+*.db
+
+# Environment files
+*.yml
+*.yaml
+!config/**/*.yaml
+!config/**/*.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large files
+*.exe
+*.dmg
+*.pkg
+

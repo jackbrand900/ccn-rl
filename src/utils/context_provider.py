@@ -101,10 +101,11 @@ def build_context(env, agent):
             # === Player position ===
             player_x = ram[70]
             player_y = ram[97]
+            low_depth = player_y > 70
 
             # === Oxygen status ===
-            oxygen_meter = ram[102] / 255.0
-            low_oxygen = oxygen_meter < 0.1
+            oxygen_meter = ram[102]
+            low_oxygen = oxygen_meter < 20
 
             # === Player direction ===
             player_direction = ram[86]
@@ -119,6 +120,7 @@ def build_context(env, agent):
                 "player_y": player_y,
                 "oxygen": oxygen_meter,
                 "low_oxygen": low_oxygen,
+                "low_depth": low_depth,
                 "facing_right": facing_right,
                 "facing_left": facing_left,
                 "divers_collected": divers_collected,
@@ -150,6 +152,43 @@ def build_context(env, agent):
             })
         except Exception as e:
             print(f"[DemonAttack RAM error] {e}")
+    elif "CliffWalking" in env_id:
+        obs = agent.last_obs if hasattr(agent, "last_obs") else None
+        context["obs"] = obs
+
+        try:
+            state = int(np.argmax(obs)) if isinstance(obs, np.ndarray) else int(obs)
+            width = 12
+            height = 4
+
+            x = state % width
+            y = state // width
+
+            def is_cliff(s):
+                # Cliff is the bottom row excluding start (36) and goal (47)
+                return s in list(range(37, 47))
+
+            cliff_right = False
+            cliff_down = False
+
+            # Check if moving RIGHT leads to cliff
+            if x < width - 1:
+                s_right = state + 1
+                cliff_right = is_cliff(s_right)
+
+            # Check if moving DOWN leads to cliff
+            if y < height - 1:
+                s_down = state + width
+                cliff_down = is_cliff(s_down)
+
+            context["cliff_right"] = cliff_right
+            context["cliff_down"] = cliff_down
+            # print(f'state: {state}')
+            # print(f'cliff right? {cliff_right}')
+            # print(f'cliff down? {cliff_down}')
+
+        except Exception as e:
+            print(f"[CliffWalking context error] {e}")
     else:
         obs = agent.last_obs if hasattr(agent, "last_obs") else None
         # print(f'obs: {obs}')
@@ -289,27 +328,45 @@ def seaquest_flag_logic(context, flag_active_val=1.0):
         "y_19": flag_active_val if context.get("divers_collected", 0) > 0 else 0.0,  # at least one diver collected
         "y_20": flag_active_val if context.get("facing_right", False) else 0.0,      # Facing right
         "y_21": flag_active_val if context.get("facing_left", False) else 0.0,       # Facing left
+        "y_22": flag_active_val if context.get("low_depth", False) else 0.0
     }
 
 def demonattack_flag_logic(context, flag_active_val=1.0):
     flags = {}
+
+    # === Context extraction ===
     player_x = context.get("player_x", 0.5)
     enemy_xs = context.get("enemy_xs", [])
     enemy_ys = context.get("enemy_ys", [])
     missile_y = context.get("missile_y", 0.5)
 
-    # y_6: Enemy aligned horizontally with player
+    # === THREAT FLAGS ===
+
+    # y_6: Enemy very close to bottom (immediate danger)
+    flags["y_6"] = flag_active_val if any(ey > 0.85 for ey in enemy_ys) else 0.0
+
+    # y_7: Missile is still in flight (can't fire again yet)
+    flags["y_7"] = flag_active_val if missile_y > 0.2 else 0.0
+
+    # y_8: Any enemy decently aligned with the player (within 0.1)
     aligned = any(abs(ex - player_x) < 0.1 for ex in enemy_xs)
+    flags["y_8"] = flag_active_val if aligned else 0.0
 
-    # y_7: Missile near bottom (e.g., just fired)
-    missile_low = missile_y > 0.8
-
-    # y_8: Enemy close to bottom (threat zone)
-    enemy_near = any(ey > 0.7 for ey in enemy_ys)
-
-    flags["y_6"] = flag_active_val if aligned else 0.0
-    flags["y_7"] = flag_active_val if missile_low else 0.0
-    flags["y_8"] = flag_active_val if enemy_near else 0.0
+    # y_10: High-density wave (many enemies visible)
+    flags["y_10"] = flag_active_val if len(enemy_xs) >= 3 else 0.0
 
     return flags
+
+def cliffwalking_flag_logic(context, flag_active_val=1.0):
+    cliff_right = context.get("cliff_right", False)
+    cliff_down = context.get("cliff_down", False)
+
+    # print(f"[Flag Logic] cliff_right={cliff_right}, cliff_down={cliff_down}")
+
+    return {
+        "y_4": flag_active_val if cliff_right else 0.0,
+        "y_5": flag_active_val if cliff_down else 0.0,
+    }
+
+
 

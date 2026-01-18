@@ -15,7 +15,7 @@ from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
 from src.agents.a2c_agent import A2CAgent
 from src.agents.constrained_ppo_agent import ConstrainedPPOAgent
-from src.agents.sb3_wrapper import SB3Wrapper
+# from src.agents.sb3_wrapper import SB3Wrapper  # Not used in IJCAI experiments
 from src.utils.config import config_by_env
 from src.utils.env_helpers import find_key
 import sys

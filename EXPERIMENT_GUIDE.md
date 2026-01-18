@@ -4,13 +4,13 @@
 
 ### 1. Run CartPole Experiments
 ```bash
-conda activate thesis_env
+conda activate ccn_rl
 python scripts/run_ijcai_experiments.py --env CartPole-v1
 ```
 
 ### 2. What Happens
 - **Loads tuned hyperparameters** from `config/ijcai_tuned/` automatically
-- **Runs 7 methods** × **5 seeds** = 35 total runs
+- **Runs 8 methods** × **5 seeds** = 40 total runs
 - **Tracks metrics per episode**: violation_rate, modification_rate, reward
 - **Aggregates across 5 runs**: computes mean ± std
 - **Generates graphs automatically** after completion
@@ -31,17 +31,6 @@ results/ijcai_experiments/
         ├── CartPole-v1_modification_rates_over_time.png
         └── CartPole-v1_*_rates.png (individual methods)
 ```
-
-## Generated Graphs
-
-1. **Violation Rates Over Time** - All methods compared (mean ± std across 5 runs)
-2. **Modification Rates Over Time** - All methods compared (mean ± std across 5 runs)
-3. **Individual Method Plots** - Violation + modification rates for each method
-
-All graphs are:
-- Publication quality (300 DPI, Times New Roman font)
-- Include confidence intervals (mean ± std)
-- Ready for submission
 
 ## Options
 

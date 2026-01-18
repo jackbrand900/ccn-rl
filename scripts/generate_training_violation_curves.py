@@ -11,7 +11,7 @@ import numpy as np
 from pathlib import Path
 
 # Configuration
-RESULTS_DIR = Path("/Users/jackbrand/Desktop/coding/imperial/ccn-rl/results/ijcai_experiments")
+RESULTS_DIR = Path(__file__).parent.parent / "results" / "ijcai_experiments"
 OUTPUT_DIR = RESULTS_DIR / "training_violation_plots"
 OUTPUT_DIR.mkdir(exist_ok=True)
 

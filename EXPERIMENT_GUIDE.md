@@ -4,6 +4,7 @@
 
 ### 1. Run CartPole Experiments
 ```bash
+conda env create -f environment.yml
 conda activate ccn_rl
 python scripts/run_ijcai_experiments.py --env CartPole-v1
 ```

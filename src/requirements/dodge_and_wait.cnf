@@ -1,0 +1,8 @@
+# Enemy close → avoid LEFTFIRE (move into danger)
+not y_8 or not y_5
+
+# Enemy close → avoid RIGHTFIRE
+not y_8 or not y_4
+
+# Enemy aligned and close → only NOOP or move away
+not y_6 or not y_8 or y_0 or y_3 or y_2

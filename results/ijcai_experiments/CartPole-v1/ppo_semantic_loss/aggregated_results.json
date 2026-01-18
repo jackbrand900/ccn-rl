@@ -1,0 +1,109 @@
+{
+  "avg_reward": {
+    "mean": 178.92,
+    "std": 58.817498416712695,
+    "min": 98.07,
+    "max": 255.78,
+    "median": 163.08
+  },
+  "avg_violations_per_step": {
+    "mean": 0.02601061875612228,
+    "std": 0.011528934769148994,
+    "min": 0.011181484087888,
+    "max": 0.0406328201213046,
+    "median": 0.0229739252995066
+  },
+  "total_violations": {
+    "mean": 444.8,
+    "std": 258.7241001530395,
+    "min": 281.0,
+    "max": 958.0,
+    "median": 326.0
+  },
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "max_reward": {
+    "mean": 411.6,
+    "std": 105.54733535243795,
+    "min": 218.0,
+    "max": 500.0,
+    "median": 455.0
+  },
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "std_reward": {
+    "mean": 67.20661195260503,
+    "std": 24.192866507546558,
+    "min": 43.93273380976876,
+    "max": 110.38078229474552,
+    "median": 67.00395510714274
+  },
+  "total_steps": {
+    "mean": 17892.0,
+    "std": 5881.74984167127,
+    "min": 9807.0,
+    "max": 25578.0,
+    "median": 16308.0
+  },
+  "best_avg_reward": {
+    "mean": 196.10399999999998,
+    "std": 35.269255506744116,
+    "min": 132.56,
+    "max": 229.08,
+    "median": 215.36
+  },
+  "final_reward": {
+    "mean": 269.0,
+    "std": 132.09996214988104,
+    "min": 146.0,
+    "max": 500.0,
+    "median": 220.0
+  },
+  "seed": {
+    "mean": 484.2,
+    "std": 373.42276309834136,
+    "min": 42.0,
+    "max": 1011.0,
+    "median": 456.0
+  },
+  "method": "ppo_semantic_loss",
+  "env": "CartPole-v1",
+  "min_reward": {
+    "mean": 51.0,
+    "std": 20.189105973271822,
+    "min": 16.0,
+    "max": 71.0,
+    "median": 63.0
+  },
+  "avg_violations_per_episode": {
+    "mean": 4.4479999999999995,
+    "std": 2.5872410015303946,
+    "min": 2.81,
+    "max": 9.58,
+    "median": 3.26
+  },
+  "train_episodes": {
+    "mean": 356.0,
+    "std": 127.53038853543887,
+    "min": 210.0,
+    "max": 500.0,
+    "median": 350.0
+  },
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  }
+}

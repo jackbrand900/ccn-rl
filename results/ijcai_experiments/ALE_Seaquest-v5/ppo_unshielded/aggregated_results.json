@@ -1,0 +1,109 @@
+{
+  "best_avg_reward": {
+    "mean": 270.8,
+    "std": 11.881077392223318,
+    "min": 254.5,
+    "max": 286.0,
+    "median": 275.5
+  },
+  "avg_reward": {
+    "mean": 302.4,
+    "std": 98.89517682880192,
+    "min": 192.6,
+    "max": 455.4,
+    "median": 321.8
+  },
+  "min_reward": {
+    "mean": 76.0,
+    "std": 75.25955088890711,
+    "min": 0.0,
+    "max": 220.0,
+    "median": 60.0
+  },
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "total_steps": {
+    "mean": 99850.0,
+    "std": 25419.919158014647,
+    "min": 71019.0,
+    "max": 139808.0,
+    "median": 104361.0
+  },
+  "train_episodes": {
+    "mean": 56.0,
+    "std": 16.24807680927192,
+    "min": 40.0,
+    "max": 80.0,
+    "median": 50.0
+  },
+  "std_reward": {
+    "mean": 114.25412254507901,
+    "std": 13.970665032634344,
+    "min": 96.48440288461136,
+    "max": 134.49401473671608,
+    "median": 114.88620456782441
+  },
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "final_reward": {
+    "mean": 312.0,
+    "std": 106.28264204469139,
+    "min": 180.0,
+    "max": 480.0,
+    "median": 280.0
+  },
+  "max_reward": {
+    "mean": 632.0,
+    "std": 62.73754856543249,
+    "min": 560.0,
+    "max": 700.0,
+    "median": 640.0
+  },
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "avg_violations_per_episode": {
+    "mean": 154.038,
+    "std": 53.87951870609091,
+    "min": 96.25,
+    "max": 241.59,
+    "median": 154.02
+  },
+  "method": "ppo_unshielded",
+  "seed": {
+    "mean": 484.2,
+    "std": 373.42276309834136,
+    "min": 42.0,
+    "max": 1011.0,
+    "median": 456.0
+  },
+  "avg_violations_per_step": {
+    "mean": 0.15066553095515647,
+    "std": 0.015068483069061112,
+    "min": 0.13031410777145952,
+    "max": 0.1728012703135729,
+    "median": 0.14758386753672348
+  },
+  "env": "ALE/Seaquest-v5",
+  "total_violations": {
+    "mean": 15403.8,
+    "std": 5387.95187060909,
+    "min": 9625.0,
+    "max": 24159.0,
+    "median": 15402.0
+  }
+}

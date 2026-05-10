@@ -33,6 +33,7 @@ class PPOAgent:
                  use_shield_post=False,
                  use_shield_pre=False,
                  use_shield_layer=False,
+                 use_action_mask=False,
                  monitor_constraints=True,
                  agent_kwargs=None,
                  mode='hard'):
@@ -43,6 +44,7 @@ class PPOAgent:
         self.use_shield_post = use_shield_post
         self.use_shield_pre = use_shield_pre
         self.use_shield_layer = use_shield_layer
+        self.use_action_mask = use_action_mask
         self.monitor_constraints = monitor_constraints
         self.verbose = verbose
         self.env = env
@@ -82,7 +84,8 @@ class PPOAgent:
         self.last_raw_probs = None
         self.last_shielded_probs = None
         self.last_obs = None
-        is_shield_active = self.use_shield_layer or self.use_shield_post or self.use_shield_pre
+        self.last_action_mask = None
+        is_shield_active = self.use_shield_layer or self.use_shield_post or self.use_shield_pre or self.use_action_mask
         self.shield_controller = ShieldController(requirements_path, action_dim, mode, verbose=self.verbose, is_shield_active=is_shield_active)
         self.policy = ModularNetwork(input_shape, action_dim, self.hidden_dim, num_layers=self.num_layers,
                                      use_shield_layer=self.use_shield_layer, pretrained_cnn=None,
@@ -105,6 +108,7 @@ class PPOAgent:
 
     def select_action(self, state, env=None, do_apply_shield=True):
         self.last_obs = state
+        self.last_action_mask = None
         context = context_provider.build_context(env or self.env, self)
         state_tensor = prepare_input(state, use_cnn=self.use_cnn).to(self.device)
 
@@ -136,6 +140,23 @@ class PPOAgent:
 
             selected_action = a_shielded
             log_prob_tensor = dist_shielded.log_prob(torch.tensor(a_shielded).to(self.device))
+
+        elif self.use_action_mask and do_apply_shield:
+            # Sample raw action (for monitoring would-have-violated)
+            dist_unshielded = torch.distributions.Categorical(probs=raw_probs)
+            a_unshielded = dist_unshielded.sample().item()
+
+            # Build mask from CNF satisfying assignments and apply via renormalized softmax
+            mask = self.shield_controller.compute_action_mask(context, device=raw_probs.device)
+            self.last_action_mask = mask
+            masked_probs = raw_probs * mask.to(raw_probs.dtype)
+            masked_probs = masked_probs / masked_probs.sum()
+            dist_shielded = torch.distributions.Categorical(probs=masked_probs)
+            a_shielded = dist_shielded.sample().item()
+
+            selected_action = a_shielded
+            log_prob_tensor = dist_shielded.log_prob(torch.tensor(a_shielded, device=self.device))
+            shielded_probs = masked_probs
 
         else:
             # === Unshielded path: sample raw and get hypothetical shielded action
@@ -176,7 +197,8 @@ class PPOAgent:
         self.memory.append((
             state, action, reward, next_state, context, done,
             self.last_log_prob, self.last_value,
-            self.last_raw_probs, self.last_shielded_probs
+            self.last_raw_probs, self.last_shielded_probs,
+            self.last_action_mask,
         ))
 
     def ensure_dict_contexts(self, contexts):
@@ -199,9 +221,17 @@ class PPOAgent:
         self.learn_step_counter += 1
 
         # === Unpack memory ===
-        states, actions, rewards, next_states, contexts, dones, log_probs, values, raw_probs, shielded_probs = zip(*self.memory)
+        states, actions, rewards, next_states, contexts, dones, log_probs, values, raw_probs, shielded_probs, action_masks = zip(*self.memory)
         contexts = self.ensure_dict_contexts(contexts)
         returns, advantages = self._compute_gae(rewards, values, dones)
+
+        if self.use_action_mask:
+            mask_batch = torch.stack([
+                m if m is not None else torch.ones(self.action_dim, dtype=torch.bool, device=self.device)
+                for m in action_masks
+            ]).to(self.device)
+        else:
+            mask_batch = None
 
         # === Prepare tensors ===
         states = prepare_batch(states, use_cnn=self.use_cnn).to(self.device)
@@ -220,7 +250,12 @@ class PPOAgent:
 
         for _ in range(epochs):
             logits, predicted_values = self.policy(states, context=contexts)
-            dist = Categorical(logits=logits)
+            if mask_batch is not None:
+                # MaskablePPO: mask invalid actions in both log_prob and entropy
+                masked_logits = logits.masked_fill(~mask_batch, float('-inf'))
+                dist = Categorical(logits=masked_logits)
+            else:
+                dist = Categorical(logits=logits)
             new_log_probs = dist.log_prob(actions)
             entropy = dist.entropy().mean()
 

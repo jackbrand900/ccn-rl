@@ -1,6 +1,6 @@
-# Safe Reinforcement Learning with Concept-Constrained Networks
+# Constraint-Satisfying Reinforcement Learning via a Neuro-Symbolic Projection Layer
 
-This repository contains the implementation and experimental code for our IJCAI submission on safe reinforcement learning using constraint-based shielding methods. The core idea is to train RL agents that not only maximize rewards but also satisfy logical safety constraints throughout training.
+This repository contains the implementation and experimental code for our submission on safe reinforcement learning using constraint-based shielding methods. The core idea is to train RL agents that not only maximize rewards but also satisfy logical safety constraints throughout training.
 
 ## What's This About?
 
@@ -179,10 +179,6 @@ We use PPO as the base algorithm, implemented in `src/agents/ppo_agent.py`. The 
 
 Training loop is in `src/train.py` with comprehensive logging and monitoring.
 
-## Citation
-
-If you use this code in your research, please cite our IJCAI paper (citation details coming soon).
-
 ## Troubleshooting
 
 **Out of memory during training:**
@@ -199,15 +195,10 @@ If you use this code in your research, please cite our IJCAI paper (citation det
 - CartPole and CliffWalking are much faster (minutes to hours)
 - Consider reducing `--train-episodes` for quick tests
 
-**Tuning produces poor hyperparameters:**
-- Increase `--trials` (we used 100-200 for final results)
-- Check that the target reward is reasonable for your environment
-- Some methods need more trials than others (CMDP is particularly finicky)
-
 ## License
 
 This project is part of academic research. Please contact the authors for licensing information.
 
 ## Acknowledgments
 
-This work builds on the `pishield` library for differentiable shielding and uses implementations from Stable-Baselines3 as reference. Thanks to the RL and safe learning communities for the tools and benchmarks.
+This work builds on the `pishield` library for differentiable shielding. Thanks to the RL and safe learning communities for the tools and benchmarks.

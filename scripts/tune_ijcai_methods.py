@@ -79,6 +79,18 @@ METHODS = [
         'lambda_sem': 1.0,
         'display_name': 'PPO + Semantic Loss'
     },
+    # Light-Medium: Action masking (MaskablePPO-style: hard CNF mask on logits)
+    {
+        'name': 'ppo_action_mask',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'use_action_mask': True,
+        'mode': 'hard',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Action Mask'
+    },
     # Medium: Pre-emptive shield (action modification before execution)
     {
         'name': 'ppo_preshield_soft',
@@ -470,6 +482,7 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             use_shield_post=method['use_shield_post'],
             use_shield_pre=method['use_shield_pre'],
             use_shield_layer=method['use_shield_layer'],
+            use_action_mask=method.get('use_action_mask', False),
             monitor_constraints=True,
             mode=method['mode'],
             verbose=False,
@@ -789,6 +802,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
             use_shield_post=method['use_shield_post'],
             use_shield_pre=method['use_shield_pre'],
             use_shield_layer=method['use_shield_layer'],
+            use_action_mask=method.get('use_action_mask', False),
             monitor_constraints=True,
             mode=method['mode'],
             verbose=False,
@@ -925,6 +939,7 @@ Examples:
                 use_shield_post=trial_data['method']['use_shield_post'],
                 use_shield_pre=trial_data['method']['use_shield_pre'],
                 use_shield_layer=trial_data['method']['use_shield_layer'],
+                use_action_mask=trial_data['method'].get('use_action_mask', False),
                 monitor_constraints=True,
                 mode=trial_data['method']['mode'],
                 verbose=False,
@@ -1047,6 +1062,8 @@ Examples:
             shield_info.append(f"Pre-emptive ({method['mode']})")
         if method['use_shield_layer']:
             shield_info.append(f"Layer ({method['mode']})")
+        if method.get('use_action_mask', False):
+            shield_info.append(f"Action Mask")
         if method.get('lambda_sem', 0) > 0:
             shield_info.append("Semantic Loss")
         if method.get('lambda_penalty', 0) > 0:

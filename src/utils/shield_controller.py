@@ -1,4 +1,5 @@
 import itertools
+import warnings
 from functools import partial
 
 import torch
@@ -252,6 +253,31 @@ class ShieldController:
         # For categorical actions, we don't need sampling - just return all satisfying actions
         self.sat_assignments_cache[key] = satisfying_actions
         return satisfying_actions
+
+    def compute_action_mask(self, context, device=None):
+        """Build a boolean mask [num_actions] of valid actions for a single context.
+
+        Uses the CNF + current flags to enumerate satisfying actions. If the set is
+        empty (which shouldn't happen for any well-formed CNF in this project), falls
+        back to an all-True mask and warns.
+        """
+        flags = self.flag_logic_fn(context)
+        flag_values = [flags.get(name, 0) for name in self.flag_names]
+        valid = self._get_satisfying_assignments(flag_values)
+
+        target_device = device if device is not None else self.device
+        mask = torch.zeros(self.num_actions, dtype=torch.bool, device=target_device)
+        if not valid:
+            warnings.warn(
+                f"Action mask empty for flags={flag_values} (no action satisfies "
+                f"the CNF). Falling back to no mask.",
+                RuntimeWarning,
+            )
+            mask[:] = True
+        else:
+            for a in valid:
+                mask[a] = True
+        return mask
 
     def compute_semantic_loss(self, action_probs, flag_tensor, debug=False):
         """

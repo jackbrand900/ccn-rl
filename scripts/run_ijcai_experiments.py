@@ -23,6 +23,23 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import pandas as pd
+
+
+class NumpyJSONEncoder(json.JSONEncoder):
+    """JSON encoder that handles numpy scalar/array types.
+
+    Needed because evaluate_policy returns numpy scalars (e.g. np.max on int
+    rewards yields np.int64, which is not a subclass of Python int and so
+    fails the default encoder).
+    """
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
@@ -88,6 +105,18 @@ METHODS = [
         'mode': '',
         'lambda_sem': 1.0,  # Semantic loss coefficient
         'display_name': 'PPO + Semantic Loss'
+    },
+    # Light-Medium: Action masking (MaskablePPO-style: hard CNF mask on logits)
+    {
+        'name': 'ppo_action_mask',
+        'agent': 'ppo',
+        'use_shield_post': False,
+        'use_shield_pre': False,
+        'use_shield_layer': False,
+        'use_action_mask': True,
+        'mode': 'hard',
+        'lambda_sem': 0.0,
+        'display_name': 'PPO + Action Mask'
     },
     # Medium: Shield computation before action (pre-emptive)
     {
@@ -324,6 +353,7 @@ def run_single_experiment(
             use_shield_post=method['use_shield_post'],
             use_shield_pre=method['use_shield_pre'],
             use_shield_layer=method['use_shield_layer'],
+            use_action_mask=method.get('use_action_mask', False),
             monitor_constraints=True,
             mode=method['mode'],
             verbose=verbose,
@@ -390,7 +420,7 @@ def run_single_experiment(
         # Save results to JSON file (for subprocess mode)
         result_file = os.path.join(run_dir, 'results.json')
         with open(result_file, 'w') as f:
-            json.dump(results, f, indent=2)
+            json.dump(results, f, indent=2, cls=NumpyJSONEncoder)
         
         env.close()
         
@@ -951,7 +981,7 @@ def run_all_experiments(
                     
                     aggregated_path = os.path.join(method_dir, 'aggregated_results.json')
                     with open(aggregated_path, 'w') as f:
-                        json.dump(aggregated, f, indent=2)
+                        json.dump(aggregated, f, indent=2, cls=NumpyJSONEncoder)
                     
                     # Print summary emphasizing violation/modification rates
                     print(f"\n✓ Aggregated results for {method['display_name']} on {env_name}:")

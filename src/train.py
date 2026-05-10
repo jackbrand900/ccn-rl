@@ -259,6 +259,8 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
         shield_mode = "Post-hoc Shield"
     elif getattr(agent, 'use_shield_pre', False):
         shield_mode = "Pre-emptive Shield"
+    elif getattr(agent, 'use_action_mask', False):
+        shield_mode = "Action Mask"
     elif agent.lambda_sem > 0:
         shield_mode = "Semantic Loss"
     else:
@@ -287,7 +289,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
             result = agent.select_action(state)
             if isinstance(result, tuple) and len(result) == 4:
                 selected_action, a_unshielded, a_shielded, context = result
-                if agent.use_shield_pre or agent.use_shield_layer:
+                if agent.use_shield_pre or agent.use_shield_layer or getattr(agent, 'use_action_mask', False):
                     action_for_training = a_shielded
                 else:
                     action_for_training = a_unshielded
@@ -460,6 +462,7 @@ def train(agent='ppo',
           use_shield_post=False,
           use_shield_pre=False,
           use_shield_layer=False,
+          use_action_mask=False,
           mode='hard',
           monitor_constraints=True,
           num_episodes=100,
@@ -572,6 +575,7 @@ def train(agent='ppo',
                          use_shield_post=use_shield_post,
                          use_shield_pre=use_shield_pre,
                          use_shield_layer=use_shield_layer,
+                         use_action_mask=use_action_mask,
                          use_orthogonal_init=True,
                          agent_kwargs=agent_kwargs,
                          monitor_constraints=monitor_constraints,
@@ -896,6 +900,7 @@ def run_multiple_evaluations(
         use_shield_post=False,
         use_shield_pre=False,
         use_shield_layer=False,
+        use_action_mask=False,
         monitor_constraints=True,
         mode='hard',
         verbose=False,
@@ -924,6 +929,7 @@ def run_multiple_evaluations(
             use_shield_post=use_shield_post,
             use_shield_pre=use_shield_pre,
             use_shield_layer=use_shield_layer,
+            use_action_mask=use_action_mask,
             monitor_constraints=monitor_constraints,
             mode=mode,
             verbose=verbose,
@@ -1029,6 +1035,7 @@ if __name__ == "__main__":
     parser.add_argument('--use_shield_post', action='store_true', help='Enable PiShield constraints during training')
     parser.add_argument('--use_shield_pre', action='store_true', help='Enable preemptive constraints during training')
     parser.add_argument('--use_shield_layer', action='store_true', help='Enable shield layer')
+    parser.add_argument('--use_action_mask', action='store_true', help='Enable MaskablePPO-style action masking from CNF')
     parser.add_argument('--mode', choices=['soft', 'hard', 'progressive', ''], default='', help='Constraint mode')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
     parser.add_argument('--visualize', action='store_true', help='Visualize training plots')
@@ -1070,6 +1077,7 @@ if __name__ == "__main__":
             use_shield_post=args.use_shield_post,
             use_shield_pre=args.use_shield_pre,
             use_shield_layer=args.use_shield_layer,
+            use_action_mask=args.use_action_mask,
             monitor_constraints=args.monitor_constraints,
             mode=args.mode,
             verbose=args.verbose,

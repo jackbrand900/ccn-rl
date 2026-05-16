@@ -1,0 +1,19 @@
+{
+  "avg_reward": 431.25,
+  "std_reward": 96.86251855077897,
+  "max_reward": 500.0,
+  "min_reward": 140.0,
+  "avg_shield_mod_rate": 0.00913623188405797,
+  "avg_violations_per_step": 0.00913623188405797,
+  "avg_violations_per_episode": 3.94,
+  "avg_modifications_per_episode": 3.94,
+  "total_violations": 394,
+  "total_modifications": 394,
+  "total_steps": 43125,
+  "train_episodes": 170,
+  "best_avg_reward": 201.0,
+  "final_reward": 337.0,
+  "seed": 42,
+  "method": "ppo_preshield_hard",
+  "env": "CartPole-v1"
+}

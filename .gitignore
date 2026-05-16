@@ -33,3 +33,9 @@ Thumbs.db
 *.dmg
 *.pkg
 
+# Local Claude Code state
+.claude/
+
+# Aggregation backup files (safety copies)
+*.prebackup
+

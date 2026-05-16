@@ -51,7 +51,7 @@ from src.train import train, evaluate_policy, make_run_dir
 from src.utils import graphing
 
 # Fixed seeds for reproducibility (5 runs per configuration)
-SEEDS = [42, 123, 456, 789, 1011]
+SEEDS = [42, 123, 456, 789, 1011, 2024, 1337, 7, 314, 271]
 
 # Environments to test
 ENVIRONMENTS = [
@@ -615,39 +615,53 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
             if not csv_files:
                 continue
             
-            # Load and aggregate across runs
+            # Load and aggregate across runs.
+            # Cumulative-violation curves require per-run cumsum BEFORE concat,
+            # so the cumsum doesn't bleed across runs.
             dfs = []
             for csv_file in csv_files:
                 try:
                     df = pd.read_csv(csv_file)
+                    df = df.sort_values('episode').reset_index(drop=True)
+                    df['cum_violations'] = df['violations'].cumsum()
                     dfs.append(df)
                 except Exception as e:
                     print(f"  Warning: Could not load {csv_file}: {e}")
                     continue
-            
+
             if not dfs:
                 continue
-            
+
             # Combine all runs
             combined = pd.concat(dfs, ignore_index=True)
-            
+
             # Normalize episodes to training progress (0-100%) for fair comparison
             # This accounts for methods that stop early when reaching target reward
             max_episode = combined['episode'].max()
             combined['training_progress'] = (combined['episode'] / max_episode) * 100
-            
-            # Group by training progress (rounded to nearest percent) and compute mean/std
+
+            # Group by training progress (rounded to nearest percent) and compute aggregates.
+            # Reward min/max give worst/best-seed envelopes. cum_violations gives the
+            # total-violations-incurred-during-training curve.
             combined['progress_bin'] = (combined['training_progress'] // 1).astype(int)  # Round to integer percent
             grouped = combined.groupby('progress_bin').agg({
                 'violation_rate': ['mean', 'std'],
                 'modification_rate': ['mean', 'std'],
-                'reward': ['mean', 'std'],
+                'reward': ['mean', 'std', 'min', 'max'],
+                'cum_violations': ['mean', 'std'],
                 'episode': 'mean'  # Keep track of actual episode number for reference
             }).reset_index()
-            
+
             # Flatten column names
-            grouped.columns = ['training_progress', 'viol_mean', 'viol_std', 'mod_mean', 'mod_std', 'reward_mean', 'reward_std', 'avg_episode']
-            
+            grouped.columns = [
+                'training_progress',
+                'viol_mean', 'viol_std',
+                'mod_mean', 'mod_std',
+                'reward_mean', 'reward_std', 'reward_min', 'reward_max',
+                'cum_viol_mean', 'cum_viol_std',
+                'avg_episode',
+            ]
+
             all_method_data[method['display_name']] = grouped
         
         if not all_method_data:
@@ -675,19 +689,21 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
         
         # Plot 1: Violation rates over time (all methods comparison)
         fig, ax = plt.subplots(figsize=(12, 7))
-        
+
         for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
             progress = data['training_progress'].values
             viol_mean = data['viol_mean'].values
             viol_std = data['viol_std'].values
-            
+
             linestyle = line_styles[idx % len(line_styles)]
             marker_info = marker_styles[idx]
-            
-            # Clean line plot - no fill for clarity
+
+            # ±1 std band (light) behind the mean line
+            ax.fill_between(progress, viol_mean - viol_std, viol_mean + viol_std,
+                            color=color, alpha=0.12, linewidth=0)
             ax.plot(progress, viol_mean, label=method_name, color=color, linewidth=2.5,
-                   linestyle=linestyle, marker=marker_info['marker'], 
-                   markevery=marker_info['markevery'], markersize=7, 
+                   linestyle=linestyle, marker=marker_info['marker'],
+                   markevery=marker_info['markevery'], markersize=7,
                    markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
         
         ax.set_xlabel('Training Progress (%)', fontsize=13)
@@ -705,19 +721,20 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
         
         # Plot 2: Modification rates over time (all methods comparison)
         fig, ax = plt.subplots(figsize=(12, 7))
-        
+
         for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
             progress = data['training_progress'].values
             mod_mean = data['mod_mean'].values
             mod_std = data['mod_std'].values
-            
+
             linestyle = line_styles[idx % len(line_styles)]
             marker_info = marker_styles[idx]
-            
-            # Clean line plot - no fill for clarity
+
+            ax.fill_between(progress, mod_mean - mod_std, mod_mean + mod_std,
+                            color=color, alpha=0.12, linewidth=0)
             ax.plot(progress, mod_mean, label=method_name, color=color, linewidth=2.5,
-                   linestyle=linestyle, marker=marker_info['marker'], 
-                   markevery=marker_info['markevery'], markersize=7, 
+                   linestyle=linestyle, marker=marker_info['marker'],
+                   markevery=marker_info['markevery'], markersize=7,
                    markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
         
         ax.set_xlabel('Training Progress (%)', fontsize=13)
@@ -820,19 +837,20 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
         
         # Plot 5: Reward over time (all methods comparison)
         fig, ax = plt.subplots(figsize=(12, 7))
-        
+
         for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
             progress = data['training_progress'].values
             reward_mean = data['reward_mean'].values
             reward_std = data['reward_std'].values
-            
+
             linestyle = line_styles[idx % len(line_styles)]
             marker_info = marker_styles[idx]
-            
-            # Clean line plot - no fill for clarity
+
+            ax.fill_between(progress, reward_mean - reward_std, reward_mean + reward_std,
+                            color=color, alpha=0.12, linewidth=0)
             ax.plot(progress, reward_mean, label=method_name, color=color, linewidth=2.5,
-                   linestyle=linestyle, marker=marker_info['marker'], 
-                   markevery=marker_info['markevery'], markersize=7, 
+                   linestyle=linestyle, marker=marker_info['marker'],
+                   markevery=marker_info['markevery'], markersize=7,
                    markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
         
         ax.set_xlabel('Training Progress (%)', fontsize=13)
@@ -847,7 +865,116 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
         plt.savefig(reward_plot_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"  ✓ Saved: {reward_plot_path}")
-    
+
+        # Plot 6: Cumulative violations over training (total safety cost incurred so far).
+        # This is the "how many crashes did the agent have before learning to drive" view.
+        fig, ax = plt.subplots(figsize=(12, 7))
+
+        for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
+            progress = data['training_progress'].values
+            cum_mean = data['cum_viol_mean'].values
+            cum_std = data['cum_viol_std'].values
+
+            linestyle = line_styles[idx % len(line_styles)]
+            marker_info = marker_styles[idx]
+
+            ax.fill_between(progress, cum_mean - cum_std, cum_mean + cum_std,
+                            color=color, alpha=0.12, linewidth=0)
+            ax.plot(progress, cum_mean, label=method_name, color=color, linewidth=2.5,
+                   linestyle=linestyle, marker=marker_info['marker'],
+                   markevery=marker_info['markevery'], markersize=7,
+                   markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
+
+        ax.set_xlabel('Training Progress (%)', fontsize=13)
+        ax.set_ylabel('Cumulative Violations', fontsize=13)
+        ax.set_title(f'{env_display} - Cumulative Violations During Training', fontsize=15)
+        ax.legend(loc='best', fontsize=9, framealpha=0.9)
+        ax.grid(alpha=0.2, linestyle='--')
+        ax.tick_params(labelsize=11)
+
+        plt.tight_layout()
+        cum_plot_path = os.path.join(plots_dir, f'{env_safe}_cumulative_violations_over_time.png')
+        plt.savefig(cum_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✓ Saved: {cum_plot_path}")
+
+        # Plot 7: Worst-case reward over time (per-bin min across seeds).
+        # Useful for safety methods: does shielding eliminate catastrophic episodes?
+        fig, ax = plt.subplots(figsize=(12, 7))
+
+        for idx, ((method_name, data), color) in enumerate(zip(all_method_data.items(), colors)):
+            progress = data['training_progress'].values
+            reward_min = data['reward_min'].values
+
+            linestyle = line_styles[idx % len(line_styles)]
+            marker_info = marker_styles[idx]
+
+            ax.plot(progress, reward_min, label=method_name, color=color, linewidth=2.0,
+                   linestyle=linestyle, marker=marker_info['marker'],
+                   markevery=marker_info['markevery'], markersize=6,
+                   markeredgewidth=1, markerfacecolor=color, markeredgecolor='white')
+
+        ax.set_xlabel('Training Progress (%)', fontsize=13)
+        ax.set_ylabel('Worst-Case Reward (min across seeds)', fontsize=13)
+        ax.set_title(f'{env_display} - Worst-Case Reward Over Training Progress', fontsize=15)
+        ax.legend(loc='best', fontsize=9, framealpha=0.9)
+        ax.grid(alpha=0.2, linestyle='--')
+        ax.tick_params(labelsize=11)
+
+        plt.tight_layout()
+        worst_plot_path = os.path.join(plots_dir, f'{env_safe}_worst_case_reward_over_time.png')
+        plt.savefig(worst_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"  ✓ Saved: {worst_plot_path}")
+
+        # Plot 8: Pareto plot — converged eval reward vs. per-step violation rate.
+        # One point per method (with seed-derived error bars on both axes). The
+        # bottom-right corner is the safety/performance sweet spot.
+        pareto_points = []
+        for method in methods_to_run:
+            agg_path = os.path.join(env_dir, method['name'], 'aggregated_results.json')
+            if not os.path.exists(agg_path):
+                continue
+            try:
+                with open(agg_path, 'r') as f:
+                    agg = json.load(f)
+                reward_stat = agg.get('avg_reward', {})
+                viol_stat = agg.get('avg_violations_per_step', {})
+                if 'mean' not in reward_stat or 'mean' not in viol_stat:
+                    continue
+                pareto_points.append({
+                    'name': method['display_name'],
+                    'reward_mean': reward_stat['mean'],
+                    'reward_std': reward_stat.get('std', 0.0),
+                    'viol_mean': viol_stat['mean'],
+                    'viol_std': viol_stat.get('std', 0.0),
+                })
+            except Exception as e:
+                print(f"  Warning: could not load {agg_path}: {e}")
+
+        if pareto_points:
+            fig, ax = plt.subplots(figsize=(10, 7))
+            for idx, (pt, color) in enumerate(zip(pareto_points, colors)):
+                marker = markers[idx % len(markers)]
+                ax.errorbar(pt['reward_mean'], pt['viol_mean'],
+                            xerr=pt['reward_std'], yerr=pt['viol_std'],
+                            fmt=marker, color=color, markersize=11,
+                            markeredgewidth=1, markeredgecolor='white',
+                            elinewidth=1.2, capsize=4, label=pt['name'])
+            ax.set_xlabel('Average Evaluation Reward', fontsize=13)
+            ax.set_ylabel('Violation Rate (per step)', fontsize=13)
+            ax.set_title(f'{env_display} - Reward vs. Violation Rate (post-training)', fontsize=15)
+            ax.legend(loc='best', fontsize=9, framealpha=0.9)
+            ax.grid(alpha=0.2, linestyle='--')
+            ax.tick_params(labelsize=11)
+            plt.tight_layout()
+            pareto_path = os.path.join(plots_dir, f'{env_safe}_pareto_reward_vs_violation.png')
+            plt.savefig(pareto_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            print(f"  ✓ Saved: {pareto_path}")
+        else:
+            print(f"  (Skipped Pareto plot — no aggregated_results.json files found)")
+
     print(f"\n✓ All graphs generated!")
 
 
@@ -895,26 +1022,32 @@ def run_all_experiments(
                 method['name']
             )
             aggregated_path = os.path.join(method_dir, 'aggregated_results.json')
-            
-            # Skip if already exists and skip_existing is True
-            if skip_existing and os.path.exists(aggregated_path):
-                print(f"⏭️  Skipping {method['display_name']} on {env_name} (already exists)")
-                # Load existing results to include in summary
-                try:
-                    with open(aggregated_path, 'r') as f:
-                        existing = json.load(f)
-                    print(f"   Existing: Reward={existing.get('avg_reward', {}).get('mean', 'N/A'):.2f}, "
-                          f"Viol Rate={existing.get('avg_violations_per_step', {}).get('mean', 'N/A'):.4f}")
-                except:
-                    pass
-                continue
-            
+
             method_results = []
-            
+
             for seed in SEEDS:
                 config_num += 1
+                run_dir_seed = os.path.join(
+                    base_dir, env_name.replace('/', '_'), method['name'], f'run_{seed}'
+                )
+                result_file_seed = os.path.join(run_dir_seed, 'results.json')
+
+                # Per-seed skip: if --skip_existing and this seed already has a result,
+                # load it and continue. Aggregation still runs over the full set below.
+                if skip_existing and os.path.exists(result_file_seed):
+                    try:
+                        with open(result_file_seed, 'r') as f:
+                            existing_seed = json.load(f)
+                        method_results.append(existing_seed)
+                        all_results.append(existing_seed)
+                        print(f"\n[{config_num}/{total_configs}] ⏭️  Skipping {method['display_name']} "
+                              f"on {env_name} (seed={seed}, results.json exists)")
+                        continue
+                    except Exception as e:
+                        print(f"  ⚠ Failed to load existing {result_file_seed}: {e}; will re-run")
+
                 print(f"\n[{config_num}/{total_configs}] Configuration: {method['display_name']} on {env_name} (seed={seed})")
-                
+
                 if use_subprocess:
                     # Run in a separate subprocess to free memory between runs
                     script_path = os.path.abspath(__file__)

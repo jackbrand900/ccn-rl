@@ -343,7 +343,7 @@ def run_single_experiment(
         # Seaquest-specific settings
         use_ram_obs = (env_name == 'ALE/Seaquest-v5')
         max_episode_steps = 2000 if env_name == 'ALE/Seaquest-v5' else None
-        early_stop_patience = 250 if env_name == 'ALE/Seaquest-v5' else 100  # Longer patience for Seaquest
+        early_stop_patience = 250 if env_name == 'ALE/Seaquest-v5' else 200  # Longer patience for sample-efficiency headroom
         
         # Train agent
         agent, episode_rewards, best_weights, best_avg_reward, env = train(

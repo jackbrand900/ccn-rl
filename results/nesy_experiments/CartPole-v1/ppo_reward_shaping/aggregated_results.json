@@ -1,0 +1,109 @@
+{
+  "train_episodes": {
+    "mean": 205.0,
+    "std": 33.54101966249684,
+    "min": 150.0,
+    "max": 260.0,
+    "median": 210.0
+  },
+  "total_violations": {
+    "mean": 455.8,
+    "std": 284.0879441299824,
+    "min": 80.0,
+    "max": 822.0,
+    "median": 487.5
+  },
+  "final_reward": {
+    "mean": 237.6,
+    "std": 130.6156192803908,
+    "min": 41.0,
+    "max": 499.0,
+    "median": 236.5
+  },
+  "env": "CartPole-v1",
+  "avg_violations_per_step": {
+    "mean": 0.024615669417388634,
+    "std": 0.0226285840247741,
+    "min": 0.002763480603820512,
+    "max": 0.08548138356466183,
+    "median": 0.021588029309980824
+  },
+  "std_reward": {
+    "mean": 73.60647189994056,
+    "std": 41.516141733586714,
+    "min": 22.254249032488158,
+    "max": 136.7886676592765,
+    "median": 67.59482505603376
+  },
+  "avg_violations_per_episode": {
+    "mean": 4.558,
+    "std": 2.8408794412998235,
+    "min": 0.8,
+    "max": 8.22,
+    "median": 4.875
+  },
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "method": "ppo_reward_shaping",
+  "max_reward": {
+    "mean": 371.1,
+    "std": 138.59253226635266,
+    "min": 156.0,
+    "max": 500.0,
+    "median": 434.5
+  },
+  "min_reward": {
+    "mean": 57.1,
+    "std": 33.01348209444136,
+    "min": 16.0,
+    "max": 112.0,
+    "median": 50.5
+  },
+  "best_avg_reward": {
+    "mean": 215.90249999999997,
+    "std": 10.755262955874208,
+    "min": 201.65,
+    "max": 231.125,
+    "median": 212.25
+  },
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "avg_reward": {
+    "mean": 218.63700000000003,
+    "std": 68.23053935738747,
+    "min": 90.78,
+    "max": 310.98,
+    "median": 233.76500000000001
+  },
+  "total_steps": {
+    "mean": 21863.7,
+    "std": 6823.053935738747,
+    "min": 9078.0,
+    "max": 31098.0,
+    "median": 23376.5
+  },
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "seed": {
+    "mean": 637.4,
+    "std": 621.523483063995,
+    "min": 7.0,
+    "max": 2024.0,
+    "median": 385.0
+  }
+}

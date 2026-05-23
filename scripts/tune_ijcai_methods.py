@@ -198,20 +198,36 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             lambda_penalty = trial.suggest_float("lambda_penalty", 0.1, 10.0, log=True)
             agent_kwargs['lambda_penalty'] = lambda_penalty
     
-    # CMDP-specific handling for CliffWalking
+    # CMDP-specific handling for CliffWalking — broad search across full PPO/Lagrangian space.
+    # Previous narrow range (lr 0.012-0.022, fixed arch) produced an unstable config:
+    # budget=0.255, ent_coef=0.13, clip_eps=0.33 → catastrophic cliff-walks on most seeds.
     elif env_name == 'CliffWalking-v1' and method['agent'] == 'cppo':
-        lr = trial.suggest_float("lr", 0.012, 0.022, log=True)  # Tight range around trial 18 (0.0172)
-        gamma = trial.suggest_float("gamma", 0.93, 0.97)  # Around 0.951
-        hidden_dim = trial.suggest_categorical("hidden_dim", [256])  # Fix to 256
-        use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [False])  # Fix to False
-        num_layers = trial.suggest_int("num_layers", 3, 3)  # Fix to 3
-        
+        lr = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
+        gamma = trial.suggest_float("gamma", 0.95, 0.999)
+        hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512])
+        use_orthogonal_init = trial.suggest_categorical("use_orthogonal_init", [True, False])
+        num_layers = trial.suggest_int("num_layers", 2, 4)
+        clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
+        # Wide entropy range (up to 0.5) — high entropy is needed to escape the
+        # safe-but-stuck local optimum where the policy collapses to "don't move."
+        ent_coef = trial.suggest_float("ent_coef", 0.01, 0.5, log=True)
+        epochs = trial.suggest_int("epochs", 4, 10)
+        batch_size = trial.suggest_categorical("batch_size", [64, 128, 256])
+        budget = trial.suggest_float("budget", 0.01, 0.15)
+        nu_lr = trial.suggest_float("nu_lr", 1e-4, 1e-2, log=True)
+
         agent_kwargs = {
             "lr": lr,
             "gamma": gamma,
             "hidden_dim": hidden_dim,
             "use_orthogonal_init": use_orthogonal_init,
-            "num_layers": num_layers
+            "num_layers": num_layers,
+            "clip_eps": clip_eps,
+            "ent_coef": ent_coef,
+            "epochs": epochs,
+            "batch_size": batch_size,
+            "budget": budget,
+            "nu_lr": nu_lr,
         }
     
     # Seaquest-specific tuning (Atari environment with sparse rewards)
@@ -351,17 +367,15 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
     elif method['agent'] == 'cppo':
         # Environment-specific adjustments for CliffWalking
         if env_name == 'CliffWalking-v1':
-            # Tight ranges around trial 18's best params
-            lr = trial.suggest_float("lr", 0.012, 0.022, log=True)  # Around 0.0172
-            cost_gamma = trial.suggest_float("cost_gamma", 0.90, 0.93)  # Around 0.917
-            cost_lam = trial.suggest_float("cost_lam", 0.89, 0.92)  # Around 0.909
-            clip_eps = trial.suggest_float("clip_eps", 0.28, 0.37)  # Around 0.326
-            ent_coef = trial.suggest_float("ent_coef", 0.09, 0.15)  # Around 0.119
-            epochs = trial.suggest_int("epochs", 10, 12)  # Around 11
-            # Keep same categorical choices to avoid Optuna TPE indexing errors
-            batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
-            budget = trial.suggest_float("budget", 0.25, 0.35)  # Around 0.298
-            nu_lr = trial.suggest_float("nu_lr", 5e-4, 1e-3, log=True)  # Around 0.000752
+            # CliffWalking CMDP: all PPO/Lagrangian params (lr, clip_eps, ent_coef,
+            # epochs, batch_size, budget, nu_lr) already suggested in the outer
+            # branch above. Only the CMDP-cost extras live here.
+            cost_gamma = trial.suggest_float("cost_gamma", 0.90, 0.999)
+            cost_lam = trial.suggest_float("cost_lam", 0.90, 0.999)
+            agent_kwargs.update({
+                "cost_gamma": cost_gamma,
+                "cost_lam": cost_lam,
+            })
         elif env_name == 'ALE/Seaquest-v5':
             # Seaquest CMDP parameters are already set in the Seaquest-specific section above
             # Don't override them here to avoid log configuration conflicts
@@ -376,9 +390,7 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
             budget = trial.suggest_float("budget", 0.10, 0.50)
             nu_lr = trial.suggest_float("nu_lr", 1e-4, 1e-2, log=True)
-        
-        # Only update agent_kwargs if we're not in Seaquest (Seaquest params already set)
-        if env_name != 'ALE/Seaquest-v5':
+
             agent_kwargs.update({
                 "cost_gamma": cost_gamma,
                 "cost_lam": cost_lam,
@@ -568,7 +580,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     
     # Add version suffix to study name to avoid conflicts with old trials
     # Change this version number when you modify hyperparameter ranges
-    study_version = "v11"  # Increment this when changing hyperparameter ranges (v11 = Seaquest CMDP anti-collapse: much higher ent_coef/budget, much lower nu_lr)
+    study_version = "v13"  # Increment this when changing hyperparameter ranges (v13 = CliffWalking CMDP with wider ent_coef [0.01, 0.5] to escape safe-but-stuck local optimum)
     study_name = f"ijcai_{method_name}_{env_safe}_{study_version}"
     
     storage = f"sqlite:///optuna_ijcai_{method_name}_{env_safe}_{study_version}.db"

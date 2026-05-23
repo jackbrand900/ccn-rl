@@ -1,0 +1,109 @@
+{
+  "train_episodes": {
+    "mean": 410.0,
+    "std": 232.07757323791543,
+    "min": 180.0,
+    "max": 1000.0,
+    "median": 335.0
+  },
+  "total_violations": {
+    "mean": 31.1,
+    "std": 82.13823713715799,
+    "min": 0.0,
+    "max": 277.0,
+    "median": 0.0
+  },
+  "max_reward": {
+    "mean": -212.2,
+    "std": 393.9024752397476,
+    "min": -1000.0,
+    "max": -13.0,
+    "median": -16.0
+  },
+  "avg_violations_per_episode": {
+    "mean": 0.311,
+    "std": 0.8213823713715799,
+    "min": 0.0,
+    "max": 2.77,
+    "median": 0.0
+  },
+  "env": "CliffWalking-v1",
+  "min_reward": {
+    "mean": -463.2,
+    "std": 591.8671810465588,
+    "min": -1756.0,
+    "max": -19.0,
+    "median": -156.0
+  },
+  "avg_reward": {
+    "mean": -246.923,
+    "std": 388.7639228130614,
+    "min": -1010.89,
+    "max": -15.47,
+    "median": -23.365000000000002
+  },
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "best_avg_reward": {
+    "mean": -174.28500000000003,
+    "std": 318.8819948664396,
+    "min": -1000.0,
+    "max": -16.575,
+    "median": -20.825000000000003
+  },
+  "final_reward": {
+    "mean": -471.1,
+    "std": 576.5362868024874,
+    "min": -1594.0,
+    "max": -15.0,
+    "median": -26.5
+  },
+  "method": "cppo",
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "seed": {
+    "mean": 637.4,
+    "std": 621.523483063995,
+    "min": 7.0,
+    "max": 2024.0,
+    "median": 385.0
+  },
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "std_reward": {
+    "mean": 48.23906483525365,
+    "std": 102.28818120301189,
+    "min": 0.0,
+    "max": 351.14113672425225,
+    "median": 6.04350431298618
+  },
+  "total_steps": {
+    "mean": 21613.4,
+    "std": 39197.34105829119,
+    "min": 1505.0,
+    "max": 100000.0,
+    "median": 1943.5
+  },
+  "avg_violations_per_step": {
+    "mean": 0.009155046614625881,
+    "std": 0.023346822419858228,
+    "min": 0.0,
+    "max": 0.07878270762229807,
+    "median": 0.0
+  }
+}

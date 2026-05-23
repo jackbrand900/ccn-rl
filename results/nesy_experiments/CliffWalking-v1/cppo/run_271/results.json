@@ -1,0 +1,19 @@
+{
+  "avg_reward": -18.44,
+  "std_reward": 6.022159081259812,
+  "max_reward": -17,
+  "min_reward": -77,
+  "avg_shield_mod_rate": 0.0,
+  "avg_violations_per_step": 0.0,
+  "avg_violations_per_episode": 0.0,
+  "avg_modifications_per_episode": 0.0,
+  "total_violations": 0,
+  "total_modifications": 0,
+  "total_steps": 1844,
+  "train_episodes": 320,
+  "best_avg_reward": -19.025,
+  "final_reward": -17,
+  "seed": 271,
+  "method": "cppo",
+  "env": "CliffWalking-v1"
+}

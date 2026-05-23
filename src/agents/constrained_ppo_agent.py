@@ -178,8 +178,11 @@ class ConstrainedPPOAgent:
             'context': context
         })
 
-        # Return shielded action for execution (safe), but we learn from unshielded
-        return a_shielded, a_unshielded, a_shielded, context
+        # Standard CMDP: env executes the policy's (unshielded) action so the
+        # agent pays real reward consequences of unsafe choices. The Lagrangian
+        # dual update then balances reward against cost. a_shielded is retained
+        # for monitoring (would-have-shielded counts) but not executed.
+        return a_unshielded, a_unshielded, a_shielded, context
 
     def store_transition(self, state, action, reward, next_state, context, done):
         if not self.memory:

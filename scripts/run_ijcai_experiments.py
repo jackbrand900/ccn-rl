@@ -318,13 +318,11 @@ def run_single_experiment(
             if method['agent'] == 'cppo':
                 agent_kwargs['nu_lr'] = 1e-3  # Lagrangian multiplier learning rate (only for CMDP)
         
-        if method['agent'] == 'cppo' and env_name == 'CliffWalking-v1':
-            min_budget_for_comparison = 0.15
-            if agent_kwargs.get('budget', 1.0) < min_budget_for_comparison:
-                if verbose:
-                    print(f"[Adjusting CMDP budget from {agent_kwargs.get('budget', 'N/A')} to {min_budget_for_comparison} to ensure violations for comparison]")
-                agent_kwargs['budget'] = min_budget_for_comparison
-        
+        # (Removed) Force-up budget override for CMDP on CliffWalking. The previous
+        # 0.15 floor was an artifact of an older narrow-search tuning that produced
+        # unstable configs. Budget now comes from the broader Optuna search.
+
+
         # Set memory limits based on environment (to prevent OOM on large environments)
         if 'max_episode_memory' not in agent_kwargs:
             env_memory_limits = {

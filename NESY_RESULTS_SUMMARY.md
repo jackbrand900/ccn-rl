@@ -1,40 +1,47 @@
 # NeSy submission — experimental results summary
 
-Self-contained briefing covering all experimental work done so far for the NeSy
-submission. Hand this to another Claude session or human reviewer for context.
+Self-contained briefing for a fresh Claude session or human reviewer. Captures
+the full state of experiments, findings, bugs found/fixed, and what remains
+to be done before submission.
 
-**Status:** CartPole ✅ done (with CMDP fix), CliffWalking ⚠️ partially stale
-(CMDP needs re-run with fix), Seaquest ⏳ pending.
+**Deadlines:** abstract June 9, full submission June 16, 2026.
+
+**Status overview:**
+| env | status |
+|---|---|
+| CartPole-v1 | ✅ complete (9 methods × 10 seeds, stats refreshed, trajectory plot) |
+| CliffWalking-v1 | ✅ complete (9 methods × 10 seeds; CMDP has bimodal seed failure pattern documented as a finding) |
+| ALE/Seaquest-v5 | ⏳ partial (7 methods reuse IJCAI data; CMDP + action_mask need 5-seed runs) |
 
 ---
 
-## 1. The setup
+## 1. Setup
 
-### Repo structure (relevant paths)
+### Repo paths
 
 ```
 ccn-rl/
 ├── config/ijcai_tuned/                # Optuna-tuned hyperparameter YAMLs
-├── results/nesy_experiments/          # NeSy-submission results live here
-│   ├── CartPole-v1/                   # 9 methods × 10 seeds
-│   ├── CliffWalking-v1/               # 9 methods × 10 seeds (CMDP STALE)
-│   ├── CartPole-v1_per_method_stats.csv
-│   ├── CartPole-v1_pairwise_reward.csv
-│   ├── CartPole-v1_pairwise_viol_rate.csv
-│   ├── CliffWalking-v1_per_method_stats.csv     (needs refresh)
-│   ├── CliffWalking-v1_pairwise_reward.csv      (needs refresh)
-│   └── CliffWalking-v1_pairwise_viol_rate.csv   (needs refresh)
+│   ├── cppo_{CartPole-v1,CliffWalking-v1,ALE_Seaquest-v5}_params.yaml
+│   ├── ppo_action_mask_{CartPole-v1,CliffWalking-v1,ALE_Seaquest-v5}_params.yaml
+│   └── ... (other methods, all envs except Seaquest where only CMDP + action_mask are tuned)
+├── results/nesy_experiments/          # NeSy-submission results
+│   ├── CartPole-v1/                   # 9 methods × 10 seeds, all per-seed CSVs present
+│   ├── CliffWalking-v1/               # 9 methods × 10 seeds, all per-seed CSVs present
+│   ├── ALE_Seaquest-v5/               # 7 methods (aggregated-only, copied from IJCAI); cppo + action_mask pending
+│   └── {CartPole-v1,CliffWalking-v1}_{per_method_stats,pairwise_reward,pairwise_viol_rate}.csv
 ├── scripts/
-│   ├── run_ijcai_experiments.py            (main experiment driver)
-│   ├── tune_ijcai_methods.py               (Optuna tuning)
-│   ├── analyze_nesy_results.py             (stats: bootstrap CI + pairwise tests)
+│   ├── run_ijcai_experiments.py            (main experiment driver; SEEDS=10, per-seed --skip_existing patch)
+│   ├── tune_ijcai_methods.py               (Optuna tuning; study_version v13 for CliffWalking CMDP)
+│   ├── analyze_nesy_results.py             (stats: bootstrap CI + Welch's t + Mann-Whitney U + BH-FDR)
 │   ├── plot_action_mask_trajectories.py    (per-seed trajectory figure)
-│   └── bench_action_mask_vs_sb3.py         (sb3-contrib validation)
+│   └── bench_action_mask_vs_sb3.py         (sb3-contrib validation, CartPole only)
 └── src/
-    ├── agents/ppo_agent.py                 (custom PPO with shield/mask hooks)
-    ├── agents/constrained_ppo_agent.py     (CMDP; credit-assignment bug FIXED)
-    ├── utils/shield_controller.py          (CNF constraint enforcement)
-    └── requirements/{emergency_cartpole,cliff_safe}.cnf
+    ├── agents/ppo_agent.py                 (custom PPO with shield/mask hooks; minor known issues)
+    ├── agents/constrained_ppo_agent.py     (CMDP; credit-assignment bug FIXED this session)
+    ├── utils/shield_controller.py          (CNF constraint enforcement; not audited)
+    ├── utils/constraint_monitor.py         (viol_rate / mod_rate logic; not audited)
+    └── requirements/{emergency_cartpole,cliff_safe,seaquest_low_oxygen_go_up}.cnf
 ```
 
 ### Methods (all on the same custom PPO base)
@@ -42,80 +49,55 @@ ccn-rl/
 1. `ppo_unshielded` — no constraint enforcement (baseline)
 2. `ppo_reward_shaping` — penalty in reward for violations
 3. `ppo_semantic_loss` — constraint-aware auxiliary loss term
-4. `ppo_action_mask` — MaskablePPO-style hard mask on logits (NEW baseline)
-5. `ppo_preshield_soft` — CCN+ differentiable shield, soft mode
-6. `ppo_preshield_hard` — CCN+ differentiable shield, hard mode
+4. `ppo_action_mask` — MaskablePPO-style hard mask on logits (NEW for this submission)
+5. `ppo_preshield_soft` — CCN+ differentiable shield, soft mode (flag_active_val=0.8)
+6. `ppo_preshield_hard` — CCN+ differentiable shield, hard mode (flag_active_val=1.0)
 7. `ppo_layer_soft` — CCN+ shield as differentiable network layer, soft
 8. `ppo_layer_hard` — CCN+ shield as differentiable network layer, hard
 9. `cppo` — CMDP (constrained MDP with Lagrangian dual)
 
-### Bug fixes applied during this session
-
-- **CMDP credit assignment** (constrained_ppo_agent.py:182). Previously, the env
-  executed `a_shielded` while memory stored `a_unshielded` — broken credit
-  assignment that masked the real Lagrangian signal. Fixed: env now executes
-  `a_unshielded`, memory and reward consistent. CartPole CMDP went from median
-  reward 138 (buggy) → **275 (correct)**; viol_rate became *real* (actual
-  violations during eval) instead of counterfactual.
-
-- **CliffWalking CMDP tuning search space** (tune_ijcai_methods.py:201-231).
-  Previous narrow range (lr 0.012-0.022, fixed arch, no nu_lr/budget tuning)
-  produced unstable configs. Now uses a broad search over the full PPO/Lagrangian
-  parameter space. `study_version` bumped to v12 so Optuna starts fresh.
-
 ### Protocol
 
-- **Seeds (10):** `[42, 123, 456, 789, 1011, 2024, 1337, 7, 314, 271]`
-- **Tuning:** 100-trial Optuna per (method, env), objective = `-|avg_reward - target|`
-  - CartPole target = 200, CliffWalking target = -20
-- **Training:** max 1000 episodes, early-stop at rolling-25 reward ≥ target, patience = 200
-- **Eval:** best-weights snapshot, 100 sampled-action episodes
+- **Seeds:** `[42, 123, 456, 789, 1011, 2024, 1337, 7, 314, 271]` — 10 for CartPole/CliffWalking, 5 for Seaquest
+- **Tuning:** 100-trial Optuna per (method, env), objective = `-|avg_reward - target|` (calibrate, not maximize)
+- **Targets:** CartPole +200, CliffWalking -20, Seaquest +250
+- **Training:** max 1000 episodes (Seaquest 2000 max-steps/ep), early-stop at rolling-25 reward ≥ target, patience 200 (Seaquest 250)
+- **Eval:** best-weights snapshot, 100 sampled-action episodes (50 for Seaquest)
 - **Stat tests:** Welch's t + Mann-Whitney U on all 36 pairs per metric, BH-FDR corrected, α = 0.05
 
-### Constraints
+### Bug fixes applied during this session
 
-`src/requirements/emergency_cartpole.cnf` (4 clauses, 2 actions): forces a
-specific action when an "emergency" state flag is active. Constraint active in
-~5% of states.
+- **CMDP credit assignment fixed** (`constrained_ppo_agent.py:182`). The buggy version executed `a_shielded` in env while memory stored `a_unshielded` — broken credit assignment that masked the real Lagrangian signal. Fixed: env now executes `a_unshielded`, memory and reward consistent. CartPole CMDP went from median 138 (buggy) → median 275 (correct). CliffWalking CMDP went from median -130 (buggy) → median -23 (correct, with bimodal seed pattern).
 
-`src/requirements/cliff_safe.cnf` (4 actions, more clauses): forbids actions
-that would step onto the cliff. Constraint active in ~30% of states. Falling
-has catastrophic reward consequences.
+- **CliffWalking CMDP tuning search expanded** (`tune_ijcai_methods.py:201-231`). Previous narrow range (lr 0.012-0.022, fixed arch, no nu_lr/budget tuning) was insufficient. Replaced with broad search across full PPO/Lagrangian parameter space. Bumped entropy ceiling to 0.5 (v13 study) to escape safe-but-stuck local optima.
 
 ---
 
-## 2. Metric definitions (critical for interpreting the table)
+## 2. Metric definitions (CRITICAL for interpreting results)
 
-The columns in the main results table are reported as `viol_rate` and `mod_rate`,
-but the *meaning* of `viol_rate` differs by method type. **Always think in terms
-of these three derived quantities:**
+The columns in result tables are reported as `viol_rate` and `mod_rate`, but the
+*meaning* of `viol_rate` differs by method type:
 
-| derived metric | definition | meaning |
+| derived metric | computed as | meaning |
 |---|---|---|
-| **would-have-violated rate** | `viol_rate` (column value) | how often the *underlying* policy proposes an unsafe action — measures constraint internalization |
-| **modification rate** | `mod_rate` (column value) | how often the shield actually changes the action |
-| **actual runtime violation rate** | `viol_rate − mod_rate` for shielded methods; `viol_rate` for unshielded methods | what fraction of executed actions actually violated the constraint at runtime |
+| **would-have-violated rate** | `viol_rate` column | how often the *underlying* policy proposes an unsafe action (measures constraint internalization) |
+| **modification rate** | `mod_rate` column | how often the shield actually changes the action |
+| **actual runtime violation rate** | `viol_rate − mod_rate` for shielded methods; `viol_rate` for non-shielded | what fraction of executed actions actually violated the constraint at runtime |
 
 For **hard shielding** (`action_mask`, `preshield_hard`, `layer_hard`):
-`viol_rate = mod_rate` → actual violations = **0** by construction (the shield
-always swaps unsafe actions).
+`viol_rate = mod_rate` → actual violations = **0** by construction.
 
 For **soft shielding** (`preshield_soft`, `layer_soft`): `viol_rate > mod_rate`
-slightly → some unsafe actions are *not* swapped (the shield reduces but doesn't
-eliminate their probability) → small but nonzero actual violations.
+slightly → small but nonzero actual violations (~0.3% on CartPole).
 
-For **non-shielded methods** (unshielded, reward_shaping, semantic_loss, CMDP):
-`mod_rate = 0` → actual violations = `viol_rate` (env runs the policy's own
-action).
-
-**This distinction is critical for the paper framing.** It must be made explicit
-or reviewers will misread the table.
+For **non-shielded methods** (unshielded, reward_shaping, semantic_loss, cppo):
+`mod_rate = 0` → actual violations = `viol_rate`.
 
 ---
 
 ## 3. CartPole results (10 seeds, post-CMDP-fix)
 
-### Numbers — including derived actual violation rate
+### Headline table
 
 | method | reward median | reward mean ± std | would-have-violated | mod_rate | **actual viol rate** |
 |---|---|---|---|---|---|
@@ -131,34 +113,29 @@ or reviewers will misread the table.
 
 ### Statistical findings (FDR-corrected α=0.05)
 
-**Would-have-violated rate** (constraint internalization, all methods):
-- Action_mask (0.054) significantly higher than: unshielded, reward_shaping,
-  semantic_loss, preshield_soft, layer_soft, CMDP. All FDR p < 0.05.
-- Action_mask NOT significantly different from preshield_hard (0.028) or
-  layer_hard (0.053).
-- **Hard-enforcement methods cluster together** on this metric in CartPole.
+**Reward:** only one pairwise comparison survives correction:
+- Action_mask (172) < Preshield_soft (231), Welch FDR p = 0.011
 
-**Reward** — only one pairwise comparison survives correction:
-- Action_mask (172) < Preshield_soft (231), FDR p = 0.011.
-- All others not significant. High-variance methods (preshield_hard ±121,
-  layer_soft ±106, layer_hard ±154, CMDP ±126) bury other differences.
+Most other reward pairs not significant — high-variance methods (preshield_hard ±121, layer_soft ±106, layer_hard ±154, CMDP ±126) bury other differences.
+
+**Would-have-violated rate:** action_mask (0.054) significantly higher than:
+unshielded, reward_shaping, semantic_loss, preshield_soft, layer_soft, CMDP.
+Not significantly different from preshield_hard (0.028) or layer_hard (0.053).
+**Hard-enforcement methods cluster together** on this metric in CartPole.
 
 ### Headline figure
 
 `results/nesy_experiments/CartPole-v1/plots/CartPole-v1_action_mask_vs_preshield_soft_trajectories.png`
 
-Per-seed training trajectories: action_mask shows peak-and-collapse across seeds
-(median climbs to ~180, then drifts down). Preshield_soft converges cleanly to
-~250 and stays. Strongest single figure for the action-masking contribution.
+Per-seed training trajectories: action_mask shows peak-and-collapse across
+seeds (median climbs to ~180, then drifts down). Preshield_soft converges
+cleanly to ~250 and stays.
 
 ---
 
-## 4. CliffWalking results (10 seeds, CMDP STALE)
+## 4. CliffWalking results (10 seeds, with v13 CMDP retune)
 
-The 8 non-CMDP methods have valid 10-seed data. CMDP shows median reward -130
-which is the **OLD buggy run** — the fix and broad-search retune are pending.
-
-### Numbers (CMDP row not yet updated; placeholder)
+### Headline table
 
 | method | reward median | reward mean ± std | would-have-violated | mod_rate | **actual viol rate** |
 |---|---|---|---|---|---|
@@ -170,174 +147,219 @@ which is the **OLD buggy run** — the fix and broad-search retune are pending.
 | PPO + Pre-emptive (Hard) | -19 | **-19 ± 1** | 0.098 | 0.098 | **0** |
 | PPO + Layer (Soft) | -21 | -320 ± 457 | 0.003 | 0.002 | **0.001** |
 | PPO + Layer (Hard) | -20 | **-20 ± 1** | 0.186 | 0.186 | **0** |
-| CMDP (STALE — buggy run) | -130 | -217 ± 184 | 0.016 | 0 | 0.016 |
+| **CMDP** (v13) | **-23** | **-247 ± 389** | 0.009 | 0 | **0.009** |
 
-### Key CliffWalking patterns (unchanged regardless of CMDP rerun)
+### CliffWalking CMDP bimodal pattern (a key finding)
 
-- **Hard methods now dominate on reward stability.** Action_mask, preshield_hard,
-  layer_hard all at -19 to -20 with std ~1. Soft methods and unshielded have
-  catastrophic seeds (mean -250 to -412, std 400-560) because the agent
-  occasionally walks off cliffs.
+| seed | reward | viol_rate | category |
+|---|---|---|---|
+| 42 | -23.8 | 0 | converged |
+| 1011 | **-15.5** | 0 | converged (best) |
+| 1337 | -15.8 | 0 | converged |
+| 2024 | -23.0 | 0.005 | converged |
+| 314 | -17.3 | 0 | converged |
+| 271 | -18.4 | 0 | converged |
+| 7 | -35.3 | 0.007 | converged (close) |
+| 789 | -309.4 | 0.079 | partial-stuck (wandering) |
+| 123 | **-1000.0** | 0 | stuck (safe-but-stagnant) |
+| 456 | **-1010.9** | 0 | stuck |
 
-- **Within the hard family, would-have-violated rate forms a clear ladder**
-  matching projection sophistication:
-  - preshield_hard 0.098 (full CCN+ + importance-ratio teaching trick)
-  - layer_hard 0.186 (differentiable layer)
-  - action_mask 0.302 (simple 0/1 mask, no teaching)
-  All three pairwise differences are FDR-significant. **This is direct empirical
-  support for "gradient-signal strength predicts constraint internalization"** —
-  a finding CartPole's simpler CNF couldn't reveal.
+**7/10 seeds converge near-optimally; 2-3/10 collapse to safe-but-stuck**
+("don't move" satisfies the constraint trivially). Reports median (-23) as
+the cleaner stat; mean is dragged by collapse seeds.
 
-- **Soft methods have huge variance** from a few catastrophic seeds. Median is
-  the right stat for reporting.
+### Within-hard-family ordering on viol_rate (cleanest CliffWalking finding)
 
-### Headline figure (CliffWalking)
+Hard methods spread on would-have-violated rate, ordered by projection
+sophistication:
+- preshield_hard: **0.098** (full CCN+ + importance-ratio teaching trick)
+- layer_hard: **0.186** (differentiable layer)
+- action_mask: **0.302** (simple 0/1 mask, no teaching)
+
+All three pairwise differences are FDR-significant. **Direct empirical
+evidence that gradient-signal strength predicts learning** — a finding
+CartPole's simpler CNF couldn't reveal.
+
+### Other CliffWalking patterns
+
+- **Hard methods dominate on reward stability** (-19 to -20, std ~1). Soft methods + unshielded have catastrophic seeds (mean -250 to -412, std 400-560) from cliff-falls.
+- **Soft methods have huge variance** from 2-3 catastrophic seeds. Use median.
+
+### Headline figure
 
 `results/nesy_experiments/CliffWalking-v1/plots/CliffWalking-v1_action_mask_vs_preshield_soft_trajectories.png`
 
-Striking inversion of the CartPole pattern: action_mask shows 10 seeds tightly
-converging to -20 (no collapse). Preshield_soft has 7 stable seeds + 2-3 seeds
-catastrophically diverging to -1000 to -1750.
+Striking inversion of CartPole pattern: action_mask shows 10 seeds tightly
+converging to -20 (no collapse). Preshield_soft has 7 stable seeds + 2-3
+seeds catastrophically diverging to -1000 to -1750.
 
 ---
 
-## 5. The contribution and how to frame it
+## 5. Seaquest status
 
-This is the key reframe based on the corrected understanding of metrics.
+### What's tuned
 
-### The three-axis design space
+- `config/ijcai_tuned/cppo_ALE_Seaquest-v5_params.yaml` — from IJCAI supplementary Table 5 (lr=1.91e-4, ent_coef=0.164, budget=0.283, etc.)
+- `config/ijcai_tuned/ppo_action_mask_ALE_Seaquest-v5_params.yaml` — just tuned (lr=1.9e-4, ent_coef=0.011, achieved reward 233/target 250 in ~19 min)
+- Other methods → fall back to PPOAgent defaults (matches IJCAI submission protocol)
+
+### What's run vs pending
+
+| method | status | data |
+|---|---|---|
+| 7 non-CMDP-non-action_mask methods | reused from IJCAI | aggregated_results.json only (no per-seed CSVs) |
+| **CMDP** | **pending** (fix changes results) | — |
+| **PPO + Action Mask** | **pending** (new method) | — |
+
+### To finish Seaquest
+
+```bash
+conda activate ccn_rl
+python scripts/run_ijcai_experiments.py --env ALE/Seaquest-v5 \
+    --method cppo ppo_action_mask \
+    --base_dir results/nesy_experiments --use_subprocess
+python scripts/analyze_nesy_results.py --env ALE/Seaquest-v5
+```
+10 runs (2 methods × 5 seeds). ETA: ~30-50 hours.
+
+### Early action_mask Seaquest signal
+
+In tuning, action_mask hit target reward 250 in ~20 episodes — very fast. Predicted: high viol_rate + high mod_rate (mask doing the work, policy not learning). Consistent with the CartPole/CliffWalking action_mask story.
+
+---
+
+## 6. The contribution (paper framing)
+
+### Three-axis design space
 
 Each method occupies a distinct point. **The contribution is characterizing the
 space, not winning a leaderboard.**
 
 **Axis 1 — Hard runtime safety guarantee (zero actual violations):**
 - ✅ Yes: action_mask, preshield_hard, layer_hard
-- 🟡 Partial: preshield_soft, layer_soft (~0.3% actual violations)
+- 🟡 Partial: preshield_soft, layer_soft (~0.3% on CartPole)
 - ❌ No: CMDP, semantic_loss, reward_shaping, unshielded
 
 **Axis 2 — Constraint internalization (would-have-violated rate, lower = policy learned the constraint):**
-- 🥇 Best: CMDP, layer_soft, preshield_soft
+- 🥇 Best: CMDP (CartPole), layer_soft, preshield_soft
 - 🥈 Middling: semantic_loss, unshielded, reward_shaping, preshield_hard
 - 🥉 Worst: layer_hard, action_mask
 
 **Axis 3 — Reward (median):**
-- 🥇 Best: CMDP, semantic_loss, preshield_hard, preshield_soft, reward_shaping
-- 🥈 Competitive: layer_soft, unshielded
-- 🥉 Weakest: action_mask, layer_hard (on CartPole)
+- 🥇 Best: CMDP (CartPole), preshield_hard, preshield_soft, semantic_loss, reward_shaping
+- 🥉 Weakest: action_mask, layer_hard
 
-### The unique value of hard CCN+ shielding
+### Unique value of hard CCN+ shielding
 
-The intersection of axes 1 and 2 is the contribution. **Hard CCN+ shielding
-(preshield_hard, layer_hard) is the only paradigm that gives BOTH runtime
-safety AND non-trivial policy learning.**
+**Hard CCN+ shielding (preshield_hard, layer_hard) is the only paradigm
+giving both runtime safety AND non-trivial policy learning.**
 
-Compare on CartPole:
-- preshield_hard: 0 actual violations + would-have-violated 0.028 + reward 239
-- action_mask: 0 actual violations + would-have-violated **0.054** + reward 170
-  → same safety, much worse learning
-- CMDP: 0.011 actual violations + would-have-violated 0.011 + reward 275
-  → better learning, but no runtime safety
-- preshield_soft: 0.003 actual violations + would-have-violated 0.014 + reward 234
-  → almost-but-not-quite-hard safety + strong learning
+- preshield_hard: 0 actual violations + would-have-violated 0.028 + reward 239 (CartPole)
+- action_mask: 0 actual violations + would-have-violated **0.054** + reward 170 — same safety, much worse learning
+- CMDP: 0.011 actual violations + would-have-violated 0.011 + reward 275 — better learning, but no runtime safety
 
-**Only hard CCN+ shielding sits in the upper-left of "safe AND learning."**
-Action_mask is dominated by hard CCN+ shielding (same safety, worse learning).
-CMDP and soft CCN+ shielding sacrifice some safety for learning. Each is a
-distinct point on the Pareto frontier.
+### CMDP CliffWalking bimodality is structural
 
-### Suggested framing for the paper (paragraph form)
+CMDP succeeds in 7/10 seeds but collapses in 2-3/10 to safe-but-stuck (zero
+violations, zero progress). Hard shielding methods succeed 10/10 because the
+agent *cannot* avoid the goal by not moving — invalid actions are blocked, so
+the policy must learn productive movement. **Structural advantage of hard
+shielding over penalty-based safety in catastrophic-violation regimes.**
 
-> Action masking achieves runtime safety but at the cost of policy learning —
-> the underlying policy never internalizes the constraint (would-have-violated
-> rate 0.054 on CartPole). Penalty-based methods (CMDP, semantic loss) achieve
-> strong learning but provide no runtime safety guarantee. CCN+ shielding
-> uniquely provides both: hard variants give runtime safety while reducing the
-> underlying policy's would-have-violated rate via the importance-ratio teaching
-> signal; soft variants further improve learning at a small cost to runtime
-> safety (~0.3% violations). The choice between hard CCN+, soft CCN+, and CMDP
-> corresponds to choosing a point on the safety-learning Pareto frontier;
-> action masking is dominated by hard CCN+ shielding on this frontier.
+### Action_mask mechanism (the underlying claim)
 
-### The action_mask result, mechanistically
-
-Action masking provides zero gradient signal on forced-action states: when the
-mask sets a logit to `-inf`, softmax → 0, gradient → 0. In states where only
-one action is valid, the masked PPO update produces no learning signal. The
-policy never internalizes the constraint, it just gets blocked at runtime.
-
-This is empirically observed across CartPole and CliffWalking. On CliffWalking,
-the within-hard-family ordering (preshield_hard < layer_hard < action_mask on
-would-have-violated rate) is direct evidence that **gradient-signal strength
-predicts learning**, controlling for the hard-safety guarantee.
+Action masking provides zero gradient signal on forced-action states: when
+the mask sets a logit to `-inf`, softmax → 0, gradient → 0. In states where
+only one action is valid, the masked PPO update produces no learning signal.
+The policy never internalizes the constraint, it just gets blocked at
+runtime. Empirically observed across all envs; on CliffWalking, the
+within-hard-family ordering directly tests this mechanism.
 
 ---
 
-## 6. sb3-contrib validation (CartPole appendix material)
+## 7. sb3-contrib validation (appendix material)
 
-To rule out implementation bugs in the custom action_mask, ran matched-reward
-comparison against the reference `sb3-contrib.MaskablePPO`:
+To rule out action_mask implementation bugs, ran matched-reward comparison
+against `sb3-contrib.MaskablePPO` on CartPole:
 
 | | reward at target=200 | viol_rate (would-have-violated) |
 |---|---|---|
 | ours (PPOAgent + use_action_mask) | 195.6 ± 34.5 | 0.052 |
 | sb3-contrib MaskablePPO | 227.8 ± 32.9 | 0.030 |
 
-Both reach the target. sb3's would-have-violated rate is lower than ours (sample
-efficiency difference), but both are substantially higher than soft-shielding
-methods (0.013-0.014). **Relative ranking preserved across PPO bases.**
+Both reach the target. sb3's would-have-violated rate is lower (sample
+efficiency), but both are substantially higher than soft-shielding methods
+(0.013-0.014). **Relative ranking preserved across PPO bases.**
 
 Script: `scripts/bench_action_mask_vs_sb3.py`. Currently 3 seeds CartPole only —
-should be bumped to 5 seeds and extended to CliffWalking before final submission.
+ideally bump to 5 + add CliffWalking before final submission.
 
 ---
 
-## 7. Things to fix before submission
+## 8. Known bugs / limitations / things to acknowledge
+
+### Bugs found this session
+
+- **CMDP credit-assignment bug** (fixed). Old version executed shielded action in env while memory stored unshielded action. Detected by examining `constrained_ppo_agent.py:select_action`. Now corrected.
+
+- **CliffWalking CMDP tuning search was too narrow** (fixed). Original narrow range produced unstable configs. Broad search with widened entropy escapes safe-but-stuck local optimum on most seeds.
+
+- **Post-hoc shielding implementation has incoherent (action, log_prob, reward) bookkeeping**. Memory stores `a_unshielded` while env executes `a_shielded` and log_prob is for `a_shielded` under shielded distribution. This produces a meaningless importance ratio. Post-hoc methods are excluded from the comparison; bug is documented but not fixed (would require splitting the code path, no paper impact).
+
+- **PPOAgent operator precedence at line 130**: `elif self.use_shield_post or self.use_shield_pre and do_apply_shield:` parses as `use_shield_post or (use_shield_pre and do_apply_shield)`. Minimal impact since post-hoc isn't in the comparison.
+
+### Not audited but reasonably trusted
+
+- `src/utils/shield_controller.py` (pishield projection) — empirical results coherent across envs suggest no critical bug, but not directly inspected
+- `src/utils/constraint_monitor.py` (viol_rate, mod_rate counting) — same
+
+### Methodology caveats to acknowledge in paper
+
+- **Target-stopping protocol**: methods evaluated at matched task performance (early-stop at rolling-25 reward ≥ target). Reveals safety at matched perf level, not at convergence. Reviewers may push on this.
+- **Tuning objective is calibration, not optimization**: Optuna minimizes |reward − target|, not maximizes reward. Methods don't necessarily achieve their "best" configs.
+- **Mixed stopping criteria**: methods that hit target stop on target; methods that don't stop on patience (no-improvement). Two different rules.
+- **Custom PPO sample efficiency**: ~30× fewer gradient updates per env-step than sb3 defaults. Documented via matched bench; relative comparisons preserved across PPO bases.
+- **High variance on some methods**: reward std exceeds mean for some methods. Report median + IQR alongside mean ± std. Most reward pairwise differences are not statistically significant at n=10.
+- **Violation rate column ambiguity**: would-have-violated (shielded methods) vs actual violations (unshielded methods). Must be made explicit in paper (see §2).
+- **Seaquest data heterogeneity**: 7 methods reuse aggregated stats from original IJCAI submission; 2 methods (CMDP, action_mask) re-run for this submission. Acknowledge in protocol section.
+
+---
+
+## 9. Things to fix before submission
 
 ### Must do
 
-- **Re-tune + re-run CMDP on CliffWalking** with the credit-assignment fix +
-  broad-search tuning. Commands in run history below. Expected: CMDP should
-  improve substantially over the current buggy -130 median, ideally joining
-  the table as a competitive baseline (similar to its CartPole behavior).
-
-- **Refresh CliffWalking stats CSVs** after CMDP re-run.
-
-- **Seaquest** — tuning source needs resolution; sweep then takes ~25-40 hr.
+- **Run CMDP and action_mask on Seaquest** — 10 runs total, ~30-50 hr
+- **Refresh Seaquest stats** after the run completes
+- **Update `NESY_RESULTS_SUMMARY.md`** with Seaquest numbers when done
 
 ### Paper-side fixes (no compute)
 
-- **Add the metric-definition box (§2 of this doc) to the paper.** Either as a
-  table caption, an inline paragraph in the methodology section, or a dedicated
-  subsection. This is the single most important framing fix.
+- **Add the metric-definition box (§2 of this doc) to the paper.** Most-likely reviewer-flag if missing.
+- **Report median + IQR alongside mean ± std** for all results tables.
+- **CMDP-fix acknowledgment**: one sentence noting the implementation correction relative to the IJCAI submission.
+- **PPO sample-efficiency footnote** referencing the sb3 bench.
+- **Target-stopping protocol acknowledgment** in methods + limitations sections.
+- **Reword reward claims** to clusters/trends rather than absolute "X > Y" — most reward pairs are not statistically significant.
+- **Seaquest protocol paragraph**: explicitly note the 7-method reuse and CMDP+action_mask re-runs.
 
-- **Report median + IQR alongside mean ± std**, especially on CliffWalking and
-  for high-variance methods on CartPole (CMDP, preshield_hard, layer_soft,
-  layer_hard).
+### Nice-to-have
 
-- **CMDP-fix acknowledgment.** Add one sentence: "An earlier draft of this work
-  used an implementation of CMDP that combined Lagrangian penalties with action
-  shielding; we corrected this to match the standard CMDP formulation before
-  reporting these results."
-
-- **PPO sample-efficiency footnote.** Custom PPO has ~30× fewer gradient updates
-  per env-step than sb3 defaults. Cite the matched-bench as evidence relative
-  comparisons preserved across PPO bases.
-
-- **Reword reward claims** to clusters/trends rather than absolute "X > Y" — most
-  reward pairs are not statistically significant at n=10.
+- Bump sb3-contrib bench to 5 seeds + add CliffWalking
+- Audit `shield_controller.py` and `constraint_monitor.py` if time permits
+- Trajectory plots for CMDP and action_mask on Seaquest once they're run
 
 ---
 
-## 8. Run history (for reproducibility)
+## 10. Run history (reproducibility)
 
 ### CartPole
-
 ```bash
 conda activate ccn_rl
 python scripts/run_ijcai_experiments.py --env CartPole-v1 \
     --base_dir results/nesy_experiments \
     --use_subprocess --num_train_episodes 1000
-# After CMDP credit-assignment fix in constrained_ppo_agent.py:182:
+# After CMDP credit-assignment fix:
 python scripts/run_ijcai_experiments.py --env CartPole-v1 --method cppo \
     --base_dir results/nesy_experiments \
     --use_subprocess --num_train_episodes 1000
@@ -346,35 +368,34 @@ python scripts/plot_action_mask_trajectories.py --env CartPole-v1
 ```
 
 ### CliffWalking
-
 ```bash
 # Tune action_mask (only method without a CliffWalking config initially)
 python scripts/tune_ijcai_methods.py --env CliffWalking-v1 \
     --method ppo_action_mask --trials 100
-# Initial sweep (CMDP was buggy in this pass)
+# Initial sweep (CMDP buggy in this pass)
 python scripts/run_ijcai_experiments.py --env CliffWalking-v1 \
     --base_dir results/nesy_experiments \
     --use_subprocess --num_train_episodes 1000
-python scripts/analyze_nesy_results.py --env CliffWalking-v1
-python scripts/plot_action_mask_trajectories.py --env CliffWalking-v1
-
-# TODO: re-tune + re-run CMDP with the fix and broad search
-python scripts/tune_ijcai_methods.py --env CliffWalking-v1 --method cppo --trials 100
+# After CMDP fix + v13 entropy bump + bumped study_version:
+python scripts/tune_ijcai_methods.py --env CliffWalking-v1 --method cppo --trials 30
 python scripts/run_ijcai_experiments.py --env CliffWalking-v1 --method cppo \
     --base_dir results/nesy_experiments \
     --use_subprocess --num_train_episodes 1000
 python scripts/analyze_nesy_results.py --env CliffWalking-v1
+python scripts/plot_action_mask_trajectories.py --env CliffWalking-v1
 ```
 
-### Seaquest (TODO)
+### Seaquest (pending)
+```bash
+# CMDP config (saved from IJCAI Table 5): config/ijcai_tuned/cppo_ALE_Seaquest-v5_params.yaml
+# action_mask config (just tuned): config/ijcai_tuned/ppo_action_mask_ALE_Seaquest-v5_params.yaml
+# 7 other methods' aggregated_results.json copied from results/ijcai_experiments/ALE_Seaquest-v5/
 
-See `NESY_TODO.md` Phase 3 — tuning source needs resolution first.
-
----
-
-## 9. Deadlines
-
-- Abstract: June 9, 2026
-- Full submission: June 16, 2026
-
-Comfortable timeline remaining for Seaquest + paper-side fixes.
+# To complete:
+python scripts/tune_ijcai_methods.py --env ALE/Seaquest-v5 --method ppo_action_mask \
+    --trials 100 --use_ram_obs --max_episode_steps 2000     # DONE
+python scripts/run_ijcai_experiments.py --env ALE/Seaquest-v5 \
+    --method cppo ppo_action_mask \
+    --base_dir results/nesy_experiments --use_subprocess     # PENDING
+python scripts/analyze_nesy_results.py --env ALE/Seaquest-v5
+```

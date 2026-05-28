@@ -1,0 +1,109 @@
+{
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "avg_reward": {
+    "mean": 253.34,
+    "std": 50.174180611147,
+    "min": 157.4,
+    "max": 323.4,
+    "median": 252.10000000000002
+  },
+  "total_violations": {
+    "mean": 11133.8,
+    "std": 2014.457981691353,
+    "min": 7767.0,
+    "max": 13912.0,
+    "median": 11649.0
+  },
+  "total_steps": {
+    "mean": 86023.0,
+    "std": 10202.574018354388,
+    "min": 69493.0,
+    "max": 101831.0,
+    "median": 84793.5
+  },
+  "best_avg_reward": {
+    "mean": 280.23999999999995,
+    "std": 18.13037230726385,
+    "min": 260.0,
+    "max": 318.4,
+    "median": 271.2
+  },
+  "method": "ppo_unshielded",
+  "train_episodes": {
+    "mean": 73.0,
+    "std": 26.095976701399778,
+    "min": 30.0,
+    "max": 110.0,
+    "median": 75.0
+  },
+  "avg_violations_per_episode": {
+    "mean": 111.33800000000001,
+    "std": 20.144579816913534,
+    "min": 77.67,
+    "max": 139.12,
+    "median": 116.49000000000001
+  },
+  "std_reward": {
+    "mean": 103.12945813144768,
+    "std": 16.214526373409118,
+    "min": 75.24121211144862,
+    "max": 130.85488145269935,
+    "median": 105.62243319014556
+  },
+  "env": "ALE/Seaquest-v5",
+  "final_reward": {
+    "mean": 266.0,
+    "std": 133.2816566523691,
+    "min": 100.0,
+    "max": 440.0,
+    "median": 280.0
+  },
+  "seed": {
+    "mean": 637.4,
+    "std": 621.523483063995,
+    "min": 7.0,
+    "max": 2024.0,
+    "median": 385.0
+  },
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "max_reward": {
+    "mean": 546.0,
+    "std": 88.56635930193812,
+    "min": 420.0,
+    "max": 680.0,
+    "median": 550.0
+  },
+  "avg_violations_per_step": {
+    "mean": 0.12858292392108445,
+    "std": 0.010896505965931454,
+    "min": 0.11176665275639273,
+    "max": 0.14337242615990273,
+    "median": 0.13067996934865483
+  },
+  "avg_modifications_per_episode": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "min_reward": {
+    "mean": 54.0,
+    "std": 26.90724809414742,
+    "min": 20.0,
+    "max": 100.0,
+    "median": 60.0
+  }
+}

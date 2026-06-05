@@ -81,7 +81,7 @@ ccn-rl/
 
 ### Quick Start
 
-To reproduce our IJCAI results, run:
+To reproduce our results, run:
 
 ```bash
 python scripts/run_ijcai_experiments.py --env CartPole-v1
@@ -127,9 +127,9 @@ python scripts/tune_ijcai_methods.py --env ALE/Seaquest-v5 --use_ram_obs --trial
 ### Viewing Results
 
 After running experiments, check out:
-- `results/ijcai_experiments/summary_table.txt` - Overall performance summary
-- `results/ijcai_experiments/{env}/plots/` - Training curves and comparisons
-- `results/ijcai_experiments/training_violation_plots/` - Violation analysis
+- `results/nesy_experiments/summary_table.txt` - Overall performance summary
+- `results/nesy_experiments/{env}/plots/` - Training curves and comparisons
+- `results/nesy_experiments/{env}_per_method_stats.csv` - Per-method statistics (incl. pairwise tests)
 
 ## Hyperparameter Tuning
 
@@ -156,7 +156,7 @@ We track three primary metrics during training:
 - **Modification Rate**: How often the shield changes the agent's actions (lower means more natural behavior)
 - **Reward**: Task performance (should stay high despite safety enforcement)
 
-The ideal method achieves high rewards with minimal violations and minimal modifications. See `results/ijcai_experiments/summary_table.txt` for complete experimental results.
+The ideal method achieves high rewards with minimal violations and minimal modifications. See `results/nesy_experiments/summary_table.txt` for complete experimental results.
 
 ## Implementation Details
 

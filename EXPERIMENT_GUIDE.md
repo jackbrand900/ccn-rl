@@ -1,4 +1,4 @@
-# Running IJCAI Experiments
+# Running Experiments
 
 ## Quick Start
 
@@ -18,7 +18,7 @@ python scripts/run_ijcai_experiments.py --env CartPole-v1
 
 ### 3. Output Structure
 ```
-results/ijcai_experiments/
+results/nesy_experiments/
 └── CartPole-v1/
     ├── cppo/
     │   ├── train_metrics_run1.csv  (per-episode metrics)

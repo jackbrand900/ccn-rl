@@ -14,16 +14,17 @@ The key challenge is maintaining good task performance while minimizing constrai
 
 ## Methods Compared
 
-We evaluate 8 different approaches across three benchmark environments:
+We evaluate 9 different approaches across three benchmark environments:
 
 1. **PPO (Unshielded)** - Standard PPO baseline with no safety mechanisms
 2. **PPO + Reward Shaping** - Adds penalty terms to the reward for constraint violations
 3. **PPO + Semantic Loss** - Incorporates constraint satisfaction into the loss function
-4. **PPO + Pre-emptive Shield (Soft)** - Modifies unsafe actions before execution, allows partial violations
-5. **PPO + Pre-emptive Shield (Hard)** - Strictly blocks all constraint-violating actions
-6. **PPO + Layer Shield (Soft)** - Integrates the shield as a differentiable network layer
-7. **PPO + Layer Shield (Hard)** - Shield layer with strict enforcement
-8. **CMDP (Constrained MDP)** - Constrained policy optimization baseline
+4. **PPO + Action Mask** - Masks constraint-violating actions from the policy's action distribution before sampling (MaskablePPO-style)
+5. **PPO + Pre-emptive Shield (Soft)** - Modifies unsafe actions before execution, allows partial violations
+6. **PPO + Pre-emptive Shield (Hard)** - Strictly blocks all constraint-violating actions
+7. **PPO + Layer Shield (Soft)** - Integrates the shield as a differentiable network layer
+8. **PPO + Layer Shield (Hard)** - Shield layer with strict enforcement
+9. **CMDP (Constrained MDP)** - Constrained policy optimization baseline
 
 The "soft" vs "hard" distinction is important: soft shields gently guide the agent away from violations while hard shields completely block them. Each has tradeoffs in terms of learning efficiency and constraint satisfaction.
 

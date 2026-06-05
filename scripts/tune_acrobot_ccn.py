@@ -2,7 +2,7 @@
 """Tune CCN+ (PiShield shield-layer) PPO on the wrapper-free Acrobot-v1.
 
 Search is centred on the known-good unshielded config (optuna trial 4 of
-ijcai_ppo_unshielded_Acrobot-v1_v18: lr 1.33e-4, gamma 0.956, hidden 256,
+ppo_unshielded_Acrobot-v1_v18: lr 1.33e-4, gamma 0.956, hidden 256,
 clip 0.108, ent 0.044, epochs 7, batch 64 -> reward -108.6) but kept wide.
 Hard shielding removes the over-spin torque that energy-pumping swing-up
 relies on, so the policy needs MORE exploration than the unshielded baseline
@@ -12,7 +12,7 @@ ranges rather than a tight local search.
 The known-good config is enqueued as the first trial so the study can never
 end up worse than the trial-4 neighbourhood.
 
-Objective (matches scripts/tune_ijcai_methods.py): maximise
+Objective (matches scripts/tune_methods.py): maximise
     -|avg_reward - target| / |target|
 i.e. drive eval reward AS CLOSE TO `target` AS POSSIBLE. NOTE this rewards
 *matching* the target, not exceeding it -- see --target help below.
@@ -182,7 +182,7 @@ def main():
           f"viol_rate={best.user_attrs.get('viol_rate')} score={best.value:.4f}")
     print("params:", best.params)
 
-    config_dir = Path("config/ijcai_tuned")
+    config_dir = Path("config/tuned")
     config_dir.mkdir(parents=True, exist_ok=True)
     out = config_dir / f"{args.method}_{ENV_NAME}_params.yaml"
     with open(out, "w") as f:

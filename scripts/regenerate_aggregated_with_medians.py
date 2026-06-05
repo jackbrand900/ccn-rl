@@ -14,9 +14,9 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from scripts.run_ijcai_experiments import aggregate_results, ENVIRONMENTS, METHODS
+from scripts.run_experiments import aggregate_results, ENVIRONMENTS, METHODS
 
-def regenerate_from_csv(base_dir='results/ijcai_experiments'):
+def regenerate_from_csv(base_dir='results/nesy_experiments'):
     """Regenerate aggregated results from experiment_summary.csv"""
     
     csv_path = os.path.join(base_dir, 'experiment_summary.csv')
@@ -78,7 +78,7 @@ def regenerate_from_csv(base_dir='results/ijcai_experiments'):
 
 
 if __name__ == "__main__":
-    base_dir = sys.argv[1] if len(sys.argv) > 1 else 'results/ijcai_experiments'
+    base_dir = sys.argv[1] if len(sys.argv) > 1 else 'results/nesy_experiments'
     regenerate_from_csv(base_dir)
     print("\n✓ Done! Summary tables will now show medians.")
 

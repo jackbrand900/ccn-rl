@@ -6,11 +6,11 @@
 ```bash
 conda env create -f environment.yml
 conda activate ccn_rl
-python scripts/run_ijcai_experiments.py --env CartPole-v1
+python scripts/run_experiments.py --env CartPole-v1
 ```
 
 ### 2. What Happens
-- **Loads tuned hyperparameters** from `config/ijcai_tuned/` automatically
+- **Loads tuned hyperparameters** from `config/tuned/` automatically
 - **Runs 8 methods** × **5 seeds** = 40 total runs
 - **Tracks metrics per episode**: violation_rate, modification_rate, reward
 - **Aggregates across 5 runs**: computes mean ± std
@@ -37,16 +37,16 @@ results/nesy_experiments/
 
 ```bash
 # Run specific methods only
-python scripts/run_ijcai_experiments.py --env CartPole-v1 --method cppo ppo_preshield_hard
+python scripts/run_experiments.py --env CartPole-v1 --method cppo ppo_preshield_hard
 
 # Run multiple environments
-python scripts/run_ijcai_experiments.py --env CartPole-v1 CliffWalking-v1
+python scripts/run_experiments.py --env CartPole-v1 CliffWalking-v1
 
 # Skip already completed runs
-python scripts/run_ijcai_experiments.py --env CartPole-v1 --skip_existing
+python scripts/run_experiments.py --env CartPole-v1 --skip_existing
 
 # Show summary without running
-python scripts/run_ijcai_experiments.py --show_summary
+python scripts/run_experiments.py --show_summary
 ```
 
 ## Metrics Tracked

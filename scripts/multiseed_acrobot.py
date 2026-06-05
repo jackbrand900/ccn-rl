@@ -29,7 +29,7 @@ METHODS = {
 }
 
 def load_cfg(method):
-    with open(f"config/ijcai_tuned/{method}_Acrobot-v1_params.yaml") as f:
+    with open(f"config/tuned/{method}_Acrobot-v1_params.yaml") as f:
         return yaml.safe_load(f)
 
 if _args.methods:

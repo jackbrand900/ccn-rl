@@ -62,12 +62,12 @@ Note: Some environments (like Atari) require accepting ROM licenses. The AutoROM
 ```
 ccn-rl/
 ├── config/
-│   └── ijcai_tuned/          # Hyperparameters for each method and environment
+│   └── tuned/          # Hyperparameters for each method and environment
 ├── results/
-│   └── ijcai_experiments/    # Experimental results, plots, and analysis
+│   └── nesy_experiments/    # Experimental results, plots, and analysis
 ├── scripts/
-│   ├── run_ijcai_experiments.py         # Main experiment runner
-│   ├── tune_ijcai_methods.py            # Hyperparameter tuning
+│   ├── run_experiments.py         # Main experiment runner
+│   ├── tune_methods.py            # Hyperparameter tuning
 │   └── generate_training_violation_curves.py  # Analysis scripts
 ├── src/
 │   ├── agents/               # PPO, A2C, DQN, CPPO implementations
@@ -85,19 +85,19 @@ ccn-rl/
 To reproduce our results, run:
 
 ```bash
-python scripts/run_ijcai_experiments.py --env CartPole-v1
+python scripts/run_experiments.py --env CartPole-v1
 ```
 
 This will:
-- Load the tuned hyperparameters from `config/ijcai_tuned/`
-- Train all 8 methods for 5 seeds each (40 runs total)
+- Load the tuned hyperparameters from `config/tuned/`
+- Train all 9 methods for 10 seeds each (90 runs total)
 - Track violation rates, modification rates, and rewards per episode
 - Generate comparison plots automatically
 
 ### Running on Multiple Environments
 
 ```bash
-python scripts/run_ijcai_experiments.py --env CartPole-v1 CliffWalking-v1 ALE/Seaquest-v5
+python scripts/run_experiments.py --env CartPole-v1 CliffWalking-v1 ALE/Seaquest-v5
 ```
 
 ### Running Specific Methods
@@ -105,7 +105,7 @@ python scripts/run_ijcai_experiments.py --env CartPole-v1 CliffWalking-v1 ALE/Se
 If you only want to test certain approaches:
 
 ```bash
-python scripts/run_ijcai_experiments.py --env CartPole-v1 \
+python scripts/run_experiments.py --env CartPole-v1 \
     --method ppo_unshielded cppo ppo_preshield_soft
 ```
 
@@ -114,7 +114,7 @@ python scripts/run_ijcai_experiments.py --env CartPole-v1 \
 The experiment runner supports several useful flags:
 
 - `--env` - Specify which environments to run (default: all three)
-- `--method` - Specify which methods to run (default: all eight)
+- `--method` - Specify which methods to run (default: all nine)
 - `--skip_existing` - Skip runs that already have results
 - `--test` - Quick test mode (1 episode only)
 - `--use_subprocess` - Run in separate processes to free memory between runs
@@ -122,7 +122,7 @@ The experiment runner supports several useful flags:
 **Note on Seaquest:** The experiment runner automatically uses RAM observations for Seaquest (no flag needed). However, if you're running the tuning scripts manually, you need to add `--use_ram_obs`:
 
 ```bash
-python scripts/tune_ijcai_methods.py --env ALE/Seaquest-v5 --use_ram_obs --trials 100
+python scripts/tune_methods.py --env ALE/Seaquest-v5 --use_ram_obs --trials 100
 ```
 
 ### Viewing Results
@@ -137,16 +137,16 @@ After running experiments, check out:
 We use Optuna for hyperparameter optimization. Each method and environment combination gets tuned separately:
 
 ```bash
-python scripts/tune_ijcai_methods.py --env CartPole-v1 \
+python scripts/tune_methods.py --env CartPole-v1 \
     --method ppo_unshielded --trials 100
 ```
 
-The tuning process optimizes for a balance between task performance and constraint satisfaction. Results are saved in `config/ijcai_tuned/` and automatically used by the experiment runner.
+The tuning process optimizes for a balance between task performance and constraint satisfaction. Results are saved in `config/tuned/` and automatically used by the experiment runner.
 
 For parallel tuning across multiple methods:
 
 ```bash
-python scripts/tune_ijcai_methods_parallel.py --env CartPole-v1 --trials 100
+python scripts/tune_methods_parallel.py --env CartPole-v1 --trials 100
 ```
 
 ## Key Metrics

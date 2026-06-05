@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Experiment runner for IJCAI submission.
+Experiment runner for submission.
 Runs ConstrainedPPO (CMDP) vs PPO with shields at different positions and softness levels.
 
 Key Metrics:
@@ -280,7 +280,7 @@ def run_single_experiment(
         import yaml
         from pathlib import Path
         env_safe = env_name.replace('/', '_')
-        config_path = Path(f"config/ijcai_tuned/{method['name']}_{env_safe}_params.yaml")
+        config_path = Path(f"config/tuned/{method['name']}_{env_safe}_params.yaml")
         
         if config_path.exists():
             with open(config_path, 'r') as f:
@@ -345,7 +345,7 @@ def run_single_experiment(
             agent_kwargs['max_episode_memory'] = max_memory
         
         # Get training target for early stopping (from tuning config)
-        from scripts.tune_ijcai_methods import TRAINING_TARGET_REWARDS
+        from scripts.tune_methods import TRAINING_TARGET_REWARDS
         training_target = TRAINING_TARGET_REWARDS.get(env_name, None)
         
         # Seaquest-specific settings
@@ -989,7 +989,7 @@ def generate_experiment_graphs(base_dir, envs_to_run, methods_to_run):
 def run_all_experiments(
     num_train_episodes=500,
     num_eval_episodes=100,
-    base_dir='results/ijcai_experiments',
+    base_dir='results/nesy_experiments',
     verbose=False,
     env_filter=None,
     method_filter=None,
@@ -1177,31 +1177,31 @@ def run_all_experiments(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Run IJCAI experiment suite",
+        description="Run experiment suite",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Run all environments (takes a long time)
-  python scripts/run_ijcai_experiments.py
+  python scripts/run_experiments.py
   
   # Run only CartPole (default: 500 train, 100 eval episodes)
-  python scripts/run_ijcai_experiments.py --env CartPole-v1
+  python scripts/run_experiments.py --env CartPole-v1
   
   # Run only CliffWalking with specific methods
-  python scripts/run_ijcai_experiments.py --env CliffWalking-v1 --method cppo ppo_preshield_hard
+  python scripts/run_experiments.py --env CliffWalking-v1 --method cppo ppo_preshield_hard
   
   # Test mode (1 episode each)
-  python scripts/run_ijcai_experiments.py --test --env CartPole-v1
+  python scripts/run_experiments.py --test --env CartPole-v1
   
   # Use subprocess mode to free memory between runs (recommended for large experiments)
-  python scripts/run_ijcai_experiments.py --env ALE/Seaquest-v5 --use_subprocess
+  python scripts/run_experiments.py --env ALE/Seaquest-v5 --use_subprocess
         """
     )
     parser.add_argument('--num_train_episodes', type=int, default=500,
                        help='Number of training episodes (default: 500)')
     parser.add_argument('--num_eval_episodes', type=int, default=100,
                        help='Number of evaluation episodes (default: 100)')
-    parser.add_argument('--base_dir', type=str, default='results/ijcai_experiments',
+    parser.add_argument('--base_dir', type=str, default='results/nesy_experiments',
                        help='Base directory for results')
     parser.add_argument('--verbose', action='store_true',
                        help='Verbose output')

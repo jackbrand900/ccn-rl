@@ -50,7 +50,7 @@ Examples:
         
         tune_cmd = [
             sys.executable,
-            str(Path(__file__).parent / "tune_ijcai_methods_parallel.py"),
+            str(Path(__file__).parent / "tune_methods_parallel.py"),
             "--env", args.env,
             "--trials", str(args.trials),
             "--train_episodes", str(args.train_episodes),
@@ -77,7 +77,7 @@ Examples:
     
     exp_cmd = [
         sys.executable,
-        str(Path(__file__).parent / "run_ijcai_experiments.py"),
+        str(Path(__file__).parent / "run_experiments.py"),
         "--env", args.env,
         "--num_train_episodes", str(args.train_episodes),
         "--num_eval_episodes", str(args.eval_episodes),
@@ -97,7 +97,7 @@ Examples:
     print(f"\n{'='*80}")
     print("COMPLETE: Tuning and Experiments Finished")
     print(f"{'='*80}")
-    print(f"Results saved to: results/ijcai_experiments/{args.env.replace('/', '_')}/")
+    print(f"Results saved to: results/nesy_experiments/{args.env.replace('/', '_')}/")
     print(f"{'='*80}\n")
 
 

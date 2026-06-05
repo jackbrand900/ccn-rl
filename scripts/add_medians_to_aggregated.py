@@ -13,7 +13,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from scripts.run_ijcai_experiments import ENVIRONMENTS, METHODS
+from scripts.run_experiments import ENVIRONMENTS, METHODS
 
 def estimate_median_from_stats(mean, std, min_val, max_val, n=5):
     """
@@ -41,7 +41,7 @@ def estimate_median_from_stats(mean, std, min_val, max_val, n=5):
     return float(estimated_median)
 
 
-def add_medians_to_aggregated(base_dir='results/ijcai_experiments'):
+def add_medians_to_aggregated(base_dir='results/nesy_experiments'):
     """Add median estimates to existing aggregated_results.json files"""
     
     for env_name in ENVIRONMENTS:
@@ -88,7 +88,7 @@ def add_medians_to_aggregated(base_dir='results/ijcai_experiments'):
 
 
 if __name__ == "__main__":
-    base_dir = sys.argv[1] if len(sys.argv) > 1 else 'results/ijcai_experiments'
+    base_dir = sys.argv[1] if len(sys.argv) > 1 else 'results/nesy_experiments'
     add_medians_to_aggregated(base_dir)
     print("\n✓ Done! Medians added to aggregated results.")
 

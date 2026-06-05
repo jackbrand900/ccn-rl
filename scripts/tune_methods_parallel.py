@@ -14,7 +14,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.tune_ijcai_methods import METHODS, TARGET_REWARDS, TRAINING_TARGET_REWARDS
+from scripts.tune_methods import METHODS, TARGET_REWARDS, TRAINING_TARGET_REWARDS
 
 def main():
     parser = argparse.ArgumentParser(
@@ -59,7 +59,7 @@ def main():
     
     # Skip completed methods if requested
     if args.skip_completed:
-        config_dir = Path("config/ijcai_tuned")
+        config_dir = Path("config/tuned")
         completed_methods = set()
         if config_dir.exists():
             for config_file in config_dir.glob(f"*_{args.env.replace('/', '_')}_params.yaml"):
@@ -109,7 +109,7 @@ def main():
         
         cmd = [
             sys.executable,
-            str(Path(__file__).parent / "tune_ijcai_methods.py"),
+            str(Path(__file__).parent / "tune_methods.py"),
             "--env", args.env,
             "--method", method['name'],
             "--trials", str(args.trials),

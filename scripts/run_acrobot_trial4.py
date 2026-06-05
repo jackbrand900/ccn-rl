@@ -4,7 +4,7 @@ Acrobot env to confirm it still learns to ~-100. Same regime as tuning:
 import warnings; warnings.filterwarnings("ignore")
 from src.train import train, evaluate_policy
 
-# trial 4 params (optuna_ijcai_ppo_unshielded_Acrobot-v1_v18, value -0.086, reward -108.6)
+# trial 4 params (optuna_ppo_unshielded_Acrobot-v1_v18, value -0.086, reward -108.6)
 agent_kwargs = {
     "lr": 0.0001331707625849592,
     "gamma": 0.9555122888613474,

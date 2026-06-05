@@ -350,7 +350,7 @@ def train_ours_vanilla(env_name, seed, total_timesteps, hp):
 # ----------------------------------------------------------------------
 # Matched-reward (early-stopping) variants. Train both methods until a
 # rolling-window mean reaches the target, then evaluate. This mirrors the
-# IJCAI methodology: methods are compared at *matched performance*, not
+# methodology: methods are compared at *matched performance*, not
 # at saturation, so the safety metrics are read at the same reward level.
 # ----------------------------------------------------------------------
 class _SB3TargetCallback(BaseCallback):
@@ -538,7 +538,7 @@ def main():
                              "vanilla: plain PPO comparison; "
                              "matched: early-stop at target reward, compare safety at matched perf")
     parser.add_argument("--target-reward", type=float, default=200.0,
-                        help="target reward for matched mode (default: 200, mirrors IJCAI CartPole target)")
+                        help="target reward for matched mode (default: 200, mirrors CartPole target)")
     args = parser.parse_args()
     run_bench(args.env, args.seeds, args.timesteps, mode=args.mode,
               target_reward=args.target_reward)

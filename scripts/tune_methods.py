@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Hyperparameter tuning script for IJCAI experiments.
+Hyperparameter tuning script for experiments.
 Tunes each method to achieve similar target rewards for fair comparison.
 """
 
@@ -602,12 +602,12 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     # Add version suffix to study name to avoid conflicts with old trials
     # Change this version number when you modify hyperparameter ranges
     study_version = "v18"  # Increment this when changing hyperparameter ranges (v18 = DynamicObstacles wide ent_coef [0.01, 0.5] for safe-but-stuck escape)
-    study_name = f"ijcai_{method_name}_{env_safe}_{study_version}"
+    study_name = f"{method_name}_{env_safe}_{study_version}"
     
-    storage = f"sqlite:///optuna_ijcai_{method_name}_{env_safe}_{study_version}.db"
+    storage = f"sqlite:///optuna_{method_name}_{env_safe}_{study_version}.db"
     
     # Check if database file exists and is writable
-    db_path = f"optuna_ijcai_{method_name}_{env_safe}_{study_version}.db"
+    db_path = f"optuna_{method_name}_{env_safe}_{study_version}.db"
     if os.path.exists(db_path):
         if not os.access(db_path, os.W_OK):
             print(f"Warning: Database file {db_path} is not writable. Attempting to fix permissions...")
@@ -890,7 +890,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
             torch.cuda.empty_cache()
     
     # Save to YAML
-    config_dir = Path("config/ijcai_tuned")
+    config_dir = Path("config/tuned")
     config_dir.mkdir(exist_ok=True)
     
     filename = config_dir / f"{method_name}_{env_safe}_params.yaml"
@@ -904,24 +904,24 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Tune hyperparameters for IJCAI experiments to match target rewards",
+        description="Tune hyperparameters for experiments to match target rewards",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Tune all methods on CartPole
-  python scripts/tune_ijcai_methods.py --env CartPole-v1 --trials 20
+  python scripts/tune_methods.py --env CartPole-v1 --trials 20
   
   # Tune specific method
-  python scripts/tune_ijcai_methods.py --env CartPole-v1 --method cppo --trials 50
+  python scripts/tune_methods.py --env CartPole-v1 --method cppo --trials 50
   
   # Quick test (fewer episodes, fewer trials)
-  python scripts/tune_ijcai_methods.py --env CartPole-v1 --trials 10 --train_episodes 200 --eval_episodes 20
+  python scripts/tune_methods.py --env CartPole-v1 --trials 10 --train_episodes 200 --eval_episodes 20
   
   # Tune Seaquest with step cap for faster tuning (default: 1000 steps)
-  python scripts/tune_ijcai_methods.py --env ALE/Seaquest-v5 --trials 20 --max_episode_steps 1000
+  python scripts/tune_methods.py --env ALE/Seaquest-v5 --trials 20 --max_episode_steps 1000
   
   # Tune Seaquest with RAM observations
-  python scripts/tune_ijcai_methods.py --env ALE/Seaquest-v5 --trials 20 --max_episode_steps 2000 --use_ram_obs
+  python scripts/tune_methods.py --env ALE/Seaquest-v5 --trials 20 --max_episode_steps 2000 --use_ram_obs
         """
     )
     parser.add_argument('--env', type=str, required=False,  # Not required when --subprocess-trial is used
@@ -1071,7 +1071,7 @@ Examples:
     training_target = TRAINING_TARGET_REWARDS.get(args.env, base_target_reward)
     
     print(f"\n{'#'*80}")
-    print(f"# Hyperparameter Tuning for IJCAI Experiments")
+    print(f"# Hyperparameter Tuning for Experiments")
     print(f"# Environment: {args.env}")
     print(f"# Training Target Reward: {training_target} (early stopping when reached)")
     print(f"# Tuning Objective Target: {base_target_reward} (minimize difference)")

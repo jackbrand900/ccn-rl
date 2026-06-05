@@ -7,7 +7,7 @@ import warnings; warnings.filterwarnings("ignore")
 import yaml
 from src.train import train, evaluate_policy
 
-with open("config/ijcai_tuned/ppo_layer_hard_Acrobot-v1_params.yaml") as f:
+with open("config/tuned/ppo_layer_hard_Acrobot-v1_params.yaml") as f:
     cfg = yaml.safe_load(f)
 print("Using layer_hard winning config:", cfg)
 

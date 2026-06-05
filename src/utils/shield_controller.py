@@ -43,6 +43,7 @@ class ShieldController:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.shield_layer = self.build_shield_layer().to(self.device)
         self.shield_activations = 0
+        self.dead_row_activations = 0
 
         self.clauses = self._parse_cnf_file()
         self.sat_assignments_cache = {}
@@ -113,6 +114,33 @@ class ShieldController:
         """Fallback flag logic — always 0 for all flags"""
         return {flag: 0 for flag in self.flag_names}
 
+    def _recover_dead_rows(self, corrected, action_probs, flag_tensor):
+        """Repair all-zero rows produced by hard shielding.
+
+        When the policy is extremely confident on a forbidden action, the legal
+        actions' softmax mass underflows to exactly 0.0 (float32 logit gap
+        >= ~104), so zeroing the forbidden action leaves an all-zero row. That
+        crashes Categorical(probs=...) on the stochastic path, makes argmax
+        silently return the forbidden action on the deterministic path, and
+        yields 0/0 = NaN wherever callers renormalize. The legal actions also
+        underflowed, so the permitted set can't be read off `corrected`; recover
+        it by probing the shield with a uniform input under the same flags, then
+        fall back to uniform over the permitted actions.
+
+        Only rows that are *exactly* zero are touched: when the sum is tiny but
+        positive, downstream normalization still recovers the policy's relative
+        preference among surviving legal actions, so those are left untouched.
+        """
+        dead = corrected.sum(dim=1, keepdim=True) == 0
+        if not dead.any():
+            return corrected
+        self.dead_row_activations += int(dead.sum().item())
+        uniform = torch.full_like(action_probs, 1.0 / self.num_actions)
+        permitted = self.shield_layer(torch.cat([uniform, flag_tensor], dim=1))[:, :self.num_actions]
+        legal = (permitted > 1e-12).to(corrected.dtype)
+        legal = legal / legal.sum(dim=1, keepdim=True).clamp_min(1.0)
+        return torch.where(dead, legal, corrected)
+
     def apply(self, action_probs, context):
         flags = self.flag_logic_fn(context)
         flag_values = [flags.get(name, 0) for name in self.flag_names]
@@ -135,6 +163,8 @@ class ShieldController:
         corrected = shielded_output[:, :self.num_actions]
         if self.mode == "soft":
             corrected = corrected / corrected.sum(dim=1, keepdim=True)
+
+        corrected = self._recover_dead_rows(corrected, action_probs, flag_tensor)
 
         flag_active = any(flag_values)
         changed = not torch.allclose(action_probs, corrected, atol=1e-5)
@@ -187,6 +217,8 @@ class ShieldController:
 
         if self.mode == "soft":
             corrected = corrected / corrected.sum(dim=1, keepdim=True)
+
+        corrected = self._recover_dead_rows(corrected, action_probs, flag_tensor)
 
         # Count activations
         modified = ~torch.isclose(action_probs, corrected, atol=1e-5)

@@ -1,0 +1,19 @@
+{
+  "avg_reward": -73.23333333333333,
+  "std_reward": 81.71196702782008,
+  "max_reward": 14,
+  "min_reward": -200,
+  "avg_shield_mod_rate": 0.6882636060718252,
+  "avg_violations_per_step": 0.6882636060718252,
+  "avg_violations_per_episode": 61.96666666666667,
+  "avg_modifications_per_episode": 61.96666666666667,
+  "total_violations": 1859,
+  "total_modifications": 1859,
+  "total_steps": 2701,
+  "train_episodes": 500,
+  "best_avg_reward": -42.4,
+  "final_reward": -151,
+  "seed": 42,
+  "method": "ppo_action_mask",
+  "env": "Taxi-v3"
+}

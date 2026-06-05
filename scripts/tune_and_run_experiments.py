@@ -25,7 +25,7 @@ Examples:
         """
     )
     parser.add_argument('--env', type=str, required=True,
-                       choices=['CartPole-v1', 'CliffWalking-v1', 'MiniGrid-DoorKey-5x5-v0', 'ALE/Seaquest-v5'],
+                       choices=['CartPole-v1', 'CliffWalking-v1', 'MiniGrid-DoorKey-5x5-v0', 'ALE/Seaquest-v5', 'LunarLander-v3', 'MiniGrid-DynamicObstacles-6x6-v0'],
                        help='Environment to tune and run')
     parser.add_argument('--trials', type=int, default=20,
                        help='Number of Optuna trials per method (default: 20)')

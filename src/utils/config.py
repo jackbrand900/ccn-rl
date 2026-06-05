@@ -76,5 +76,33 @@ def config_by_env(env_name, use_ram_obs=False):
             "frame_stack": 1,
             "max_steps": 500,
         }
+    if "LunarLander" in env_name:
+        return {
+            "use_cnn": False,
+            "input_shape": 8,
+            "frame_stack": 1,
+            "max_steps": 1000,
+        }
+    if "Acrobot" in env_name:
+        return {
+            "use_cnn": False,
+            "input_shape": 6,
+            "frame_stack": 1,
+            "max_steps": 500,
+        }
+    if "FrozenLake" in env_name:
+        return {
+            "use_cnn": False,
+            "input_shape": 16,
+            "frame_stack": 1,
+            "max_steps": 100,
+        }
+    if "Taxi" in env_name:
+        return {
+            "use_cnn": False,
+            "input_shape": 500,
+            "frame_stack": 1,
+            "max_steps": 200,
+        }
     raise ValueError(f"Unknown environment: {env_name}")
 

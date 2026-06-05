@@ -90,6 +90,12 @@ class ConstraintMonitor:
 
         This is used as a consistent way to log constraint violations regardless
         of whether the active shield mode is soft, post, or integrated.
+
+        Logic: detect whether the projection reduced the action's probability from
+        its one-hot input (1.0). This handles both forced-action CNFs (where the
+        projection redistributes mass to a different action) and forbidden-action
+        CNFs (where the projection simply zeros the unsafe action without
+        redistributing).
         """
         device = next(shield_controller.shield_layer.parameters()).device
 
@@ -102,8 +108,7 @@ class ConstraintMonitor:
             corrected = shield_controller.apply(one_hot_action_probs, context)
             corrected_probs = corrected[:, :shield_controller.num_actions]  # Ensure correct slice
 
-        max_prob = corrected_probs.max().item()
-        return corrected_probs[0, action].item() < (max_prob - epsilon)
+        return corrected_probs[0, action].item() < (1.0 - epsilon)
 
 
     def summary(self):

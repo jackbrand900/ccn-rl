@@ -1,0 +1,19 @@
+{
+  "avg_reward": 0.0,
+  "std_reward": 0.0,
+  "max_reward": 0,
+  "min_reward": 0,
+  "avg_shield_mod_rate": 0.010699588477366255,
+  "avg_violations_per_step": 0.010699588477366255,
+  "avg_violations_per_episode": 3.466666666666667,
+  "avg_modifications_per_episode": 3.466666666666667,
+  "total_violations": 104,
+  "total_modifications": 104,
+  "total_steps": 9720,
+  "train_episodes": 230,
+  "best_avg_reward": 0.0,
+  "final_reward": 0,
+  "seed": 42,
+  "method": "ppo_action_mask",
+  "env": "MiniGrid-LavaCrossingS9N1-v0"
+}

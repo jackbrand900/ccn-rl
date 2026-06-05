@@ -31,6 +31,12 @@ TARGET_REWARDS = {
     'CliffWalking-v1': -20.0,  # Target reward for CliffWalking
     'MiniGrid-DoorKey-5x5-v0': 0.7,  # Realistic target
     'ALE/Seaquest-v5': 250.0,  # More realistic target (best CMDP achieved ~180, PPO baseline ~200-300)
+    'LunarLander-v3': 50.0,  # Soft landing approach; reachable in 500-ep budget
+    'MiniGrid-DynamicObstacles-6x6-v0': 0.7,  # Reach goal while avoiding moving obstacles
+    'MiniGrid-LavaCrossingS9N1-v0': 0.7,  # Reach goal while avoiding lava
+    'Acrobot-v1': -100.0,  # Gym leaderboard solved threshold
+    'FrozenLake-v1': 0.5,  # Slippery 4x4: optimal ~0.74, random ~0.03
+    'Taxi-v3': 5.0,  # Random ~-500, optimal ~+8; calibration midpoint
 }
 
 # Target rewards for early stopping during training
@@ -41,6 +47,12 @@ TRAINING_TARGET_REWARDS = {
     'CliffWalking-v1': -20.0,  # Stop training when rolling average reaches -20
     'MiniGrid-DoorKey-5x5-v0': 0.7,
     'ALE/Seaquest-v5': 250.0,
+    'LunarLander-v3': 50.0,  # Match TARGET_REWARDS
+    'MiniGrid-DynamicObstacles-6x6-v0': 0.7,  # Match TARGET_REWARDS
+    'MiniGrid-LavaCrossingS9N1-v0': 0.7,  # Match TARGET_REWARDS
+    'Acrobot-v1': -100.0,  # Match TARGET_REWARDS
+    'FrozenLake-v1': 0.5,  # Match TARGET_REWARDS
+    'Taxi-v3': 5.0,  # Match TARGET_REWARDS
 }
 
 # Methods to tune (ordered from lightest to heaviest for memory/computational efficiency)
@@ -324,7 +336,12 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
     # === Agent-specific parameters (for non-CliffWalking, non-Seaquest PPO) ===
     if method['agent'] == 'ppo' and not (env_name == 'CliffWalking-v1') and not (env_name == 'ALE/Seaquest-v5'):
         clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
-        ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
+        # DynamicObstacles needs wider entropy to escape the safe-but-stuck local
+        # optimum where the policy converges to "spin in place forever."
+        if env_name == 'MiniGrid-DynamicObstacles-6x6-v0':
+            ent_coef = trial.suggest_float("ent_coef", 0.01, 0.5, log=True)
+        else:
+            ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
         epochs = trial.suggest_int("epochs", 1, 10)
         batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128])
         agent_kwargs.update({
@@ -385,7 +402,11 @@ def objective(trial, env_name, method, target_reward, num_train_episodes=500, nu
             cost_gamma = trial.suggest_float("cost_gamma", 0.90, 0.999)
             cost_lam = trial.suggest_float("cost_lam", 0.90, 0.999)
             clip_eps = trial.suggest_float("clip_eps", 0.1, 0.3)
-            ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
+            # DynamicObstacles gets a wider entropy range for safe-but-stuck escape.
+            if env_name == 'MiniGrid-DynamicObstacles-6x6-v0':
+                ent_coef = trial.suggest_float("ent_coef", 0.01, 0.5, log=True)
+            else:
+                ent_coef = trial.suggest_float("ent_coef", 0.0, 0.05)
             epochs = trial.suggest_int("epochs", 1, 10)
             batch_size = trial.suggest_categorical("batch_size", [32, 64, 128])
             budget = trial.suggest_float("budget", 0.10, 0.50)
@@ -580,7 +601,7 @@ def tune_method(env_name, method, target_reward, n_trials=30, num_train_episodes
     
     # Add version suffix to study name to avoid conflicts with old trials
     # Change this version number when you modify hyperparameter ranges
-    study_version = "v13"  # Increment this when changing hyperparameter ranges (v13 = CliffWalking CMDP with wider ent_coef [0.01, 0.5] to escape safe-but-stuck local optimum)
+    study_version = "v18"  # Increment this when changing hyperparameter ranges (v18 = DynamicObstacles wide ent_coef [0.01, 0.5] for safe-but-stuck escape)
     study_name = f"ijcai_{method_name}_{env_safe}_{study_version}"
     
     storage = f"sqlite:///optuna_ijcai_{method_name}_{env_safe}_{study_version}.db"
@@ -904,7 +925,7 @@ Examples:
         """
     )
     parser.add_argument('--env', type=str, required=False,  # Not required when --subprocess-trial is used
-                       choices=['CartPole-v1', 'CliffWalking-v1', 'MiniGrid-DoorKey-5x5-v0', 'ALE/Seaquest-v5'],
+                       choices=['CartPole-v1', 'CliffWalking-v1', 'MiniGrid-DoorKey-5x5-v0', 'ALE/Seaquest-v5', 'LunarLander-v3', 'MiniGrid-DynamicObstacles-6x6-v0', 'MiniGrid-LavaCrossingS9N1-v0', 'Acrobot-v1', 'FrozenLake-v1', 'Taxi-v3'],
                        help='Environment to tune')
     parser.add_argument('--method', type=str, default=None,
                        help='Specific method to tune (default: all)')

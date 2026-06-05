@@ -57,7 +57,6 @@ SEEDS = [42, 123, 456, 789, 1011, 2024, 1337, 7, 314, 271]
 ENVIRONMENTS = [
     'CliffWalking-v1',
     'CartPole-v1',
-    'MiniGrid-DoorKey-5x5-v0',
     'ALE/Seaquest-v5',
 ]
 
@@ -65,7 +64,6 @@ ENVIRONMENTS = [
 ENV_DISPLAY_NAMES = {
     'CliffWalking-v1': 'Cliff Walking',
     'CartPole-v1': 'Cart Pole',
-    'MiniGrid-DoorKey-5x5-v0': 'Door Key',
     'ALE/Seaquest-v5': 'Seaquest',
 }
 
@@ -312,6 +310,12 @@ def run_single_experiment(
                 'CliffWalking-v1': 0.10,
                 'MiniGrid-DoorKey-5x5-v0': 0.20,
                 'ALE/Seaquest-v5': 0.25,
+                'LunarLander-v3': 0.15,  # Mirror CartPole budget
+                'MiniGrid-DynamicObstacles-6x6-v0': 0.10,  # Conservative for safety-critical env
+                'MiniGrid-LavaCrossingS9N1-v0': 0.10,  # Conservative for safety-critical env
+                'Acrobot-v1': 0.15,  # Joint-velocity bound; mirror CartPole
+                'FrozenLake-v1': 0.10,  # Hole-adjacency; safety-critical
+                'Taxi-v3': 0.15,  # Illegal-pickup/dropoff; mirror CartPole
             }
             budget = env_budgets.get(env_name, 0.15)  # Default 15%
             agent_kwargs['budget'] = budget
@@ -330,6 +334,12 @@ def run_single_experiment(
                 'CliffWalking-v1': 1000,  # Match step limit (1000 steps) for exploration
                 'MiniGrid-DoorKey-5x5-v0': 2000,  # Longer episodes
                 'ALE/Seaquest-v5': 5000,  # Very long episodes (up to 10k steps)
+                'LunarLander-v3': 1000,  # LL episodes capped at 1000 steps
+                'MiniGrid-DynamicObstacles-6x6-v0': 500,  # MiniGrid episodes short, ~200 steps max
+                'MiniGrid-LavaCrossingS9N1-v0': 500,  # MiniGrid episodes short
+                'Acrobot-v1': 500,  # Acrobot episodes capped at 500 steps
+                'FrozenLake-v1': 100,  # FrozenLake episodes capped at 100 steps
+                'Taxi-v3': 200,  # Taxi episodes capped at 200 steps
             }
             max_memory = env_memory_limits.get(env_name, 2000)  # Default 2000
             agent_kwargs['max_episode_memory'] = max_memory

@@ -20,7 +20,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Run hyperparameter tuning for each method independently (separate processes)")
     parser.add_argument('--env', type=str, required=True,
-                       choices=['CartPole-v1', 'CliffWalking-v1', 'MiniGrid-DoorKey-5x5-v0', 'ALE/Seaquest-v5'],
+                       choices=['CartPole-v1', 'CliffWalking-v1', 'MiniGrid-DoorKey-5x5-v0', 'ALE/Seaquest-v5', 'LunarLander-v3', 'MiniGrid-DynamicObstacles-6x6-v0', 'Acrobot-v1', 'FrozenLake-v1', 'Taxi-v3'],
                        help='Environment to tune')
     parser.add_argument('--trials', type=int, default=15,
                        help='Number of Optuna trials per method (default: 15)')

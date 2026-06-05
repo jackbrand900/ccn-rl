@@ -1,0 +1,19 @@
+{
+  "avg_reward": 0.0,
+  "std_reward": 0.0,
+  "max_reward": 0.0,
+  "min_reward": 0.0,
+  "avg_shield_mod_rate": 0.0,
+  "avg_violations_per_step": 0.15267175572519084,
+  "avg_violations_per_episode": 1.0,
+  "avg_modifications_per_episode": 0.0,
+  "total_violations": 20,
+  "total_modifications": 0,
+  "total_steps": 131,
+  "train_episodes": 220,
+  "best_avg_reward": 0.05,
+  "final_reward": 0.0,
+  "seed": 42,
+  "method": "ppo_unshielded",
+  "env": "FrozenLake-v1"
+}

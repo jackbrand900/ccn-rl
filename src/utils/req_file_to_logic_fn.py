@@ -1,6 +1,9 @@
 from src.utils.context_provider import (key_flag_logic, position_flag_logic, cartpole_emergency_flag_logic,
                                         red_light_flag_logic, wheel_on_grass_flag_logic, freeway_flag_logic,
-                                        seaquest_flag_logic, cliffwalking_flag_logic, demonattack_flag_logic)
+                                        seaquest_flag_logic, cliffwalking_flag_logic, demonattack_flag_logic,
+                                        lunar_lander_tilt_flag_logic, dynamic_obstacle_flag_logic,
+                                        lava_avoidance_flag_logic, acrobot_velocity_flag_logic,
+                                        frozenlake_flag_logic, taxi_safe_flag_logic)
 req_file_to_logic_fn = {
     "emergency_cartpole.cnf": cartpole_emergency_flag_logic,
     "forward_on_flag.cnf": position_flag_logic,
@@ -16,6 +19,12 @@ req_file_to_logic_fn = {
     "cliff_safe.cnf": cliffwalking_flag_logic,
     "demon_attack_defensive.cnf": demonattack_flag_logic,
     "demon_attack_offensive.cnf": demonattack_flag_logic,
+    "lunar_lander_tilt.cnf": lunar_lander_tilt_flag_logic,
+    "dynamic_obstacle_avoidance.cnf": dynamic_obstacle_flag_logic,
+    "lava_avoidance.cnf": lava_avoidance_flag_logic,
+    "acrobot_velocity_safe.cnf": acrobot_velocity_flag_logic,
+    "frozenlake_safe.cnf": frozenlake_flag_logic,
+    "taxi_safe.cnf": taxi_safe_flag_logic,
 }
 
 

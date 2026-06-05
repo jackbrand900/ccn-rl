@@ -9,7 +9,7 @@ import torch
 import src.utils.graphing as graphing
 import argparse
 from gymnasium.envs.registration import register
-from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper
+from minigrid.wrappers import FlatObsWrapper, FullyObsWrapper, RGBImgObsWrapper, ImgObsWrapper
 
 from src.agents.dqn_agent import DQNAgent
 from src.agents.ppo_agent import PPOAgent
@@ -74,6 +74,12 @@ custom_envs = {
     "ALE/Seaquest-v5": (None, None),
     "ALE/DemonAttack-v5": (None, None),
     "CliffWalking-v1": (None, None),
+    "LunarLander-v3": (None, None),
+    "Acrobot-v1": (None, None),
+    "FrozenLake-v1": (None, None),
+    "Taxi-v3": (None, None),
+    "MiniGrid-DynamicObstacles-6x6-v0": ("minigrid.envs:DynamicObstaclesEnv", {'size': 6, 'n_obstacles': 3}),
+    "MiniGrid-LavaCrossingS9N1-v0": (None, None),
 }
 
 def create_environment(env_name, render=False, use_ram_obs=False, seed=42, max_episode_steps=None):
@@ -155,6 +161,51 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42, max_e
             env.observation_space.seed(seed)
             return env
 
+        if env_name == "LunarLander-v3":
+            env = gym.make(env_name, render_mode="human" if render else None)
+            max_steps = max_episode_steps if max_episode_steps is not None else 1000
+            env = TimeLimit(env, max_episode_steps=max_steps)
+            env.env_name = env_name
+            env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
+            return env
+
+        if env_name == "Acrobot-v1":
+            env = gym.make(env_name, render_mode="human" if render else None)
+            max_steps = max_episode_steps if max_episode_steps is not None else 500
+            env = TimeLimit(env, max_episode_steps=max_steps)
+            env.env_name = env_name
+            env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
+            return env
+
+        if env_name == "FrozenLake-v1":
+            env = gym.make(env_name, render_mode="human" if render else None,
+                           is_slippery=False, map_name="4x4")
+            max_steps = max_episode_steps if max_episode_steps is not None else 100
+            env = TimeLimit(env, max_episode_steps=max_steps)
+            env.env_name = env_name
+            env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
+            return env
+
+        if env_name == "Taxi-v3":
+            env = gym.make(env_name, render_mode="human" if render else None)
+            max_steps = max_episode_steps if max_episode_steps is not None else 200
+            env = TimeLimit(env, max_episode_steps=max_steps)
+            env.env_name = env_name
+            env.use_ram = False
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
+            return env
+
         # Handle MiniGrid environments
         env = gym.make(env_name, render_mode="human" if render else None)
         if "MiniGrid" in env_name:
@@ -162,7 +213,11 @@ def create_environment(env_name, render=False, use_ram_obs=False, seed=42, max_e
                 env = RGBImgObsWrapper(env)
                 env = FullyObsWrapper(env)
             else:
-                env = FlatObsWrapper(env)
+                # ImgObsWrapper returns the 7x7x3 partial-view image as the obs
+                # (dense integer features, values in [0, 10]). This is a far better
+                # MLP input than FlatObsWrapper's 2835-dim sparse one-hot mess; it
+                # also matches the input_shape: 147 declared in config_by_env.
+                env = ImgObsWrapper(env)
             env.env_name = env_name
             env.use_ram = False
             env.reset(seed=seed)
@@ -252,6 +307,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
     else:
         softness = softness.capitalize()
 
+    obs_space = env.observation_space
     env_name = getattr(env.unwrapped, 'env_name', getattr(getattr(env, 'spec', None), 'id', 'UnknownEnv'))
     if getattr(agent, 'use_shield_layer', False):
         shield_mode = "Layered Shield"
@@ -271,7 +327,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
         if hasattr(agent, "start_new_episode"):
             agent.start_new_episode()
         state, _ = env.reset()
-        state = preprocess_state(state, use_cnn=use_cnn)
+        state = preprocess_state(state, use_cnn=use_cnn, obs_space=obs_space)
         try:
             key_pos = find_key(env)
             env.key_pos = key_pos
@@ -314,7 +370,7 @@ def run_training(agent, env, num_episodes=100, print_interval=10, checkpoint_win
             if render:
                 env.render()
 
-            next_state = preprocess_state(next_state, use_cnn=use_cnn)
+            next_state = preprocess_state(next_state, use_cnn=use_cnn, obs_space=obs_space)
 
             done = terminated or truncated
 
@@ -528,6 +584,12 @@ def train(agent='ppo',
         'ALE/DemonAttack-v5': 'src/requirements/demon_attack_defensive.cnf',
         'ALE/Freeway-v5': 'src/requirements/freeway_go_up_when_safe.cnf',
         'CarRacingWithTrafficLights-v0': 'src/requirements/red_light_stop.cnf',
+        'LunarLander-v3': 'src/requirements/lunar_lander_tilt.cnf',
+        'MiniGrid-DynamicObstacles-6x6-v0': 'src/requirements/dynamic_obstacle_avoidance.cnf',
+        'MiniGrid-LavaCrossingS9N1-v0': 'src/requirements/lava_avoidance.cnf',
+        'Acrobot-v1': 'src/requirements/acrobot_velocity_safe.cnf',
+        'FrozenLake-v1': 'src/requirements/frozenlake_safe.cnf',
+        'Taxi-v3': 'src/requirements/taxi_safe.cnf',
     }
     requirements_path = env_to_requirements.get(env_name, 'src/requirements/cliff_safe.cnf')
 

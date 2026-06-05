@@ -152,6 +152,81 @@ def build_context(env, agent):
             })
         except Exception as e:
             print(f"[DemonAttack RAM error] {e}")
+    elif "LunarLander" in env_id:
+        obs = agent.last_obs if hasattr(agent, "last_obs") else None
+        context["obs"] = obs
+        if obs is not None:
+            # LunarLander obs layout: [x, y, vx, vy, angle, ang_vel, leg_l, leg_r]
+            try:
+                context["angle"] = float(obs[4])
+            except (IndexError, TypeError):
+                pass
+
+    elif "Acrobot" in env_id:
+        obs = agent.last_obs if hasattr(agent, "last_obs") else None
+        context["obs"] = obs
+        if obs is not None:
+            # Acrobot obs layout: [cos(theta1), sin(theta1), cos(theta2), sin(theta2),
+            #                      theta1_dot, theta2_dot]
+            try:
+                context["theta1_dot"] = float(obs[4])
+                context["theta2_dot"] = float(obs[5])
+            except (IndexError, TypeError):
+                pass
+
+    elif "FrozenLake" in env_id:
+        obs = agent.last_obs if hasattr(agent, "last_obs") else None
+        context["obs"] = obs
+
+        try:
+            # Default 4x4 layout: holes at state indices {5, 7, 11, 12}.
+            state = int(np.argmax(obs)) if isinstance(obs, np.ndarray) else int(obs)
+            width = 4
+            holes = {5, 7, 11, 12}
+
+            x = state % width
+            y = state // width
+
+            # FrozenLake action ordering: 0=left, 1=down, 2=right, 3=up.
+            # A direction is unsafe if the adjacent in-bounds cell is a hole.
+            context["hole_left"]  = (x > 0)         and ((state - 1) in holes)
+            context["hole_down"]  = (y < width - 1) and ((state + width) in holes)
+            context["hole_right"] = (x < width - 1) and ((state + 1) in holes)
+            context["hole_up"]    = (y > 0)         and ((state - width) in holes)
+
+        except Exception as e:
+            print(f"[FrozenLake context error] {e}")
+
+    elif "Taxi" in env_id:
+        obs = agent.last_obs if hasattr(agent, "last_obs") else None
+        context["obs"] = obs
+        try:
+            state = int(np.argmax(obs)) if isinstance(obs, np.ndarray) else int(obs)
+            # Gymnasium Taxi-v3 decode: state -> [taxi_row, taxi_col, pass_loc, dest]
+            dest = state % 4
+            s = state // 4
+            pass_loc = s % 5
+            s = s // 5
+            taxi_col = s % 5
+            taxi_row = s // 5
+
+            # R=(0,0), G=(0,4), Y=(4,0), B=(4,3); pass_loc==4 means in-taxi.
+            LOC_POS = {0: (0, 0), 1: (0, 4), 2: (4, 0), 3: (4, 3)}
+            passenger_in_taxi = (pass_loc == 4)
+            at_dest = ((taxi_row, taxi_col) == LOC_POS[dest])
+            if passenger_in_taxi:
+                pickup_illegal = True
+                dropoff_illegal = not at_dest
+            else:
+                at_pass = ((taxi_row, taxi_col) == LOC_POS[pass_loc])
+                pickup_illegal = not at_pass
+                dropoff_illegal = True  # no passenger to drop off
+
+            context["pickup_illegal"] = pickup_illegal
+            context["dropoff_illegal"] = dropoff_illegal
+        except Exception as e:
+            print(f"[Taxi context error] {e}")
+
     elif "CliffWalking" in env_id:
         obs = agent.last_obs if hasattr(agent, "last_obs") else None
         context["obs"] = obs
@@ -298,6 +373,147 @@ def cartpole_emergency_flag_logic(context, flag_active_val=1.0):
     }
 
 
+def lava_avoidance_flag_logic(context, flag_active_val=1.0):
+    """Detect if Lava is in the front cell (MiniGrid-LavaCrossing).
+
+    Lava is static, so we only need to check the front cell.
+
+    y_7 = lava_in_front
+    """
+    direction = context.get("direction")
+    position = context.get("position")
+    env = context.get("env")
+
+    # Use explicit is-None checks: numpy arrays raise on `None in (...)`.
+    if direction is None or position is None or env is None:
+        return {"y_7": 0.0}
+
+    front_deltas = {
+        0: (1, 0),    # right
+        1: (0, 1),    # down
+        2: (-1, 0),   # left
+        3: (0, -1),   # up
+    }
+    if direction not in front_deltas:
+        return {"y_7": 0.0}
+    dx, dy = front_deltas[direction]
+    front_pos = (int(position[0]) + dx, int(position[1]) + dy)
+
+    grid = env.unwrapped.grid
+    if not (0 <= front_pos[0] < grid.width and 0 <= front_pos[1] < grid.height):
+        return {"y_7": 0.0}
+    try:
+        front_obj = grid.get(*front_pos)
+    except Exception:
+        return {"y_7": 0.0}
+
+    is_lava = front_obj is not None and getattr(front_obj, "type", None) == "lava"
+    return {"y_7": flag_active_val if is_lava else 0.0}
+
+
+def dynamic_obstacle_flag_logic(context, flag_active_val=1.0):
+    """Detect if forward move is unsafe in MiniGrid-DynamicObstacles.
+
+    MiniGrid's DynamicObstaclesEnv terminates the episode with reward -1 if
+    the agent takes the forward action and the front cell contains anything
+    other than the goal (walls, balls, etc.). Additionally, in this env
+    obstacles move at the same step as the agent, so an obstacle adjacent
+    to the front cell could move into the front cell mid-step.
+
+    The flag fires if EITHER:
+      (a) the front cell contains a non-goal object (wall, ball)         OR
+      (b) any cardinal neighbor of the front cell contains an obstacle
+          (ball) that could move into the front cell this step.
+
+    y_7 = forward_unsafe
+    """
+    direction = context.get("direction")
+    position = context.get("position")
+    env = context.get("env")
+
+    if direction is None or position is None or env is None:
+        return {"y_7": 0.0}
+
+    front_deltas = {
+        0: (1, 0),    # right
+        1: (0, 1),    # down
+        2: (-1, 0),   # left
+        3: (0, -1),   # up
+    }
+    if direction not in front_deltas:
+        return {"y_7": 0.0}
+    dx, dy = front_deltas[direction]
+    front_pos = (int(position[0]) + dx, int(position[1]) + dy)
+
+    grid = env.unwrapped.grid
+
+    def _in_bounds(cx, cy):
+        return 0 <= cx < grid.width and 0 <= cy < grid.height
+
+    # (a) Front cell: anything non-goal blocks forward.
+    if _in_bounds(*front_pos):
+        try:
+            front_obj = grid.get(*front_pos)
+        except Exception:
+            front_obj = None
+        if front_obj is not None and getattr(front_obj, "type", None) != "goal":
+            return {"y_7": flag_active_val}
+
+    # (b) Cardinal neighbors of the front cell: a ball there could move into the
+    #     front cell at the same step the agent moves into it.
+    neighbors = [
+        (front_pos[0] + 1, front_pos[1]),
+        (front_pos[0] - 1, front_pos[1]),
+        (front_pos[0], front_pos[1] + 1),
+        (front_pos[0], front_pos[1] - 1),
+    ]
+    for cx, cy in neighbors:
+        if not _in_bounds(cx, cy):
+            continue
+        try:
+            obj = grid.get(cx, cy)
+        except Exception:
+            continue
+        if obj is not None and getattr(obj, "type", None) == "ball":
+            return {"y_7": flag_active_val}
+    return {"y_7": 0.0}
+
+
+def acrobot_velocity_flag_logic(context, flag_active_val=1.0, threshold=6.0):
+    """Bounded joint-2 angular velocity for Acrobot-v1.
+
+    Acrobot actions: 0 = -torque, 1 = 0 torque, 2 = +torque (applied to joint 2).
+    Joint 2 angular velocity is bounded by Gymnasium to [-9pi, +9pi] (raw units).
+    theta2_dot arrives unnormalized, so threshold=6.0 rad/s is the over-spin
+    bound directly in raw units (~0.21 of the +-9pi range).
+
+    y_3 = theta2_dot > +threshold   (overspinning in + direction)
+    y_4 = theta2_dot < -threshold   (overspinning in - direction)
+    """
+    theta2_dot = context.get("theta2_dot")
+    if theta2_dot is None:
+        return {}
+    return {
+        "y_3": flag_active_val if theta2_dot > threshold else 0.0,
+        "y_4": flag_active_val if theta2_dot < -threshold else 0.0,
+    }
+
+
+def lunar_lander_tilt_flag_logic(context, flag_active_val=1.0, threshold=0.25):
+    """Tilt-based flags for LunarLander.
+
+    y_4 = tilted_left  (angle >  +threshold rad)
+    y_5 = tilted_right (angle <  -threshold rad)
+    """
+    angle = context.get("angle")
+    if angle is None:
+        return {}
+    return {
+        "y_4": flag_active_val if angle > threshold else 0.0,
+        "y_5": flag_active_val if angle < -threshold else 0.0,
+    }
+
+
 def red_light_flag_logic(context, flag_active_val=1.0):
     at_red_light = context.get("at_red_light", False)
 
@@ -356,6 +572,34 @@ def demonattack_flag_logic(context, flag_active_val=1.0):
     flags["y_10"] = flag_active_val if len(enemy_xs) >= 3 else 0.0
 
     return flags
+
+def frozenlake_flag_logic(context, flag_active_val=1.0):
+    """Hole-adjacency flags for FrozenLake-v1 (4x4, slippery).
+
+    Actions: 0=left, 1=down, 2=right, 3=up.
+    y_4..y_7 fire when an adjacent in-bounds cell in that direction is a hole.
+    Note: under is_slippery=True the env's transitions are stochastic, so the
+    constraint operates on the agent's *intended* move, not the realized one.
+    """
+    return {
+        "y_4": flag_active_val if context.get("hole_left", False) else 0.0,
+        "y_5": flag_active_val if context.get("hole_down", False) else 0.0,
+        "y_6": flag_active_val if context.get("hole_right", False) else 0.0,
+        "y_7": flag_active_val if context.get("hole_up", False) else 0.0,
+    }
+
+
+def taxi_safe_flag_logic(context, flag_active_val=1.0):
+    """Forbid illegal pickup/dropoff actions in Taxi-v3.
+
+    y_6 = pickup_illegal  (passenger already in taxi, or taxi not at passenger)
+    y_7 = dropoff_illegal (no passenger in taxi, or taxi not at destination)
+    """
+    return {
+        "y_6": flag_active_val if context.get("pickup_illegal", False) else 0.0,
+        "y_7": flag_active_val if context.get("dropoff_illegal", False) else 0.0,
+    }
+
 
 def cliffwalking_flag_logic(context, flag_active_val=1.0):
     cliff_right = context.get("cliff_right", False)

@@ -1,0 +1,10 @@
+batch_size: 128
+clip_eps: 0.11070203512415043
+ent_coef: 0.029400999412169934
+epochs: 7
+gamma: 0.9329561577849786
+hidden_dim: 256
+lambda_sem: 6.487815777620734
+lr: 0.0022376347838592415
+num_layers: 3
+use_orthogonal_init: true

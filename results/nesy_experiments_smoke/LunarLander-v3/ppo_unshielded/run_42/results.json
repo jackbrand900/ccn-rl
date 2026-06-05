@@ -1,0 +1,19 @@
+{
+  "avg_reward": -106.31841538392712,
+  "std_reward": 76.83984469807805,
+  "max_reward": -17.76794446824215,
+  "min_reward": -205.79893667773666,
+  "avg_shield_mod_rate": 0.0,
+  "avg_violations_per_step": 0.1962457337883959,
+  "avg_violations_per_episode": 23.0,
+  "avg_modifications_per_episode": 0.0,
+  "total_violations": 230,
+  "total_modifications": 0,
+  "total_steps": 1172,
+  "train_episodes": 200,
+  "best_avg_reward": -84.15759217656297,
+  "final_reward": -109.52792382954549,
+  "seed": 42,
+  "method": "ppo_unshielded",
+  "env": "LunarLander-v3"
+}

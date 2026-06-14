@@ -1,89 +1,24 @@
 {
-  "avg_shield_mod_rate": {
-    "mean": 0.0,
-    "std": 0.0,
-    "min": 0.0,
-    "max": 0.0,
-    "median": 0.0
-  },
-  "total_violations": {
-    "mean": 9.9,
-    "std": 17.818249072229293,
-    "min": 0.0,
-    "max": 62.0,
-    "median": 5.0
-  },
-  "avg_reward": {
-    "mean": -412.44800000000004,
-    "std": 480.6582330679461,
-    "min": -1061.38,
-    "max": -16.65,
-    "median": -24.814999999999998
-  },
-  "final_reward": {
-    "mean": -448.9,
-    "std": 541.7708833076949,
-    "min": -1396.0,
-    "max": -13.0,
-    "median": -17.0
-  },
   "std_reward": {
-    "mean": 37.71514691765403,
-    "std": 55.44265481540157,
+    "mean": 37.71514691765404,
+    "std": 58.44168958105708,
     "min": 0.0,
     "max": 191.2027036942731,
     "median": 22.11791074238975
   },
-  "env": "CliffWalking-v1",
-  "max_reward": {
-    "mean": -333.4,
-    "std": 441.93601346801324,
-    "min": -1000.0,
-    "max": -13.0,
-    "median": -15.0
-  },
-  "method": "ppo_semantic_loss",
-  "total_steps": {
-    "mean": 40264.7,
-    "std": 47391.4100255521,
-    "min": 1328.0,
-    "max": 100000.0,
-    "median": 1687.5
-  },
-  "avg_violations_per_episode": {
-    "mean": 0.099,
-    "std": 0.17818249072229292,
-    "min": 0.0,
-    "max": 0.62,
-    "median": 0.05
-  },
-  "seed": {
-    "mean": 637.4,
-    "std": 621.523483063995,
-    "min": 7.0,
-    "max": 2024.0,
-    "median": 385.0
-  },
-  "total_modifications": {
-    "mean": 0.0,
-    "std": 0.0,
-    "min": 0.0,
-    "max": 0.0,
-    "median": 0.0
-  },
-  "best_avg_reward": {
-    "mean": -394.6625,
-    "std": 462.6108109483067,
-    "min": -1000.0,
-    "max": -17.875,
-    "median": -19.4875
-  },
   "avg_violations_per_step": {
     "mean": 0.0019090141049342441,
-    "std": 0.0025550938417053504,
+    "std": 0.002693305391752877,
     "min": 0.0,
     "max": 0.00677710843373494,
     "median": 0.00035836629406706794
+  },
+  "avg_violations_per_episode": {
+    "mean": 0.099,
+    "std": 0.1878208366147555,
+    "min": 0.0,
+    "max": 0.62,
+    "median": 0.05
   },
   "avg_modifications_per_episode": {
     "mean": 0.0,
@@ -92,18 +27,83 @@
     "max": 0.0,
     "median": 0.0
   },
+  "max_reward": {
+    "mean": -333.4,
+    "std": 465.8414608712568,
+    "min": -1000.0,
+    "max": -13.0,
+    "median": -15.0
+  },
+  "total_violations": {
+    "mean": 9.9,
+    "std": 18.78208366147555,
+    "min": 0.0,
+    "max": 62.0,
+    "median": 5.0
+  },
+  "best_avg_reward": {
+    "mean": -394.6625,
+    "std": 487.63461093806933,
+    "min": -1000.0,
+    "max": -17.875,
+    "median": -19.4875
+  },
+  "final_reward": {
+    "mean": -448.9,
+    "std": 571.0766537378712,
+    "min": -1396.0,
+    "max": -13.0,
+    "median": -17.0
+  },
+  "seed": {
+    "mean": 637.4,
+    "std": 655.1432752544371,
+    "min": 7.0,
+    "max": 2024.0,
+    "median": 385.0
+  },
+  "method": "ppo_semantic_loss",
+  "env": "CliffWalking-v1",
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "avg_reward": {
+    "mean": -412.44800000000015,
+    "std": 506.65826420225744,
+    "min": -1061.38,
+    "max": -16.65,
+    "median": -24.814999999999998
+  },
   "min_reward": {
     "mean": -525.1,
-    "std": 499.49163156153077,
+    "std": 526.5104093093613,
     "min": -1297.0,
     "max": -21.0,
     "median": -226.0
   },
   "train_episodes": {
     "mean": 266.0,
-    "std": 119.76643937263894,
+    "std": 126.24491188866891,
     "min": 150.0,
     "max": 590.0,
     "median": 245.0
+  },
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "total_steps": {
+    "mean": 40264.7,
+    "std": 49954.932402561055,
+    "min": 1328.0,
+    "max": 100000.0,
+    "median": 1687.5
   }
 }

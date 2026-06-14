@@ -1,96 +1,24 @@
 {
-  "total_modifications": {
-    "mean": 0.0,
-    "std": 0.0,
-    "min": 0.0,
-    "max": 0.0,
-    "median": 0.0
-  },
-  "avg_reward": {
-    "mean": 277.72,
-    "std": 37.82392893394339,
-    "min": 219.0,
-    "max": 340.8,
-    "median": 272.5
-  },
-  "total_violations": {
-    "mean": 10851.2,
-    "std": 2890.497112954794,
-    "min": 7207.0,
-    "max": 15182.0,
-    "median": 9569.0
-  },
-  "total_steps": {
-    "mean": 90682.5,
-    "std": 10160.2064668982,
-    "min": 76204.0,
-    "max": 107501.0,
-    "median": 89074.5
-  },
-  "best_avg_reward": {
-    "mean": 204.04,
-    "std": 19.112877334404676,
-    "min": 175.4,
-    "max": 241.28,
-    "median": 203.86
-  },
-  "method": "ppo_reward_shaping",
-  "train_episodes": {
-    "mean": 440.0,
-    "std": 48.78524367060187,
-    "min": 350.0,
-    "max": 500.0,
-    "median": 445.0
-  },
-  "avg_violations_per_episode": {
-    "mean": 108.51199999999999,
-    "std": 28.904971129547942,
-    "min": 72.07,
-    "max": 151.82,
-    "median": 95.69
-  },
   "std_reward": {
     "mean": 103.66562769536475,
-    "std": 13.144947110050504,
+    "std": 13.855990863402535,
     "min": 75.73215961531798,
     "max": 122.12436284378312,
     "median": 105.46264673856689
   },
-  "env": "ALE/Seaquest-v5",
-  "final_reward": {
-    "mean": 140.9,
-    "std": 65.63451835733999,
-    "min": 49.0,
-    "max": 245.0,
-    "median": 130.5
-  },
-  "seed": {
-    "mean": 637.4,
-    "std": 621.523483063995,
-    "min": 7.0,
-    "max": 2024.0,
-    "median": 385.0
-  },
-  "avg_shield_mod_rate": {
-    "mean": 0.0,
-    "std": 0.0,
-    "min": 0.0,
-    "max": 0.0,
-    "median": 0.0
-  },
-  "max_reward": {
-    "mean": 562.0,
-    "std": 72.91090453423274,
-    "min": 400.0,
-    "max": 680.0,
-    "median": 550.0
-  },
   "avg_violations_per_step": {
     "mean": 0.11791921937073557,
-    "std": 0.019400326241524695,
+    "std": 0.020449739424517308,
     "min": 0.08947348818731456,
     "max": 0.14465844001076386,
     "median": 0.11387511275075447
+  },
+  "avg_violations_per_episode": {
+    "mean": 108.51199999999999,
+    "std": 30.468514823593807,
+    "min": 72.07,
+    "max": 151.82,
+    "median": 95.69
   },
   "avg_modifications_per_episode": {
     "mean": 0.0,
@@ -99,11 +27,83 @@
     "max": 0.0,
     "median": 0.0
   },
+  "max_reward": {
+    "mean": 562.0,
+    "std": 76.85484153042452,
+    "min": 400.0,
+    "max": 680.0,
+    "median": 550.0
+  },
+  "total_violations": {
+    "mean": 10851.2,
+    "std": 3046.851482359381,
+    "min": 7207.0,
+    "max": 15182.0,
+    "median": 9569.0
+  },
+  "best_avg_reward": {
+    "mean": 204.04,
+    "std": 20.146741672042157,
+    "min": 175.4,
+    "max": 241.28,
+    "median": 203.86
+  },
+  "final_reward": {
+    "mean": 140.9,
+    "std": 69.18485704577589,
+    "min": 49.0,
+    "max": 245.0,
+    "median": 130.5
+  },
+  "seed": {
+    "mean": 637.4,
+    "std": 655.1432752544371,
+    "min": 7.0,
+    "max": 2024.0,
+    "median": 385.0
+  },
+  "method": "ppo_reward_shaping",
+  "env": "ALE/Seaquest-v5",
+  "avg_shield_mod_rate": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "avg_reward": {
+    "mean": 277.71999999999997,
+    "std": 39.86992182920186,
+    "min": 219.0,
+    "max": 340.8,
+    "median": 272.5
+  },
   "min_reward": {
     "mean": 64.0,
-    "std": 32.0,
+    "std": 33.730961708462715,
     "min": 20.0,
     "max": 120.0,
     "median": 70.0
+  },
+  "train_episodes": {
+    "mean": 440.0,
+    "std": 51.42416206847171,
+    "min": 350.0,
+    "max": 500.0,
+    "median": 445.0
+  },
+  "total_modifications": {
+    "mean": 0.0,
+    "std": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "median": 0.0
+  },
+  "total_steps": {
+    "mean": 90682.5,
+    "std": 10709.797977656825,
+    "min": 76204.0,
+    "max": 107501.0,
+    "median": 89074.5
   }
 }

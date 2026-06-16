@@ -134,7 +134,7 @@ After running experiments, check out:
 
 ## Hyperparameter Tuning
 
-We use Optuna for hyperparameter optimization. Each method and environment combination gets tuned separately:
+We use Optuna for hyperparameter optimization. Most method and environment combinations are tuned separately; see Appendix D for the Seaquest exceptions.
 
 ```bash
 python scripts/tune_methods.py --env CartPole-v1 \
